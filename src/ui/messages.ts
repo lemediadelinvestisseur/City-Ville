@@ -35,6 +35,8 @@ export function failMessage(reason: FailReason, missing?: number): string {
       return 'Cette construction ne peut pas être vendue.';
     case 'alreadyOwned':
       return 'Offre déjà achetée.';
+    case 'energyFull':
+      return 'Votre énergie est déjà au maximum.';
     case 'invalid':
       return 'Action impossible.';
   }

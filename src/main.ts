@@ -4,7 +4,7 @@ import { SAVE_KEY } from './config';
 import { Emitter } from './core/emitter';
 import { Game } from './core/game';
 import { createNewGame } from './core/newGame';
-import { loadGame, saveGame } from './core/save';
+import { deserialize, saveGame, type KeyValueStorage } from './core/save';
 import { ArtLibrary } from './render/art/library';
 import { createPhaserGame } from './render/createPhaserGame';
 import { bindSounds } from './app/sounds';
@@ -13,14 +13,44 @@ import { SoundFx } from './services/sound';
 import { safeStorage } from './services/storage';
 import { UI } from './ui/UI';
 
+/**
+ * Charge la partie sauvegardée. Une sauvegarde illisible (corrompue, d'une
+ * version plus récente…) est mise de côté au lieu d'être écrasée.
+ */
+function loadOrCreate(storage: KeyValueStorage): Game {
+  let raw: string | null = null;
+  try {
+    raw = storage.getItem(SAVE_KEY);
+  } catch {
+    raw = null;
+  }
+  const backup = () => {
+    if (!raw) return;
+    try {
+      storage.setItem(`${SAVE_KEY}:backup-${Date.now()}`, raw);
+    } catch {
+      // Stockage plein ou indisponible : tant pis pour la copie.
+    }
+  };
+  const state = deserialize(raw);
+  if (state) {
+    try {
+      return new Game(state);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  backup();
+  return new Game(createNewGame(Date.now()));
+}
+
 function boot(): void {
   const gameRoot = document.getElementById('game');
   const uiRoot = document.getElementById('ui');
   if (!gameRoot || !uiRoot) throw new Error('Conteneurs #game et #ui introuvables');
 
   const storage = safeStorage();
-  const state = loadGame(storage, SAVE_KEY) ?? createNewGame(Date.now());
-  const game = new Game(state);
+  const game = loadOrCreate(storage);
   const bus = new Emitter<AppEvents>();
   const art = ArtLibrary.build();
 
@@ -32,10 +62,17 @@ function boot(): void {
 
   // ——— Sauvegarde automatique ———
   let resetting = false;
+  // Partie modifiée dans un autre onglet : cet onglet ne doit plus rien écrire.
+  let stale = false;
   let saveTimer = 0;
   const persist = () => {
-    if (!resetting) saveGame(storage, SAVE_KEY, game.state, Date.now());
+    if (!resetting && !stale) saveGame(storage, SAVE_KEY, game.state, Date.now());
   };
+  window.addEventListener('storage', (event) => {
+    if (event.key !== SAVE_KEY || resetting || stale) return;
+    stale = true;
+    ui?.showStale(() => window.location.reload());
+  });
   game.events.on('change', () => {
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(persist, 800);

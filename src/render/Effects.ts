@@ -20,7 +20,8 @@ export class Effects {
   bounce(targets: Phaser.GameObjects.Image[]): void {
     const { tweens } = this.scene;
     tweens.killTweensOf(targets);
-    for (const target of targets) target.setScale(1);
+    // Interrompre l'apparition ne doit pas laisser l'objet transparent.
+    for (const target of targets) target.setScale(1).setAlpha(1);
     tweens.add({ targets, scaleY: 0.93, scaleX: 1.04, duration: 70, yoyo: true, ease: 'Quad.easeOut' });
   }
 

@@ -1,65 +1,100 @@
 import { getBuildingDef } from '@/data/buildings';
 import type { Game } from './game';
-import type { BuildingCategory, Entity, PrimaryAction } from './types';
+import { CHUNKS_PER_SIDE } from './grid';
+import type { BuildingCategory, Entity, PrimaryAction, QuestProgress } from './types';
 
 /** Cible d'aide visuelle (flèche de tutoriel ou bouton à mettre en avant). */
 export type HintTarget =
   | { kind: 'entity'; entityId: number }
   | { kind: 'shop'; defId?: string; category?: BuildingCategory }
-  | { kind: 'expand' };
+  | { kind: 'expand'; cx: number; cy: number };
 
-function matches(entity: Entity, filter: { defId?: string; category?: BuildingCategory }): boolean {
+interface Filter {
+  defId?: string;
+  category?: BuildingCategory;
+}
+
+function matches(entity: Entity, filter: Filter): boolean {
   if (filter.defId && entity.defId !== filter.defId) return false;
   if (filter.category && getBuildingDef(entity.defId).category !== filter.category) return false;
   return true;
 }
 
-/**
- * Trouve la prochaine chose à faire pour avancer dans les objectifs actifs :
- * une construction précise sur la carte, ou un achat dans le menu.
- */
-export function findHint(game: Game): HintTarget | null {
-  const withAction = (type: PrimaryAction['type'], filter: { defId?: string; category?: BuildingCategory }) =>
-    game.state.entities.find((e) => matches(e, filter) && game.primaryAction(e).type === type);
-
-  for (const { def, progress } of game.activeQuests()) {
-    const status = game.questTaskStatus(progress);
-    for (let i = 0; i < def.tasks.length; i++) {
-      const task = def.tasks[i];
-      if (!task || status[i]?.done) continue;
-      let found: Entity | undefined;
-      switch (task.type) {
-        case 'collectRent':
-          found = withAction('collectRent', { defId: task.defId, category: 'house' });
-          break;
-        case 'harvest':
-          found = withAction('harvest', { category: 'farm' });
-          break;
-        case 'plant':
-          found = withAction('plant', { category: 'farm' });
-          if (!found) return { kind: 'shop', defId: 'plot' };
-          break;
-        case 'place':
-          return { kind: 'shop', defId: task.defId, category: task.category };
-        case 'build':
-          found = withAction('build', { defId: task.defId, category: task.category });
-          if (!found) return { kind: 'shop', defId: task.defId, category: task.category };
-          break;
-        case 'supply':
-          found = withAction('supply', { defId: task.defId, category: 'business' });
-          break;
-        case 'collectBusiness':
-          found = withAction('collectBusiness', { defId: task.defId, category: 'business' });
-          break;
-        case 'expand':
-          return { kind: 'expand' };
-        default:
-          break;
-      }
-      if (found) return { kind: 'entity', entityId: found.id };
-      // Tâche en attente (culture qui pousse…) : on regarde les objectifs suivants.
-      break;
+function firstPurchasableChunk(game: Game): { cx: number; cy: number } | null {
+  for (let cy = 0; cy < CHUNKS_PER_SIDE; cy++) {
+    for (let cx = 0; cx < CHUNKS_PER_SIDE; cx++) {
+      if (game.expansionInfo(cx, cy).status === 'purchasable') return { cx, cy };
     }
+  }
+  return null;
+}
+
+/**
+ * Prochaine chose à faire pour avancer dans UN objectif : une construction
+ * précise sur la carte, un achat dans le menu ou une zone à acheter.
+ * Renvoie null si l'objectif attend simplement que le temps passe.
+ */
+export function findQuestHint(game: Game, progress: QuestProgress): HintTarget | null {
+  const withAction = (type: PrimaryAction['type'], filter: Filter): Entity | undefined =>
+    game.state.entities.find(
+      (e) => game.isTileUnlocked(e.x, e.y) && matches(e, filter) && game.primaryAction(e).type === type,
+    );
+  const entity = (found: Entity | undefined): HintTarget | null =>
+    found ? { kind: 'entity', entityId: found.id } : null;
+
+  const def = game.activeQuests().find((q) => q.progress === progress)?.def;
+  if (!def) return null;
+  const status = game.questTaskStatus(progress);
+  for (let i = 0; i < def.tasks.length; i++) {
+    const task = def.tasks[i];
+    if (!task || status[i]?.done) continue;
+    switch (task.type) {
+      case 'collectRent':
+        return entity(withAction('collectRent', { defId: task.defId, category: 'house' }));
+      case 'harvest':
+        // Rien de mûr : on invite à planter un champ vide.
+        return entity(withAction('harvest', { category: 'farm' }) ?? withAction('plant', { category: 'farm' }));
+      case 'plant':
+        return (
+          entity(withAction('plant', { category: 'farm' }) ?? withAction('harvest', { category: 'farm' })) ?? {
+            kind: 'shop',
+            defId: 'plot',
+          }
+        );
+      case 'place':
+        return { kind: 'shop', defId: task.defId, category: task.category };
+      case 'build':
+        return (
+          entity(withAction('build', { defId: task.defId, category: task.category })) ?? {
+            kind: 'shop',
+            defId: task.defId,
+            category: task.category,
+          }
+        );
+      case 'supply':
+        return entity(withAction('supply', { defId: task.defId, category: 'business' }));
+      case 'collectBusiness':
+        // Un commerce sans marchandises doit d'abord être approvisionné.
+        return entity(
+          withAction('collectBusiness', { defId: task.defId, category: 'business' }) ??
+            withAction('supply', { defId: task.defId, category: 'business' }),
+        );
+      case 'expand': {
+        const chunk = firstPurchasableChunk(game);
+        return chunk ? { kind: 'expand', ...chunk } : null;
+      }
+      default:
+        return null;
+    }
+  }
+  return null;
+}
+
+/** Première aide disponible parmi les objectifs actifs (dans l'ordre). */
+export function findHint(game: Game): HintTarget | null {
+  for (const { progress } of game.activeQuests()) {
+    const hint = findQuestHint(game, progress);
+    if (hint) return hint;
   }
   return null;
 }

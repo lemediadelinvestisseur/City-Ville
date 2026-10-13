@@ -633,11 +633,13 @@ export class Game {
   buyCashOffer(offerId: string): Result<object> {
     const offer = findCashOffer(offerId);
     if (!offer) return fail('invalid');
+    const refill = offer.reward === 'energyRefill' ? Math.max(0, this.derived().energyMax - this.state.energy) : 0;
+    // Une recharge complète n'a aucun sens quand la jauge est déjà pleine.
+    if (offer.reward === 'energyRefill' && refill === 0) return fail('energyFull');
     if (this.state.cash < offer.cash) return fail('notEnoughCash', offer.cash - this.state.cash);
     this.spend({ cash: offer.cash });
     if (offer.reward === 'energyRefill') {
-      const missing = Math.max(0, this.derived().energyMax - this.state.energy);
-      this.give({ energy: missing }, null);
+      this.give({ energy: refill }, null);
     } else {
       this.give(offer.reward, null);
     }

@@ -19,9 +19,9 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'harvest',
     title: 'Jour de récolte',
     intro:
-      'Vos fraises sont mûres ! Récoltez-les : elles deviennent des marchandises, indispensables pour approvisionner les commerces.',
+      'Récoltez vos champs : les récoltes deviennent des marchandises, indispensables pour approvisionner les commerces. Un champ vide se replante en le touchant.',
     icon: 'strawberry',
-    requires: { quests: ['welcome'] },
+    // Actif dès le départ : les récoltes faites avant la fin de « Bienvenue » comptent aussi.
     tasks: [{ type: 'harvest', count: 4 }],
     labels: ['Récolter 4 champs'],
     reward: { coins: 50, xp: 5, cash: 1 },
@@ -146,6 +146,10 @@ export const QUESTS: readonly QuestDef[] = [
 ];
 
 const BY_ID = new Map(QUESTS.map((quest) => [quest.id, quest]));
+
+export function findQuestDef(id: string): QuestDef | undefined {
+  return BY_ID.get(id);
+}
 
 export function getQuestDef(id: string): QuestDef {
   const quest = BY_ID.get(id);

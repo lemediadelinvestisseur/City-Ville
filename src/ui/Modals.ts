@@ -48,6 +48,9 @@ export class Modals {
     if (!this.current) return;
     const { node, options } = this.current;
     this.current = null;
+    // La fenêtre qui s'efface ne doit plus recevoir de clics (double-toucher).
+    node.style.pointerEvents = 'none';
+    node.setAttribute('inert', '');
     node.classList.remove('is-in');
     this.el.classList.remove('is-open');
     setTimeout(() => node.remove(), 200);
@@ -60,6 +63,8 @@ export class Modals {
     const options = this.queue.shift();
     if (!options) return;
     const dismissible = options.dismissible !== false;
+    const backdrop = h('div', { class: 'modal-backdrop' });
+    const isCurrent = () => this.current?.node === backdrop;
     const card = h(
       'div',
       {
@@ -69,7 +74,13 @@ export class Modals {
       dismissible
         ? h(
             'button',
-            { class: 'modal__close', attrs: { 'aria-label': 'Fermer' }, onClick: () => this.close() },
+            {
+              class: 'modal__close',
+              attrs: { 'aria-label': 'Fermer' },
+              onClick: () => {
+                if (isCurrent()) this.close();
+              },
+            },
             icon(Icons.close),
           )
         : null,
@@ -86,6 +97,8 @@ export class Modals {
                 class: `btn btn--${button.kind ?? 'primary'}`,
                 text: button.label,
                 onClick: () => {
+                  // Un second toucher rapide ne doit pas rejouer l'action.
+                  if (!isCurrent()) return;
                   if (button.onClick?.() === false) return;
                   this.close();
                 },
@@ -96,9 +109,9 @@ export class Modals {
           )
         : null,
     );
-    const backdrop = h('div', { class: 'modal-backdrop' }, card);
+    backdrop.append(card);
     backdrop.addEventListener('click', (event) => {
-      if (event.target === backdrop && dismissible) this.close();
+      if (event.target === backdrop && dismissible && isCurrent()) this.close();
     });
     this.current = { options, node: backdrop };
     this.el.append(backdrop);

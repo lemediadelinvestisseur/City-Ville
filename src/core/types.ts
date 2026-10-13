@@ -160,7 +160,8 @@ export type FailReason =
   | 'storageFull'
   | 'invalid'
   | 'notSellable'
-  | 'alreadyOwned';
+  | 'alreadyOwned'
+  | 'energyFull';
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; reason: FailReason; missing?: number };
 

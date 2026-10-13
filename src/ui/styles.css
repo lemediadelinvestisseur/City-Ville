@@ -1688,3 +1688,36 @@ button:focus-visible {
     height: 48px;
   }
 }
+
+/* ——— Écrans peu hauts (petits téléphones, paysage) ——— */
+@media (max-height: 700px) {
+  .modal {
+    padding: 16px 16px 14px;
+  }
+  .modal__avatar {
+    width: 56px;
+    height: 56px;
+    border-width: 3px;
+  }
+  .modal__title {
+    margin-bottom: 8px;
+    font-size: 19px;
+  }
+  .modal__body {
+    font-size: 13px;
+    line-height: 1.38;
+  }
+  .tips {
+    gap: 6px;
+  }
+  .tips li {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .modal__buttons {
+    margin-top: 12px;
+  }
+  .btn {
+    padding: 10px 16px;
+  }
+}

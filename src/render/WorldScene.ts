@@ -45,7 +45,7 @@ interface Placement {
   reason: FailReason | null;
 }
 
-type Gesture = 'none' | 'pan' | 'pinch' | 'ghost';
+type Gesture = 'none' | 'pan' | 'pinch' | 'ghost' | 'paint';
 
 /** Scène principale : la carte isométrique, ses constructions et les interactions tactiles. */
 export class WorldScene extends Phaser.Scene {
@@ -76,7 +76,10 @@ export class WorldScene extends Phaser.Scene {
   private velocity = { x: 0, y: 0 };
   private pinch = { dist: 1, zoom: 1, midX: 0, midY: 0 };
   private grab = { dx: 0, dy: 0 };
+  /** Tracé de routes au glissé. */
+  private paint = { x: 0, y: 0, started: false, warned: false };
   private overlayScale = 1;
+  private modalOpen = false;
 
   constructor(
     private readonly ctx: AppContext,
@@ -526,6 +529,12 @@ export class WorldScene extends Phaser.Scene {
       }),
     );
     on(bus.on('ui:focusEntity', ({ entityId }) => this.focusEntity(entityId)));
+    on(bus.on('ui:focusTile', ({ x, y }) => this.focusWorld(tileToWorld(x, y))));
+    on(
+      bus.on('ui:modalOpen', (open) => {
+        this.modalOpen = open;
+      }),
+    );
   }
 
   private onResize(gameSize: Phaser.Structs.Size): void {
@@ -550,11 +559,16 @@ export class WorldScene extends Phaser.Scene {
         this.ctx.bus.emit('world:cameraMoved', undefined);
       },
     );
+    // Les raccourcis ne s'appliquent qu'au monde : pas pendant une fenêtre ni sur un bouton focalisé.
+    const forWorld = () => !this.modalOpen && !(document.activeElement instanceof HTMLButtonElement);
     this.input.keyboard?.on('keydown-ESC', () => {
+      if (!forWorld()) return;
       if (this.placement) this.endPlacement();
       else this.ctx.bus.emit('world:emptyTap', undefined);
     });
-    this.input.keyboard?.on('keydown-ENTER', () => this.confirmPlacement());
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (forWorld()) this.confirmPlacement();
+    });
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
@@ -578,7 +592,16 @@ export class WorldScene extends Phaser.Scene {
     this.down = { x: pointer.x, y: pointer.y, time: now };
     this.last = { x: pointer.x, y: pointer.y, time: now };
     this.velocity = { x: 0, y: 0 };
-    if (this.placement && this.isOnGhost(pointer)) {
+    if (
+      this.placement &&
+      this.placement.moveId === null &&
+      this.isOnGhost(pointer) &&
+      getBuildingDef(this.placement.defId).category === 'road'
+    ) {
+      // Glisser depuis la route fantôme trace une route.
+      this.gesture = 'paint';
+      this.paint = { x: this.placement.x, y: this.placement.y, started: false, warned: false };
+    } else if (this.placement && this.isOnGhost(pointer)) {
       this.gesture = 'ghost';
       const tile = this.tileAt(pointer.x, pointer.y);
       this.grab = { dx: tile.x - this.placement.x, dy: tile.y - this.placement.y };
@@ -588,16 +611,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
-    if (!pointer.isDown) {
-      // Souris : la construction fantôme suit le curseur.
-      if (this.placement && !pointer.wasTouch) {
-        const def = getBuildingDef(this.placement.defId);
-        const tile = this.tileAt(pointer.x, pointer.y);
-        this.movePlacement(tile.x - Math.floor((def.size.w - 1) / 2), tile.y - Math.floor((def.size.d - 1) / 2));
-      }
-      return;
-    }
-    if (!this.pointers.has(pointer.id)) return;
+    // Survol à la souris : rien à faire (le placement se fait au clic, comme au toucher).
+    if (!pointer.isDown || !this.pointers.has(pointer.id)) return;
     this.pointers.set(pointer.id, { x: pointer.x, y: pointer.y });
     const slop = TAP_SLOP_CSS * this.dpr;
     if (Math.hypot(pointer.x - this.down.x, pointer.y - this.down.y) > slop) this.tapCandidate = false;
@@ -621,6 +636,10 @@ export class WorldScene extends Phaser.Scene {
       this.movePlacement(tile.x - this.grab.dx, tile.y - this.grab.dy);
       return;
     }
+    if (this.gesture === 'paint' && this.placement) {
+      if (!this.tapCandidate) this.paintTo(this.tileAt(pointer.x, pointer.y));
+      return;
+    }
     if (this.gesture === 'pan') {
       const now = performance.now();
       const dx = pointer.x - this.last.x;
@@ -639,6 +658,12 @@ export class WorldScene extends Phaser.Scene {
   private onPointerUp(pointer: Phaser.Input.Pointer): void {
     if (!this.pointers.has(pointer.id)) return;
     this.pointers.delete(pointer.id);
+    if (pointer.wasCanceled) {
+      // Geste système (volet de notifications, bord de l'écran…) : on annule tout.
+      this.tapCandidate = false;
+      if (this.pointers.size === 0) this.gesture = 'none';
+      return;
+    }
     if (this.gesture === 'pinch') {
       if (this.pointers.size === 1) {
         const [rest] = [...this.pointers.values()];
@@ -651,7 +676,7 @@ export class WorldScene extends Phaser.Scene {
       }
       return;
     }
-    if (this.gesture === 'pan' || this.gesture === 'ghost') {
+    if (this.gesture === 'pan' || this.gesture === 'ghost' || this.gesture === 'paint') {
       if (this.tapCandidate) {
         this.handleTap(pointer);
       } else if (this.gesture === 'pan' && performance.now() - this.last.time < 80) {
@@ -727,7 +752,8 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     const tile = this.tileAt(x, y);
-    if (!this.game_.isTileUnlocked(tile.x, tile.y)) {
+    const inMap = tile.x >= 0 && tile.y >= 0 && tile.x < MAP_SIZE && tile.y < MAP_SIZE;
+    if (inMap && !this.game_.isTileUnlocked(tile.x, tile.y)) {
       const { cx, cy } = chunkOf(tile.x, tile.y);
       this.ctx.bus.emit('world:lockedTap', { cx, cy, screen: this.toCss(x, y) });
       return;
@@ -797,15 +823,20 @@ export class WorldScene extends Phaser.Scene {
     const view = this.views.get(id);
     if (!view) return;
     const def = getBuildingDef(view.entity.defId);
-    const center = footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d);
+    this.focusWorld(footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d));
+  }
+
+  /** Glisse la caméra jusqu'à un point du monde. */
+  private focusWorld(target: { x: number; y: number }): void {
     const cam = this.cameras.main;
+    this.camCtl.stop();
     this.tweens.add({
       targets: cam,
-      scrollX: center.x - cam.width / 2,
-      scrollY: center.y - cam.height / 2,
+      scrollX: target.x - cam.width / 2,
+      scrollY: target.y - cam.height / 2,
       duration: 450,
       ease: 'Sine.easeInOut',
-      onComplete: () => this.camCtl.centerOn(center.x, center.y),
+      onComplete: () => this.camCtl.centerOn(target.x, target.y),
     });
   }
 
@@ -953,18 +984,42 @@ export class WorldScene extends Phaser.Scene {
     this.refreshHint();
   }
 
+  /** Pose des routes case par case (voisinage en croix) jusqu'à la case visée. */
+  private paintTo(target: { x: number; y: number }): void {
+    if (!this.paint.started) {
+      this.paint.started = true;
+      this.paintRoad(this.paint.x, this.paint.y);
+    }
+    let { x, y } = this.paint;
+    while (x !== target.x || y !== target.y) {
+      if (Math.abs(target.x - x) >= Math.abs(target.y - y)) x += Math.sign(target.x - x);
+      else y += Math.sign(target.y - y);
+      this.paintRoad(x, y);
+    }
+    this.paint.x = x;
+    this.paint.y = y;
+    this.movePlacement(x, y);
+  }
+
+  private paintRoad(x: number, y: number): void {
+    const def = getBuildingDef('road');
+    // Les cases déjà occupées (croisement avec une route existante…) sont simplement ignorées.
+    if (this.game_.checkPlacement(def, x, y) !== null) return;
+    const purchase = this.game_.checkPurchase(def);
+    if (!purchase.ok) {
+      if (!this.paint.warned) this.ctx.bus.emit('world:fail', { reason: purchase.reason, missing: purchase.missing });
+      this.paint.warned = true;
+      return;
+    }
+    this.game_.place('road', x, y);
+  }
+
   private isOnGhost(pointer: Phaser.Input.Pointer): boolean {
     const p = this.placement;
     if (!p) return false;
     const def = getBuildingDef(p.defId);
     const tile = this.tileAt(pointer.x, pointer.y);
-    const margin = 1;
-    return (
-      tile.x >= p.x - margin &&
-      tile.x < p.x + def.size.w + margin &&
-      tile.y >= p.y - margin &&
-      tile.y < p.y + def.size.d + margin
-    );
+    return tile.x >= p.x && tile.x < p.x + def.size.w && tile.y >= p.y && tile.y < p.y + def.size.d;
   }
 
   private drawFootprint(x: number, y: number, w: number, d: number, color: number, alpha: number): void {

@@ -66,13 +66,14 @@ Détails : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/GAME_DESIGN.md]
 
 ## Contrôles
 
-| Action                    | Mobile                   | Ordinateur                      |
-| ------------------------- | ------------------------ | ------------------------------- |
-| Se déplacer               | Glisser                  | Cliquer-glisser                 |
-| Zoomer                    | Pincer                   | Molette                         |
-| Agir sur une construction | Toucher                  | Clic                            |
-| Placer une construction   | Toucher la carte, puis ✓ | Survoler puis clic (Entrée = ✓) |
-| Annuler                   | ✗                        | Échap                           |
+| Action                    | Mobile                                        | Ordinateur                                            |
+| ------------------------- | --------------------------------------------- | ----------------------------------------------------- |
+| Se déplacer               | Glisser                                       | Cliquer-glisser                                       |
+| Zoomer                    | Pincer                                        | Molette                                               |
+| Agir sur une construction | Toucher                                       | Clic                                                  |
+| Placer une construction   | Toucher la carte, puis la construction (ou ✓) | Cliquer la carte, puis la construction (ou ✓, Entrée) |
+| Tracer des routes         | Glisser depuis la route fantôme               | Cliquer-glisser depuis la route fantôme               |
+| Annuler                   | ✗                                             | Échap                                                 |
 
 ## Nom et droits
 

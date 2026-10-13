@@ -43,6 +43,8 @@ export interface AppEvents {
   'ui:setMode': WorldMode;
   'ui:plantMode': { cropId: string | null };
   'ui:focusEntity': { entityId: number };
+  /** Centre la caméra sur une case (coordonnées de case, fractionnaires possibles). */
+  'ui:focusTile': { x: number; y: number };
   'ui:modalOpen': boolean;
 }
 

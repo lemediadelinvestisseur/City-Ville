@@ -10,6 +10,10 @@ export const CROPS: readonly CropDef[] = [
 
 const BY_ID = new Map(CROPS.map((crop) => [crop.id, crop]));
 
+export function findCropDef(id: string): CropDef | undefined {
+  return BY_ID.get(id);
+}
+
 export function getCropDef(id: string): CropDef {
   const crop = BY_ID.get(id);
   if (!crop) throw new Error(`Culture inconnue : ${id}`);

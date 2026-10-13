@@ -1,9 +1,8 @@
 import type { AppContext, PlacementInfo } from '@/app/context';
 import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
-import type { HintTarget } from '@/core/hints';
-import { findHint } from '@/core/hints';
+import { findQuestHint, type HintTarget } from '@/core/hints';
 import type { BuildingDef, CropDef, FailReason, Reward } from '@/core/types';
-import { ENERGY_REGEN_SEC, xpForLevel } from '@/data/balance';
+import { CHUNK_SIZE, ENERGY_REGEN_SEC, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
 import type { StoreProduct } from '@/data/products';
@@ -250,7 +249,13 @@ export class UI {
         ? h('span', { class: 'placebar__cost' }, icon(Icons.cash), ` ${formatNumber(def.cost.cash)}`)
         : h('span', { class: 'placebar__cost' }, icon(Icons.coin), ` ${formatNumber(def.cost.coins ?? 0)}`);
     const status = info.valid
-      ? h('span', { class: 'placebar__status is-ok', text: 'Touchez la carte pour choisir l’emplacement' })
+      ? h('span', {
+          class: 'placebar__status is-ok',
+          text:
+            def.category === 'road'
+              ? 'Touchez la route pour la poser, glissez pour en tracer'
+              : 'Touchez la carte pour choisir l’emplacement',
+        })
       : h('span', {
           class: 'placebar__status is-bad',
           text: info.reason ? failMessage(info.reason) : 'Emplacement invalide',
@@ -483,18 +488,15 @@ export class UI {
 
   private showQuest(questId: string): void {
     const def = getQuestDef(questId);
-    const hint = findHint(this.ctx.game);
+    const progress = this.ctx.game.state.quests.active.find((q) => q.id === questId);
+    // L'aide est calculée pour CET objectif, pas pour le premier de la liste.
+    const hint = progress ? findQuestHint(this.ctx.game, progress) : null;
     const buttons: Array<{ label: string; kind?: 'primary' | 'secondary'; onClick?: () => void }> = [];
-    const relevant = hint && this.ctx.game.activeQuests()[0]?.def.id === questId;
-    if (relevant && hint) {
+    if (hint) {
       buttons.push({
         label: 'Montre-moi',
         kind: 'secondary',
-        onClick: () => {
-          if (hint.kind === 'entity') this.ctx.bus.emit('ui:focusEntity', { entityId: hint.entityId });
-          else if (hint.kind === 'shop') this.buildMenu.open({ defId: hint.defId, category: hint.category });
-          this.refreshDock();
-        },
+        onClick: () => this.showHint(hint),
       });
     }
     buttons.push({ label: 'OK' });
@@ -510,6 +512,18 @@ export class UI {
       ],
       buttons,
     });
+  }
+
+  private showHint(hint: HintTarget): void {
+    if (hint.kind === 'entity') {
+      this.ctx.bus.emit('ui:focusEntity', { entityId: hint.entityId });
+    } else if (hint.kind === 'shop') {
+      this.buildMenu.open({ defId: hint.defId, category: hint.category });
+    } else {
+      this.ctx.bus.emit('ui:focusTile', { x: (hint.cx + 0.5) * CHUNK_SIZE, y: (hint.cy + 0.5) * CHUNK_SIZE });
+      this.toasts.show('Touchez le panneau « À vendre » pour agrandir la ville.', 'info');
+    }
+    this.refreshDock();
   }
 
   private showQuestCompleted(questId: string, reward: Reward): void {
@@ -717,6 +731,20 @@ export class UI {
         }),
       250,
     );
+  }
+
+  /** La partie a été modifiée dans un autre onglet : on impose un rechargement. */
+  showStale(reload: () => void): void {
+    this.modals.show({
+      title: 'Partie ouverte ailleurs',
+      kicker: 'Sauvegarde',
+      urgent: true,
+      dismissible: false,
+      body: h('p', {
+        text: 'Votre ville a été modifiée dans un autre onglet. Rechargez la page pour reprendre la partie la plus récente.',
+      }),
+      buttons: [{ label: 'Recharger', onClick: reload }],
+    });
   }
 
   /** Confirmation du paiement simulé (fournisseur de test). */

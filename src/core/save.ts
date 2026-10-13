@@ -1,4 +1,6 @@
 import { findBuildingDef } from '@/data/buildings';
+import { findCropDef } from '@/data/crops';
+import { findQuestDef } from '@/data/quests';
 import { SAVE_VERSION } from './newGame';
 import type { GameState } from './types';
 
@@ -57,10 +59,22 @@ function validate(state: Record<string, unknown>): boolean {
   if (!numbers.every((key) => typeof state[key] === 'number' && Number.isFinite(state[key]))) return false;
   if (!Array.isArray(state.entities) || !Array.isArray(state.unlockedChunks)) return false;
   if (!isObject(state.quests) || !isObject(state.tutorial) || !isObject(state.stats)) return false;
-  // Une construction inconnue (contenu retiré) invaliderait la carte : on la retire.
+  const quests = state.quests;
+  if (!Array.isArray(quests.active) || !Array.isArray(quests.completed)) return false;
+  // Contenu retiré ou renommé par une mise à jour : on l'écarte plutôt que de bloquer la partie.
   state.entities = (state.entities as Array<Record<string, unknown>>).filter(
     (e) => isObject(e) && typeof e.defId === 'string' && findBuildingDef(e.defId) !== undefined,
   );
+  for (const entity of state.entities as Array<Record<string, unknown>>) {
+    const farm = entity.farm;
+    if (isObject(farm) && farm.cropId !== null && (typeof farm.cropId !== 'string' || !findCropDef(farm.cropId))) {
+      entity.farm = { cropId: null, plantedAt: 0, readyAt: 0 };
+    }
+  }
+  quests.active = (quests.active as unknown[]).filter(
+    (q) => isObject(q) && typeof q.id === 'string' && findQuestDef(q.id) !== undefined && Array.isArray(q.counts),
+  );
+  quests.completed = (quests.completed as unknown[]).filter((id) => typeof id === 'string' && findQuestDef(id));
   return true;
 }
 

@@ -4,6 +4,7 @@ import type { PaymentProvider } from '@/services/payments/PaymentProvider';
 import { clear, h, icon } from './dom';
 import { formatNumber } from './format';
 import { Icons } from './icons';
+import { failMessage } from './messages';
 
 export type ShopTab = 'cash' | 'coins';
 
@@ -116,37 +117,38 @@ export class Shop {
 
   private renderOffers(): void {
     const grid = h('div', { class: 'offers' });
+    const energyFull = this.game.state.energy >= this.game.derived().energyMax;
     for (const offer of CASH_OFFERS) {
       const affordable = this.game.state.cash >= offer.cash;
       const isEnergy = offer.reward === 'energyRefill' || (typeof offer.reward === 'object' && offer.reward.energy);
-      grid.append(
-        h(
-          'button',
-          {
-            class: 'offer',
-            onClick: () => {
-              const result = this.game.buyCashOffer(offer.id);
-              if (result.ok) {
-                this.notify(`${offer.title} : c’est fait !`, 'success');
-                this.render();
-              } else {
-                this.notify('Pas assez de cash.', 'error');
-                this.tab = 'cash';
-                this.render();
-              }
-            },
+      const useless = offer.reward === 'energyRefill' && energyFull;
+      const button = h(
+        'button',
+        {
+          class: 'offer',
+          onClick: () => {
+            const result = this.game.buyCashOffer(offer.id);
+            if (result.ok) {
+              this.notify(`${offer.title} : c’est fait !`, 'success');
+            } else {
+              this.notify(failMessage(result.reason, result.missing), 'error');
+              if (result.reason === 'notEnoughCash') this.tab = 'cash';
+            }
+            this.render();
           },
-          h('span', { class: 'offer__icon' }, icon(isEnergy ? Icons.energy : Icons.coin)),
-          h('span', { class: 'offer__title', text: offer.title }),
-          h('span', { class: 'offer__desc', text: offer.description }),
-          h(
-            'span',
-            { class: `offer__price offer__price--cash${affordable ? '' : ' is-short'}` },
-            icon(Icons.cash),
-            ` ${formatNumber(offer.cash)}`,
-          ),
+        },
+        h('span', { class: 'offer__icon' }, icon(isEnergy ? Icons.energy : Icons.coin)),
+        h('span', { class: 'offer__title', text: offer.title }),
+        h('span', { class: 'offer__desc', text: useless ? 'Votre énergie est déjà au maximum' : offer.description }),
+        h(
+          'span',
+          { class: `offer__price offer__price--cash${affordable ? '' : ' is-short'}` },
+          icon(Icons.cash),
+          ` ${formatNumber(offer.cash)}`,
         ),
       );
+      if (useless) button.disabled = true;
+      grid.append(button);
     }
     this.body.append(grid);
   }

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ENERGY_REGEN_SEC, energyMaxForLevel, xpForLevel } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
 import { Game, type Clock } from './game';
+import { findHint, findQuestHint } from './hints';
 import { createNewGame } from './newGame';
 import { deserialize, serialize } from './save';
 import type { Entity } from './types';
@@ -41,7 +42,7 @@ describe('nouvelle partie', () => {
     expect(byDef(game, 'town_hall')).toHaveLength(1);
     expect(byDef(game, 'cottage')).toHaveLength(2);
     expect(byDef(game, 'plot')).toHaveLength(4);
-    expect(game.activeQuests().map((q) => q.def.id)).toEqual(['welcome']);
+    expect(game.activeQuests().map((q) => q.def.id)).toEqual(['welcome', 'harvest']);
     expect(game.derived()).toMatchObject({ population: 30, popCap: 80, goodsCap: 250 });
   });
 
@@ -305,6 +306,59 @@ describe('objectifs', () => {
   });
 });
 
+describe('aides des objectifs', () => {
+  it('compte les récoltes faites avant la fin de « Bienvenue »', () => {
+    const { game } = setup();
+    for (const plot of byDef(game, 'plot')) game.harvest(plot.id);
+    expect(game.state.quests.completed).toContain('harvest');
+  });
+
+  it('propose de planter quand rien n’est mûr', () => {
+    const { game } = setup();
+    for (const house of byDef(game, 'cottage')) game.collectRent(house.id);
+    const plots = byDef(game, 'plot');
+    game.harvest(plots[0]!.id);
+    for (const plot of plots.slice(1)) {
+      plot.farm = { cropId: 'strawberry', plantedAt: game.now(), readyAt: game.now() + 60_000 };
+    }
+    const harvest = game.state.quests.active.find((q) => q.id === 'harvest')!;
+    expect(findQuestHint(game, harvest)).toEqual({ kind: 'entity', entityId: plots[0]!.id });
+  });
+
+  it('guide vers l’approvisionnement avant l’encaissement', () => {
+    const { game } = setup();
+    game.state.quests.completed.push('welcome', 'harvest', 'bakery', 'houses');
+    game.state.quests.active = [];
+    game.devGrant({ xp: 15, coins: 5000 });
+    const fresh = new Game(game.state, { now: () => game.now() });
+    for (let i = 0; i < 2; i++) {
+      const spot = freeSpot(fresh, 'cottage');
+      const placed = fresh.place('cottage', spot.x, spot.y);
+      if (placed.ok) fresh.speedUp(placed.entity.id);
+    }
+    const spot = freeSpot(fresh, 'flower_shop');
+    const placed = fresh.place('flower_shop', spot.x, spot.y);
+    if (!placed.ok) throw new Error(placed.reason);
+    fresh.state.cash = 50;
+    fresh.speedUp(placed.entity.id);
+    const quest = fresh.state.quests.active.find((q) => q.id === 'flowers')!;
+    expect(findQuestHint(fresh, quest)).toEqual({ kind: 'entity', entityId: placed.entity.id });
+    expect(fresh.primaryAction(placed.entity).type).toBe('supply');
+  });
+
+  it('montre une zone achetable pour l’objectif d’agrandissement', () => {
+    const { game } = setup();
+    game.state.quests.completed.push('welcome', 'harvest', 'plant', 'bakery', 'houses', 'school');
+    game.state.quests.active = [];
+    const fresh = new Game(game.state, { now: () => game.now() });
+    const quest = fresh.state.quests.active.find((q) => q.id === 'expand')!;
+    const hint = findQuestHint(fresh, quest);
+    expect(hint).toMatchObject({ kind: 'expand' });
+    if (hint?.kind === 'expand') expect(fresh.expansionInfo(hint.cx, hint.cy).status).toBe('purchasable');
+    expect(findHint(fresh)).not.toBeNull();
+  });
+});
+
 describe('agrandissements', () => {
   it('ne vend que les zones adjacentes, au bon niveau', () => {
     const { game } = setup();
@@ -333,6 +387,14 @@ describe('boutique', () => {
     expect(game.buyCashOffer('coins_6000')).toMatchObject({ ok: false, reason: 'notEnoughCash' });
   });
 
+  it('ne facture pas une recharge d’énergie quand la jauge est pleine', () => {
+    const { game } = setup();
+    game.state.cash = 20;
+    expect(game.state.energy).toBe(energyMaxForLevel(1));
+    expect(game.buyCashOffer('energy_full')).toMatchObject({ ok: false, reason: 'energyFull' });
+    expect(game.state.cash).toBe(20);
+  });
+
   it('crédite un achat réel une seule fois pour les offres uniques', () => {
     const { game } = setup();
     expect(game.grantStoreProduct('starter_pack').ok).toBe(true);
@@ -348,6 +410,21 @@ describe('sauvegarde', () => {
     game.collectRent(byDef(game, 'cottage')[0]!.id);
     const restored = deserialize(serialize(game.state, clock.now()));
     expect(restored).toEqual(game.state);
+  });
+
+  it('écarte les objectifs et cultures inconnus (contenu renommé)', () => {
+    const { game, clock } = setup();
+    const plot = byDef(game, 'plot')[0]!;
+    const file = JSON.parse(serialize(game.state, clock.now()));
+    file.state.quests.active.push({ id: 'quete_disparue', counts: [0], startedAt: 0 });
+    file.state.quests.completed.push('autre_quete_disparue');
+    file.state.entities.find((e: Entity) => e.id === plot.id).farm.cropId = 'mangue';
+    const restored = deserialize(JSON.stringify(file));
+    expect(restored).not.toBeNull();
+    expect(restored!.quests.active.map((q) => q.id)).toEqual(['welcome', 'harvest']);
+    expect(restored!.quests.completed).toEqual([]);
+    expect(restored!.entities.find((e) => e.id === plot.id)!.farm!.cropId).toBeNull();
+    expect(() => new Game(restored!, clock)).not.toThrow();
   });
 
   it('rejette les données corrompues ou futures', () => {
