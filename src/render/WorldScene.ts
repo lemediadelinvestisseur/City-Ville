@@ -1,0 +1,1042 @@
+import Phaser from 'phaser';
+import type { AppContext, ScreenPoint, WorldMode } from '@/app/context';
+import { findHint, type HintTarget } from '@/core/hints';
+import { CHUNKS_PER_SIDE, chunkOf, roadMask } from '@/core/grid';
+import type { Entity, FailReason, Reward } from '@/core/types';
+import { CHUNK_SIZE, MAP_SIZE } from '@/data/balance';
+import { getBuildingDef } from '@/data/buildings';
+import { ArtKey, CLOUD_VARIANTS, GRASS_VARIANTS } from './art/library';
+import type { BadgeKind } from './art/sprites';
+import { CameraController } from './CameraController';
+import { HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } from './iso';
+import { DEPTH_FX, Effects } from './Effects';
+import { WalkerSystem } from './WalkerSystem';
+
+const DEPTH_GROUND = 0;
+const DEPTH_ROAD = 2;
+const DEPTH_LIMITS = 4;
+const DEPTH_OVERLAY = 1_000_000;
+const DEPTH_GHOST = 2_000_000;
+const DEPTH_CLOUDS = 4_000_000;
+
+const LOCKED_TINT = 0xa9bb92;
+const TAP_SLOP_CSS = 10;
+
+interface View {
+  entity: Entity;
+  main: Phaser.GameObjects.Image;
+  textureKey: string;
+  crop: Phaser.GameObjects.Image | null;
+  cropKey: string | null;
+  badge: Phaser.GameObjects.Image | null;
+  badgeKind: BadgeKind | null;
+  badgeBaseY: number;
+  bar: Phaser.GameObjects.Graphics | null;
+  barKey: string;
+}
+
+interface Placement {
+  defId: string;
+  moveId: number | null;
+  x: number;
+  y: number;
+  ghost: Phaser.GameObjects.Image;
+  valid: boolean;
+  reason: FailReason | null;
+}
+
+type Gesture = 'none' | 'pan' | 'pinch' | 'ghost';
+
+/** Scène principale : la carte isométrique, ses constructions et les interactions tactiles. */
+export class WorldScene extends Phaser.Scene {
+  private camCtl!: CameraController;
+  private fx!: Effects;
+  private views = new Map<number, View>();
+  private ground: Phaser.GameObjects.Image[] = [];
+  private limits!: Phaser.GameObjects.Graphics;
+  private overlay!: Phaser.GameObjects.Graphics;
+  private signs = new Map<string, Phaser.GameObjects.Image>();
+  private walkers!: WalkerSystem;
+  private clouds: Phaser.GameObjects.Image[] = [];
+  private arrow!: Phaser.GameObjects.Image;
+  private hintKey = '';
+  private hintEntityId: number | null = null;
+  private mode: WorldMode = 'play';
+  private plantCropId: string | null = null;
+  private placement: Placement | null = null;
+  private selectedId: number | null = null;
+  private unsubscribers: Array<() => void> = [];
+
+  // Gestes
+  private pointers = new Map<number, { x: number; y: number }>();
+  private gesture: Gesture = 'none';
+  private tapCandidate = false;
+  private down = { x: 0, y: 0, time: 0 };
+  private last = { x: 0, y: 0, time: 0 };
+  private velocity = { x: 0, y: 0 };
+  private pinch = { dist: 1, zoom: 1, midX: 0, midY: 0 };
+  private grab = { dx: 0, dy: 0 };
+  private overlayScale = 1;
+
+  constructor(
+    private readonly ctx: AppContext,
+    private readonly dpr: number,
+  ) {
+    super({ key: 'world' });
+  }
+
+  private get game_() {
+    return this.ctx.game;
+  }
+
+  create(): void {
+    for (const [key, piece] of this.ctx.art.pieces) {
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, piece.canvas);
+    }
+    this.cameras.main.setBackgroundColor('#5f9440');
+    this.fx = new Effects(this);
+    this.buildGround();
+    this.limits = this.add.graphics().setDepth(DEPTH_LIMITS);
+    this.overlay = this.add.graphics().setDepth(DEPTH_GHOST - 1);
+    this.walkers = new WalkerSystem(this);
+    for (const entity of this.game_.state.entities) this.addView(entity);
+    this.refreshRoads();
+    this.refreshLimits();
+    this.createClouds();
+    this.arrow = this.add
+      .image(0, 0, ArtKey.arrow)
+      .setOrigin(0.5, 1)
+      .setDepth(DEPTH_FX - 1)
+      .setVisible(false);
+
+    const margin = 420;
+    const isSmall = Math.min(window.innerWidth, window.innerHeight) < 700;
+    this.camCtl = new CameraController(
+      this.cameras.main,
+      this.dpr,
+      {
+        x: -MAP_SIZE * HALF_W - margin,
+        y: -margin,
+        w: MAP_SIZE * HALF_W * 2 + margin * 2,
+        h: MAP_SIZE * TILE_H + margin * 2,
+      },
+      0.22,
+      1.4,
+      isSmall ? 0.4 : 0.62,
+    );
+    const start = tileToWorld(16.5, 18.5);
+    this.camCtl.centerOn(start.x, start.y);
+    this.updateOverlayScale();
+
+    this.setupInput();
+    this.subscribe();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    this.time.addEvent({ delay: 500, loop: true, callback: () => this.refreshDynamic() });
+    this.refreshDynamic();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubscribers.forEach((u) => u()));
+    this.ctx.bus.emit('world:ready', undefined);
+  }
+
+  override update(time: number, delta: number): void {
+    if (this.camCtl.update(delta)) this.ctx.bus.emit('world:cameraMoved', undefined);
+    this.walkers.update(delta, time);
+    const bob = Math.sin(time / 260) * 5;
+    for (const view of this.views.values()) {
+      if (view.badge) view.badge.y = view.badgeBaseY + bob * this.overlayScale;
+    }
+    if (this.arrow.visible && this.hintEntityId !== null) {
+      const view = this.views.get(this.hintEntityId);
+      if (view) this.arrow.y = this.topOf(view) - 72 * this.overlayScale + Math.sin(time / 180) * 10;
+    }
+    for (const cloud of this.clouds) {
+      cloud.x += (delta / 1000) * (cloud.getData('speed') as number);
+      if (cloud.x > MAP_SIZE * HALF_W + 600) cloud.x = -MAP_SIZE * HALF_W - 600;
+    }
+  }
+
+  // ———————————————————————————— Terrain ————————————————————————————
+
+  private buildGround(): void {
+    for (let y = 0; y < MAP_SIZE; y++) {
+      for (let x = 0; x < MAP_SIZE; x++) {
+        const variant = (x * 7 + y * 13 + ((x * y) % 5)) % GRASS_VARIANTS;
+        const key = ArtKey.grass(variant);
+        const piece = this.ctx.art.get(key);
+        const pos = tileToWorld(x, y);
+        const tile = this.add.image(pos.x, pos.y, key).setOrigin(piece.originX, piece.originY).setDepth(DEPTH_GROUND);
+        if (!this.game_.isTileUnlocked(x, y)) tile.setTint(LOCKED_TINT);
+        this.ground.push(tile);
+      }
+    }
+  }
+
+  private refreshGroundTint(): void {
+    for (let y = 0; y < MAP_SIZE; y++) {
+      for (let x = 0; x < MAP_SIZE; x++) {
+        const tile = this.ground[y * MAP_SIZE + x];
+        if (!tile) continue;
+        if (this.game_.isTileUnlocked(x, y)) tile.clearTint();
+        else tile.setTint(LOCKED_TINT);
+      }
+    }
+  }
+
+  /** Limites de la ville (pointillés) et panneaux « À vendre ». */
+  private refreshLimits(): void {
+    const g = this.limits;
+    g.clear();
+    g.lineStyle(5, 0xffffff, 0.6);
+    const dash = (ax: number, ay: number, bx: number, by: number) => {
+      const steps = CHUNK_SIZE * 2;
+      for (let i = 0; i < steps; i += 2) {
+        const s = tileToWorld(ax + ((bx - ax) * i) / steps, ay + ((by - ay) * i) / steps);
+        const e = tileToWorld(ax + ((bx - ax) * (i + 1)) / steps, ay + ((by - ay) * (i + 1)) / steps);
+        g.lineBetween(s.x, s.y, e.x, e.y);
+      }
+    };
+    for (let cy = 0; cy < CHUNKS_PER_SIDE; cy++) {
+      for (let cx = 0; cx < CHUNKS_PER_SIDE; cx++) {
+        if (!this.game_.isChunkUnlocked(cx, cy)) continue;
+        const x0 = cx * CHUNK_SIZE;
+        const y0 = cy * CHUNK_SIZE;
+        const x1 = x0 + CHUNK_SIZE;
+        const y1 = y0 + CHUNK_SIZE;
+        if (!this.game_.isChunkUnlocked(cx, cy - 1)) dash(x0, y0, x1, y0);
+        if (!this.game_.isChunkUnlocked(cx, cy + 1)) dash(x0, y1, x1, y1);
+        if (!this.game_.isChunkUnlocked(cx - 1, cy)) dash(x0, y0, x0, y1);
+        if (!this.game_.isChunkUnlocked(cx + 1, cy)) dash(x1, y0, x1, y1);
+      }
+    }
+    // Panneaux sur les zones achetables.
+    const wanted = new Set<string>();
+    for (let cy = 0; cy < CHUNKS_PER_SIDE; cy++) {
+      for (let cx = 0; cx < CHUNKS_PER_SIDE; cx++) {
+        if (this.game_.expansionInfo(cx, cy).status !== 'purchasable') continue;
+        const key = `${cx},${cy}`;
+        wanted.add(key);
+        if (this.signs.has(key)) continue;
+        const tx = cx * CHUNK_SIZE + CHUNK_SIZE / 2;
+        const ty = cy * CHUNK_SIZE + CHUNK_SIZE / 2;
+        const pos = tileToWorld(tx, ty);
+        const sign = this.add
+          .image(pos.x, pos.y, ArtKey.forSale)
+          .setOrigin(0.5, this.ctx.art.get(ArtKey.forSale).originY)
+          .setScale(1.6)
+          .setDepth(depthOf(tx, ty, 1, 1) + 0.3);
+        this.signs.set(key, sign);
+      }
+    }
+    for (const [key, sign] of this.signs) {
+      if (!wanted.has(key)) {
+        sign.destroy();
+        this.signs.delete(key);
+      }
+    }
+  }
+
+  private createClouds(): void {
+    for (let i = 0; i < 3; i++) {
+      const cloud = this.add
+        .image(-1800 + i * 1500, 300 + i * 650, ArtKey.cloud(i % CLOUD_VARIANTS))
+        .setDepth(DEPTH_CLOUDS)
+        .setAlpha(0.32)
+        .setScale(1.8 + i * 0.3);
+      cloud.setData('speed', 10 + i * 4);
+      this.clouds.push(cloud);
+    }
+  }
+
+  // ———————————————————————————— Vues des constructions ————————————————————————————
+
+  private textureFor(entity: Entity): string {
+    const def = getBuildingDef(entity.defId);
+    if (def.category === 'road') return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y), entity.x, entity.y));
+    if (!entity.built) return ArtKey.construction(Math.min(3, Math.max(def.size.w, def.size.d)));
+    return ArtKey.building(def.id);
+  }
+
+  private cropKeyFor(entity: Entity): string | null {
+    const farm = entity.farm;
+    if (!farm || farm.cropId === null) return null;
+    const now = this.game_.now();
+    if (now >= farm.readyAt) return ArtKey.crop(farm.cropId, 'ripe');
+    const ratio = (now - farm.plantedAt) / Math.max(1, farm.readyAt - farm.plantedAt);
+    return ArtKey.crop(farm.cropId, ratio < 0.4 ? 'sprout' : 'growing');
+  }
+
+  private badgeFor(entity: Entity): BadgeKind | null {
+    switch (this.game_.primaryAction(entity).type) {
+      case 'build':
+        return 'build';
+      case 'collectRent':
+      case 'collectBusiness':
+        return 'coin';
+      case 'harvest':
+        return 'harvest';
+      case 'supply':
+        return 'goods';
+      default:
+        return null;
+    }
+  }
+
+  private isFlat(entity: Entity): boolean {
+    const category = getBuildingDef(entity.defId).category;
+    return category === 'road';
+  }
+
+  private addView(entity: Entity): void {
+    const key = this.textureFor(entity);
+    const main = this.add.image(0, 0, key);
+    const view: View = {
+      entity,
+      main,
+      textureKey: '',
+      crop: null,
+      cropKey: null,
+      badge: null,
+      badgeKind: null,
+      badgeBaseY: 0,
+      bar: null,
+      barKey: '',
+    };
+    this.views.set(entity.id, view);
+    this.syncView(view);
+  }
+
+  private removeView(id: number): void {
+    const view = this.views.get(id);
+    if (!view) return;
+    view.main.destroy();
+    view.crop?.destroy();
+    view.badge?.destroy();
+    view.bar?.destroy();
+    this.views.delete(id);
+    if (this.selectedId === id) this.select(null);
+  }
+
+  /** Met à jour texture, position, profondeur, culture, bulle et barre de chantier. */
+  private syncView(view: View): void {
+    const { entity } = view;
+    const def = getBuildingDef(entity.defId);
+    const key = this.textureFor(entity);
+    if (key !== view.textureKey) {
+      const piece = this.ctx.art.get(key);
+      view.main.setTexture(key).setOrigin(piece.originX, piece.originY);
+      view.textureKey = key;
+    }
+    const pos = tileToWorld(entity.x, entity.y);
+    const depth = this.isFlat(entity) ? DEPTH_ROAD : depthOf(entity.x, entity.y, def.size.w, def.size.d);
+    view.main.setPosition(pos.x, pos.y).setDepth(depth);
+    const locked = !this.game_.isTileUnlocked(entity.x, entity.y);
+    if (locked) view.main.setTint(LOCKED_TINT);
+    else if (this.selectedId !== entity.id) view.main.clearTint();
+
+    const cropKey = this.cropKeyFor(entity);
+    if (cropKey !== view.cropKey) {
+      if (cropKey) {
+        const piece = this.ctx.art.get(cropKey);
+        if (!view.crop) view.crop = this.add.image(0, 0, cropKey);
+        view.crop.setTexture(cropKey).setOrigin(piece.originX, piece.originY);
+      } else {
+        view.crop?.destroy();
+        view.crop = null;
+      }
+      view.cropKey = cropKey;
+    }
+    view.crop?.setPosition(pos.x, pos.y).setDepth(depth + 0.001);
+
+    const badgeKind = locked ? null : this.badgeFor(entity);
+    if (badgeKind !== view.badgeKind) {
+      view.badge?.destroy();
+      view.badge = badgeKind ? this.add.image(0, 0, ArtKey.badge(badgeKind)).setOrigin(0.5, 1) : null;
+      view.badgeKind = badgeKind;
+    }
+    if (view.badge) {
+      view.badgeBaseY = this.topOf(view) + 10 * this.overlayScale;
+      const center = footprintCenter(entity.x, entity.y, def.size.w, def.size.d);
+      view.badge
+        .setPosition(center.x, view.badgeBaseY)
+        .setDepth(DEPTH_OVERLAY + depth)
+        .setScale(this.overlayScale * (badgeKind === 'goods' ? 0.9 : 1));
+    }
+
+    const barKey = entity.built
+      ? ''
+      : `${entity.buildProgress}/${def.buildSteps}@${entity.x},${entity.y}:${this.overlayScale}`;
+    if (barKey !== view.barKey) {
+      view.barKey = barKey;
+      if (!barKey) {
+        view.bar?.destroy();
+        view.bar = null;
+      } else {
+        if (!view.bar) view.bar = this.add.graphics();
+        this.drawBuildBar(view.bar, view, entity.buildProgress, def.buildSteps);
+      }
+    }
+  }
+
+  private drawBuildBar(g: Phaser.GameObjects.Graphics, view: View, done: number, total: number): void {
+    const def = getBuildingDef(view.entity.defId);
+    const center = footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d);
+    const s = this.overlayScale;
+    const width = Math.max(70, total * 18) * s;
+    const height = 12 * s;
+    const x = center.x - width / 2;
+    const y = center.y + 18 * s;
+    g.clear();
+    g.setDepth(DEPTH_OVERLAY + view.main.depth + 0.5);
+    g.fillStyle(0x0b2a4a, 0.75);
+    g.fillRoundedRect(x - 3 * s, y - 3 * s, width + 6 * s, height + 6 * s, 7 * s);
+    const gap = 3 * s;
+    const seg = (width - gap * (total - 1)) / total;
+    for (let i = 0; i < total; i++) {
+      g.fillStyle(i < done ? 0x4fc3f7 : 0x37506a, 1);
+      g.fillRoundedRect(x + i * (seg + gap), y, seg, height, 4 * s);
+    }
+  }
+
+  /** Haut visuel d'une construction (en coordonnées monde). */
+  private topOf(view: View): number {
+    const { main } = view;
+    const piece = this.ctx.art.get(view.textureKey);
+    const top = main.y - main.displayHeight * main.originY;
+    // Les textures ont une marge transparente ; on la compense grossièrement.
+    return top + Math.min(24, piece.canvas.height * 0.06);
+  }
+
+  /** Rafraîchit les états qui dépendent du temps (cultures, loyers…) et l'aide visuelle. */
+  private refreshDynamic(): void {
+    for (const view of this.views.values()) {
+      const e = view.entity;
+      if (e.house || e.business || e.farm || !e.built) {
+        const badge = this.badgeFor(e);
+        if (badge !== view.badgeKind || this.cropKeyFor(e) !== view.cropKey) this.syncView(view);
+      }
+    }
+    this.refreshHint();
+  }
+
+  private refreshRoads(): void {
+    const roads: Array<{ x: number; y: number }> = [];
+    for (const view of this.views.values()) {
+      if (view.entity.defId === 'road') {
+        roads.push({ x: view.entity.x, y: view.entity.y });
+        const key = this.textureFor(view.entity);
+        if (key !== view.textureKey) this.syncView(view);
+      }
+    }
+    this.walkers.setRoads(roads.filter((r) => this.game_.isTileUnlocked(r.x, r.y)));
+    this.walkers.setTarget(Math.min(28, Math.round(this.game_.derived().population / 7)));
+  }
+
+  private refreshHint(): void {
+    const hint: HintTarget | null = this.game_.state.level <= 4 && this.mode === 'play' ? findHint(this.game_) : null;
+    const key = JSON.stringify(hint);
+    if (key !== this.hintKey) {
+      this.hintKey = key;
+      this.ctx.bus.emit('world:hint', hint);
+    }
+    this.hintEntityId = hint?.kind === 'entity' && !this.placement ? hint.entityId : null;
+    const view = this.hintEntityId !== null ? this.views.get(this.hintEntityId) : undefined;
+    if (view) {
+      const def = getBuildingDef(view.entity.defId);
+      const center = footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d);
+      this.arrow.setVisible(true).setX(center.x).setScale(this.overlayScale);
+    } else {
+      this.arrow.setVisible(false);
+    }
+  }
+
+  private updateOverlayScale(): void {
+    const scale = Math.max(0.8, Math.min(1.7, 0.55 / this.camCtl.userZoom));
+    if (Math.abs(scale - this.overlayScale) < 0.02) return;
+    this.overlayScale = scale;
+    for (const view of this.views.values()) if (view.badge || view.bar) this.syncView(view);
+  }
+
+  // ———————————————————————————— Évènements ————————————————————————————
+
+  private subscribe(): void {
+    const { game, bus } = this.ctx;
+    const on = (unsubscribe: () => void): void => {
+      this.unsubscribers.push(unsubscribe);
+    };
+    on(
+      game.events.on('entityAdded', (entity) => {
+        this.addView(entity);
+        if (entity.defId === 'road') this.refreshRoads();
+        const view = this.views.get(entity.id);
+        if (view) this.popIn(view);
+      }),
+    );
+    on(
+      game.events.on('entityRemoved', (entity) => {
+        this.removeView(entity.id);
+        if (entity.defId === 'road') this.refreshRoads();
+        this.walkers.setTarget(Math.min(28, Math.round(game.derived().population / 7)));
+      }),
+    );
+    on(
+      game.events.on('entityMoved', (entity) => {
+        const view = this.views.get(entity.id);
+        if (view) this.syncView(view);
+        if (entity.defId === 'road') this.refreshRoads();
+      }),
+    );
+    on(
+      game.events.on('entityUpdated', (entity) => {
+        const view = this.views.get(entity.id);
+        if (view) this.syncView(view);
+      }),
+    );
+    on(
+      game.events.on('constructionComplete', (entity) => {
+        const view = this.views.get(entity.id);
+        if (view) this.celebrate(view);
+        this.refreshRoads();
+      }),
+    );
+    on(game.events.on('reward', ({ entityId, reward }) => this.onReward(entityId, reward)));
+    on(
+      game.events.on('expanded', () => {
+        this.refreshGroundTint();
+        this.refreshLimits();
+        for (const view of this.views.values()) this.syncView(view);
+        this.refreshRoads();
+      }),
+    );
+    on(game.events.on('levelUp', () => this.refreshLimits()));
+    on(game.events.on('change', () => this.refreshHint()));
+
+    on(bus.on('ui:startPlacement', ({ defId }) => this.startPlacement(defId, null)));
+    on(bus.on('ui:startMove', ({ entityId }) => this.startMoveOf(entityId)));
+    on(bus.on('ui:confirmPlacement', () => this.confirmPlacement()));
+    on(bus.on('ui:cancelPlacement', () => this.endPlacement()));
+    on(
+      bus.on('ui:setMode', (mode) => {
+        this.mode = mode;
+        if (mode === 'play') this.select(null);
+        this.refreshHint();
+      }),
+    );
+    on(
+      bus.on('ui:plantMode', ({ cropId }) => {
+        this.plantCropId = cropId;
+      }),
+    );
+    on(bus.on('ui:focusEntity', ({ entityId }) => this.focusEntity(entityId)));
+  }
+
+  private onResize(gameSize: Phaser.Structs.Size): void {
+    this.cameras.main.setSize(gameSize.width, gameSize.height);
+    this.camCtl.apply();
+  }
+
+  // ———————————————————————————— Entrées ————————————————————————————
+
+  private setupInput(): void {
+    this.input.addPointer(2);
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
+    this.input.on(Phaser.Input.Events.POINTER_UP, this.onPointerUp, this);
+    this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onPointerUp, this);
+    this.input.on(
+      Phaser.Input.Events.POINTER_WHEEL,
+      (pointer: Phaser.Input.Pointer, _objects: unknown, _dx: number, dy: number) => {
+        const factor = Math.exp(-dy * 0.0015);
+        this.camCtl.zoomAt(this.camCtl.userZoom * factor, pointer.x, pointer.y);
+        this.updateOverlayScale();
+        this.ctx.bus.emit('world:cameraMoved', undefined);
+      },
+    );
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.placement) this.endPlacement();
+      else this.ctx.bus.emit('world:emptyTap', undefined);
+    });
+    this.input.keyboard?.on('keydown-ENTER', () => this.confirmPlacement());
+  }
+
+  private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    this.pointers.set(pointer.id, { x: pointer.x, y: pointer.y });
+    this.camCtl.stop();
+    if (this.pointers.size >= 2) {
+      const [a, b] = [...this.pointers.values()];
+      if (!a || !b) return;
+      this.gesture = 'pinch';
+      this.tapCandidate = false;
+      this.pinch = {
+        dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+        zoom: this.camCtl.userZoom,
+        midX: (a.x + b.x) / 2,
+        midY: (a.y + b.y) / 2,
+      };
+      return;
+    }
+    const now = performance.now();
+    this.tapCandidate = true;
+    this.down = { x: pointer.x, y: pointer.y, time: now };
+    this.last = { x: pointer.x, y: pointer.y, time: now };
+    this.velocity = { x: 0, y: 0 };
+    if (this.placement && this.isOnGhost(pointer)) {
+      this.gesture = 'ghost';
+      const tile = this.tileAt(pointer.x, pointer.y);
+      this.grab = { dx: tile.x - this.placement.x, dy: tile.y - this.placement.y };
+    } else {
+      this.gesture = 'pan';
+    }
+  }
+
+  private onPointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!pointer.isDown) {
+      // Souris : la construction fantôme suit le curseur.
+      if (this.placement && !pointer.wasTouch) {
+        const def = getBuildingDef(this.placement.defId);
+        const tile = this.tileAt(pointer.x, pointer.y);
+        this.movePlacement(tile.x - Math.floor((def.size.w - 1) / 2), tile.y - Math.floor((def.size.d - 1) / 2));
+      }
+      return;
+    }
+    if (!this.pointers.has(pointer.id)) return;
+    this.pointers.set(pointer.id, { x: pointer.x, y: pointer.y });
+    const slop = TAP_SLOP_CSS * this.dpr;
+    if (Math.hypot(pointer.x - this.down.x, pointer.y - this.down.y) > slop) this.tapCandidate = false;
+
+    if (this.gesture === 'pinch' && this.pointers.size >= 2) {
+      const [a, b] = [...this.pointers.values()];
+      if (!a || !b) return;
+      const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      this.camCtl.zoomAt(this.pinch.zoom * (dist / this.pinch.dist), midX, midY);
+      this.camCtl.panBy(midX - this.pinch.midX, midY - this.pinch.midY);
+      this.pinch.midX = midX;
+      this.pinch.midY = midY;
+      this.updateOverlayScale();
+      this.ctx.bus.emit('world:cameraMoved', undefined);
+      return;
+    }
+    if (this.gesture === 'ghost' && this.placement) {
+      const tile = this.tileAt(pointer.x, pointer.y);
+      this.movePlacement(tile.x - this.grab.dx, tile.y - this.grab.dy);
+      return;
+    }
+    if (this.gesture === 'pan') {
+      const now = performance.now();
+      const dx = pointer.x - this.last.x;
+      const dy = pointer.y - this.last.y;
+      const dt = Math.max(1, now - this.last.time);
+      if (!this.tapCandidate) {
+        this.camCtl.panBy(dx, dy);
+        this.velocity.x = this.velocity.x * 0.6 + (dx / dt) * 0.4;
+        this.velocity.y = this.velocity.y * 0.6 + (dy / dt) * 0.4;
+        this.ctx.bus.emit('world:cameraMoved', undefined);
+      }
+      this.last = { x: pointer.x, y: pointer.y, time: now };
+    }
+  }
+
+  private onPointerUp(pointer: Phaser.Input.Pointer): void {
+    if (!this.pointers.has(pointer.id)) return;
+    this.pointers.delete(pointer.id);
+    if (this.gesture === 'pinch') {
+      if (this.pointers.size === 1) {
+        const [rest] = [...this.pointers.values()];
+        if (rest) this.last = { x: rest.x, y: rest.y, time: performance.now() };
+        this.gesture = 'pan';
+        this.tapCandidate = false;
+        this.velocity = { x: 0, y: 0 };
+      } else if (this.pointers.size === 0) {
+        this.gesture = 'none';
+      }
+      return;
+    }
+    if (this.gesture === 'pan' || this.gesture === 'ghost') {
+      if (this.tapCandidate) {
+        this.handleTap(pointer);
+      } else if (this.gesture === 'pan' && performance.now() - this.last.time < 80) {
+        this.camCtl.setVelocity(this.velocity.x, this.velocity.y);
+      }
+    }
+    if (this.pointers.size === 0) this.gesture = 'none';
+  }
+
+  private tileAt(sx: number, sy: number): { x: number; y: number } {
+    const world = this.camCtl.screenToWorld(sx, sy);
+    const tile = worldToTile(world.x, world.y);
+    return { x: Math.floor(tile.x), y: Math.floor(tile.y) };
+  }
+
+  private toCss(sx: number, sy: number): ScreenPoint {
+    return { x: sx / this.dpr, y: sy / this.dpr };
+  }
+
+  /** Position écran (CSS) du haut d'une construction. */
+  entityScreenPoint(entityId: number): ScreenPoint | null {
+    const view = this.views.get(entityId);
+    if (!view) return null;
+    const def = getBuildingDef(view.entity.defId);
+    const center = footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d);
+    const screen = this.camCtl.worldToScreen(center.x, Math.min(center.y, this.topOf(view) + 40));
+    return this.toCss(screen.x, screen.y);
+  }
+
+  /** Construction sous un point de l'écran (test au pixel près). */
+  private pick(sx: number, sy: number, includeFlat: boolean): Entity | null {
+    const world = this.camCtl.screenToWorld(sx, sy);
+    const candidates = [...this.views.values()]
+      .filter((v) => includeFlat || !this.isFlat(v.entity))
+      .sort((a, b) => b.main.depth - a.main.depth);
+    for (const view of candidates) {
+      const { main } = view;
+      const left = main.x - main.displayWidth * main.originX;
+      const top = main.y - main.displayHeight * main.originY;
+      const lx = Math.floor(world.x - left);
+      const ly = Math.floor(world.y - top);
+      if (lx < 0 || ly < 0 || lx >= main.width || ly >= main.height) continue;
+      const alpha = this.textures.getPixelAlpha(lx, ly, view.textureKey);
+      if (alpha > 60) return view.entity;
+    }
+    const tile = worldToTile(world.x, world.y);
+    const entity = this.game_.entityAt(Math.floor(tile.x), Math.floor(tile.y));
+    if (entity && (includeFlat || !this.isFlat(entity))) return entity;
+    return null;
+  }
+
+  private handleTap(pointer: Phaser.Input.Pointer): void {
+    const { x, y } = pointer;
+    if (this.placement) {
+      const p = this.placement;
+      const def = getBuildingDef(p.defId);
+      const tile = this.tileAt(x, y);
+      const onGhost = tile.x >= p.x && tile.x < p.x + def.size.w && tile.y >= p.y && tile.y < p.y + def.size.d;
+      // Toucher la construction fantôme la pose ; toucher ailleurs la déplace.
+      if (onGhost) this.confirmPlacement();
+      else this.movePlacement(tile.x - Math.floor((def.size.w - 1) / 2), tile.y - Math.floor((def.size.d - 1) / 2));
+      return;
+    }
+    if (this.mode === 'edit') {
+      const entity = this.pick(x, y, true);
+      if (entity && this.game_.isTileUnlocked(entity.x, entity.y)) this.select(entity.id);
+      else this.select(null);
+      return;
+    }
+    const entity = this.pick(x, y, false);
+    if (entity && this.game_.isTileUnlocked(entity.x, entity.y)) {
+      this.interact(entity, this.toCss(x, y));
+      return;
+    }
+    const tile = this.tileAt(x, y);
+    if (!this.game_.isTileUnlocked(tile.x, tile.y)) {
+      const { cx, cy } = chunkOf(tile.x, tile.y);
+      this.ctx.bus.emit('world:lockedTap', { cx, cy, screen: this.toCss(x, y) });
+      return;
+    }
+    this.ctx.bus.emit('world:emptyTap', undefined);
+  }
+
+  /** Action principale sur une construction touchée. */
+  private interact(entity: Entity, screen: ScreenPoint): void {
+    const { game, bus } = this.ctx;
+    const view = this.views.get(entity.id);
+    if (view) this.bounce(view);
+    const action = game.primaryAction(entity);
+    let result: { ok: boolean; reason?: FailReason; missing?: number } | null = null;
+    switch (action.type) {
+      case 'build':
+        result = game.buildStep(entity.id);
+        if (result.ok && view) this.hammerFx(view);
+        break;
+      case 'collectRent':
+        result = game.collectRent(entity.id);
+        break;
+      case 'harvest':
+        result = game.harvest(entity.id);
+        break;
+      case 'supply':
+        result = game.supply(entity.id);
+        if (result.ok && view) this.supplyFx(view);
+        break;
+      case 'collectBusiness':
+        result = game.collectBusiness(entity.id);
+        break;
+      case 'plant':
+        if (this.plantCropId) result = game.plant(entity.id, this.plantCropId);
+        else bus.emit('world:entityInfo', { entityId: entity.id, screen, action });
+        break;
+      default:
+        bus.emit('world:entityInfo', { entityId: entity.id, screen, action });
+    }
+    if (result) bus.emit('world:action', { type: action.type, ok: result.ok });
+    if (result && !result.ok && result.reason) {
+      bus.emit('world:fail', { reason: result.reason, missing: result.missing, screen });
+    }
+  }
+
+  private select(id: number | null): void {
+    if (this.selectedId !== null) {
+      const previous = this.views.get(this.selectedId);
+      previous?.main.clearTint();
+    }
+    this.selectedId = id;
+    this.overlay.clear();
+    if (id === null) {
+      this.ctx.bus.emit('world:editSelect', null);
+      return;
+    }
+    const view = this.views.get(id);
+    if (!view) return;
+    view.main.setTint(0xbfe9ff);
+    const def = getBuildingDef(view.entity.defId);
+    this.drawFootprint(view.entity.x, view.entity.y, def.size.w, def.size.d, 0x4fc3f7, 0.35);
+    const screen = this.entityScreenPoint(id);
+    if (screen) this.ctx.bus.emit('world:editSelect', { entityId: id, screen });
+  }
+
+  private focusEntity(id: number): void {
+    const view = this.views.get(id);
+    if (!view) return;
+    const def = getBuildingDef(view.entity.defId);
+    const center = footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d);
+    const cam = this.cameras.main;
+    this.tweens.add({
+      targets: cam,
+      scrollX: center.x - cam.width / 2,
+      scrollY: center.y - cam.height / 2,
+      duration: 450,
+      ease: 'Sine.easeInOut',
+      onComplete: () => this.camCtl.centerOn(center.x, center.y),
+    });
+  }
+
+  // ———————————————————————————— Placement ————————————————————————————
+
+  private startMoveOf(entityId: number): void {
+    const entity = this.game_.getEntity(entityId);
+    if (!entity) return;
+    this.select(null);
+    this.startPlacement(entity.defId, entityId);
+  }
+
+  private startPlacement(defId: string, moveId: number | null): void {
+    this.endPlacement();
+    const def = getBuildingDef(defId);
+    let x: number;
+    let y: number;
+    if (moveId !== null) {
+      const entity = this.game_.getEntity(moveId);
+      if (!entity) return;
+      x = entity.x;
+      y = entity.y;
+      const original = this.views.get(moveId);
+      original?.main.setAlpha(0.25);
+      original?.crop?.setAlpha(0.25);
+      original?.badge?.setVisible(false);
+    } else {
+      const center = this.camCtl.center();
+      const tile = worldToTile(center.x, center.y);
+      const spot = this.nearestFreeSpot(
+        Math.floor(tile.x - def.size.w / 2 + 0.5),
+        Math.floor(tile.y - def.size.d / 2 + 0.5),
+        defId,
+      );
+      x = spot.x;
+      y = spot.y;
+    }
+    const key = def.category === 'road' ? ArtKey.road(0) : ArtKey.building(defId);
+    const piece = this.ctx.art.get(key);
+    const ghost = this.add
+      .image(0, 0, key)
+      .setOrigin(piece.originX, piece.originY)
+      .setAlpha(0.85)
+      .setDepth(DEPTH_GHOST);
+    this.placement = { defId, moveId, x, y, ghost, valid: false, reason: null };
+    this.arrow.setVisible(false);
+    this.movePlacement(x, y, true);
+  }
+
+  private nearestFreeSpot(cx: number, cy: number, defId: string): { x: number; y: number } {
+    const def = getBuildingDef(defId);
+    for (let r = 0; r <= 10; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          if (this.game_.checkPlacement(def, cx + dx, cy + dy) === null) return { x: cx + dx, y: cy + dy };
+        }
+      }
+    }
+    return { x: cx, y: cy };
+  }
+
+  private movePlacement(x: number, y: number, force = false): void {
+    const p = this.placement;
+    if (!p || (!force && p.x === x && p.y === y)) return;
+    const def = getBuildingDef(p.defId);
+    p.x = Math.max(-def.size.w + 1, Math.min(MAP_SIZE - 1, x));
+    p.y = Math.max(-def.size.d + 1, Math.min(MAP_SIZE - 1, y));
+    let reason = this.game_.checkPlacement(def, p.x, p.y, p.moveId ?? 0);
+    if (!reason && p.moveId === null) {
+      const purchase = this.game_.checkPurchase(def);
+      if (!purchase.ok) reason = purchase.reason;
+    }
+    p.valid = reason === null;
+    p.reason = reason;
+    if (def.category === 'road') {
+      const mask = roadMask((rx, ry) => this.game_.isRoad(rx, ry), p.x, p.y);
+      const key = ArtKey.road(mask);
+      const piece = this.ctx.art.get(key);
+      p.ghost.setTexture(key).setOrigin(piece.originX, piece.originY);
+    }
+    const pos = tileToWorld(p.x, p.y);
+    p.ghost.setPosition(pos.x, pos.y);
+    if (p.valid) p.ghost.clearTint();
+    else p.ghost.setTint(0xff8a80);
+    this.overlay.clear();
+    if (def.category === 'decoration') {
+      const r = def.bonus.radius;
+      this.drawFootprint(p.x - r, p.y - r, def.size.w + 2 * r, def.size.d + 2 * r, 0xffd54f, 0.16);
+    }
+    this.drawFootprint(p.x, p.y, def.size.w, def.size.d, p.valid ? 0x66bb6a : 0xef5350, 0.5);
+    this.ctx.bus.emit('world:placement', {
+      defId: p.defId,
+      moving: p.moveId !== null,
+      valid: p.valid,
+      reason: p.reason,
+    });
+  }
+
+  private confirmPlacement(): void {
+    const p = this.placement;
+    if (!p) return;
+    const screen = this.toCss(this.cameras.main.width / 2, this.cameras.main.height / 2);
+    if (!p.valid) {
+      this.ctx.bus.emit('world:fail', { reason: p.reason ?? 'blocked', screen });
+      this.cameras.main.shake(120, 0.002);
+      return;
+    }
+    const def = getBuildingDef(p.defId);
+    if (p.moveId !== null) {
+      const result = this.game_.move(p.moveId, p.x, p.y);
+      if (!result.ok) {
+        this.ctx.bus.emit('world:fail', { reason: result.reason, screen });
+        return;
+      }
+      this.endPlacement();
+      return;
+    }
+    const result = this.game_.place(p.defId, p.x, p.y);
+    if (!result.ok) {
+      this.ctx.bus.emit('world:fail', { reason: result.reason, missing: result.missing, screen });
+      return;
+    }
+    if (def.repeatPlacement && this.game_.checkPurchase(def).ok) {
+      this.movePlacement(p.x, p.y, true);
+    } else {
+      this.endPlacement();
+    }
+  }
+
+  private endPlacement(): void {
+    const p = this.placement;
+    if (!p) return;
+    p.ghost.destroy();
+    if (p.moveId !== null) {
+      const original = this.views.get(p.moveId);
+      original?.main.setAlpha(1);
+      original?.crop?.setAlpha(1);
+      original?.badge?.setVisible(true);
+      if (original) this.syncView(original);
+    }
+    this.placement = null;
+    this.overlay.clear();
+    this.ctx.bus.emit('world:placement', null);
+    this.refreshHint();
+  }
+
+  private isOnGhost(pointer: Phaser.Input.Pointer): boolean {
+    const p = this.placement;
+    if (!p) return false;
+    const def = getBuildingDef(p.defId);
+    const tile = this.tileAt(pointer.x, pointer.y);
+    const margin = 1;
+    return (
+      tile.x >= p.x - margin &&
+      tile.x < p.x + def.size.w + margin &&
+      tile.y >= p.y - margin &&
+      tile.y < p.y + def.size.d + margin
+    );
+  }
+
+  private drawFootprint(x: number, y: number, w: number, d: number, color: number, alpha: number): void {
+    const g = this.overlay;
+    const a = tileToWorld(x, y);
+    const b = tileToWorld(x + w, y);
+    const c = tileToWorld(x + w, y + d);
+    const e = tileToWorld(x, y + d);
+    g.fillStyle(color, alpha);
+    g.fillPoints(
+      [a, b, c, e].map((p) => new Phaser.Math.Vector2(p.x, p.y)),
+      true,
+    );
+    g.lineStyle(4, color, Math.min(1, alpha + 0.4));
+    g.strokePoints(
+      [a, b, c, e].map((p) => new Phaser.Math.Vector2(p.x, p.y)),
+      true,
+    );
+  }
+
+  // ———————————————————————————— Effets ————————————————————————————
+
+  /** Repères d'une construction pour les effets : centre de l'emprise, haut visuel, taille. */
+  private anchor(view: View): { x: number; y: number; top: number; w: number; d: number } {
+    const def = getBuildingDef(view.entity.defId);
+    const center = footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d);
+    return { x: center.x, y: center.y, top: this.topOf(view), w: def.size.w, d: def.size.d };
+  }
+
+  private bounce(view: View): void {
+    this.fx.bounce(view.crop ? [view.main, view.crop] : [view.main]);
+  }
+
+  private popIn(view: View): void {
+    this.fx.popIn(view.main);
+    const a = this.anchor(view);
+    this.fx.puffs(a.x, a.y, a.w, a.d, 5);
+  }
+
+  private hammerFx(view: View): void {
+    const a = this.anchor(view);
+    this.fx.puffs(a.x, a.y, a.w, a.d, 3);
+    this.fx.shake();
+  }
+
+  private supplyFx(view: View): void {
+    const a = this.anchor(view);
+    this.fx.crates(a.x, a.y);
+  }
+
+  private celebrate(view: View): void {
+    const a = this.anchor(view);
+    this.fx.puffs(a.x, a.y, a.w, a.d, 8);
+    this.fx.stars(a.x, a.top + 30);
+    this.fx.popText(a.x, a.top + 20, 'Terminé !', '#ffffff', 0, this.overlayScale);
+  }
+
+  private onReward(entityId: number | null, reward: Reward): void {
+    if (entityId === null) return;
+    const view = this.views.get(entityId);
+    if (!view) return;
+    const a = this.anchor(view);
+    const s = this.overlayScale;
+    const lines: Array<[string, string]> = [];
+    if (reward.coins) {
+      lines.push([`+${reward.coins}`, '#ffd54f']);
+      this.fx.coinBurst(a.x, a.top + 40, Math.min(8, 2 + Math.floor(reward.coins / 40)));
+    }
+    if (reward.goods) lines.push([`+${reward.goods}`, '#ffb74d']);
+    if (reward.xp) lines.push([`+${reward.xp} XP`, '#81d4fa']);
+    lines.forEach(([text, color], i) => this.fx.popText(a.x, a.top + 20 + i * 38 * s, text, color, i * 120, s));
+    const screen = this.entityScreenPoint(entityId);
+    if (screen) this.ctx.bus.emit('fx:reward', { screen, reward });
+  }
+}

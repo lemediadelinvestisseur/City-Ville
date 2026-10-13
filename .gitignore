@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+.vite/
+.env
+.env.*
+!.env.example
+# Capacitor (à venir)
+android/app/build/
+ios/App/Pods/

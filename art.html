@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planche graphique</title>
+    <style>
+      body {
+        margin: 0;
+        background: #6fa53c;
+        font:
+          12px system-ui,
+          sans-serif;
+        color: #fff;
+      }
+      .grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px;
+        align-items: flex-end;
+      }
+      figure {
+        margin: 0;
+        background: rgba(0, 0, 0, 0.12);
+        padding: 4px;
+        border-radius: 6px;
+        text-align: center;
+      }
+      figcaption {
+        font-size: 10px;
+        opacity: 0.85;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sheet" class="grid"></div>
+    <script type="module" src="/src/dev/artPreview.ts"></script>
+  </body>
+</html>
