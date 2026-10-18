@@ -56,6 +56,12 @@ Tout ce qui se règle sans toucher au code : `buildings.ts`, `crops.ts`, `quests
   (projection isométrique 2:1, cases de 128 × 64). `ArtLibrary` les enregistre comme textures Phaser et fournit
   des vignettes pour l'interface. Remplacer par de vraies illustrations = remplacer ces textures par des images
   chargées, sans toucher au reste.
+- Paysage (`MapLayer`) : sols peints pixel par pixel (`art/ground.ts`, motifs périodiques sans couture),
+  rivages et bordures d'herbe en transitions arrondies, teintes douces aux coins des cases (prairie, sous-bois,
+  profondeur de l'eau : `groundStyle.ts`), arbres et sous-bois (`art/nature.ts`), montagnes rendues depuis un
+  relief (`art/mountains.ts`). Ces visuels sont dessinés à la demande et regroupés dans des atlas
+  (`TerrainAtlas`) pour ne coûter que quelques appels de dessin ; les petits détails sont masqués quand on
+  dézoome.
 
 ### `src/ui` — l'interface (HTML/CSS)
 

@@ -7,15 +7,17 @@ import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
 import { isWater } from '@/data/terrain';
 import { ArtKey, CLOUD_VARIANTS } from './art/library';
+import { DEEP_SEA } from './groundStyle';
 import { LOCKED_TINT, MapLayer } from './MapLayer';
 import type { BadgeKind } from './art/sprites';
 import { CameraController } from './CameraController';
-import { HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } from './iso';
+import { HALF_H, HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } from './iso';
 import { DEPTH_FX, Effects } from './Effects';
 import { formatClock } from '@/ui/format';
 import { DropSystem } from './Drops';
 import { MovingVan } from './MovingVan';
 import { NightLayer } from './NightLayer';
+import { treeLook } from './trees';
 import { WalkerSystem } from './WalkerSystem';
 import { t } from '@/i18n';
 
@@ -131,7 +133,7 @@ export class WorldScene extends Phaser.Scene {
     for (const [key, piece] of this.ctx.art.pieces) {
       if (!this.textures.exists(key)) this.textures.addCanvas(key, piece.canvas);
     }
-    this.cameras.main.setBackgroundColor('#2f9fc7');
+    this.cameras.main.setBackgroundColor(DEEP_SEA);
     this.fx = new Effects(this);
     this.map = new MapLayer(this, this.ctx.art, {
       isChunkUnlocked: (cx, cy) => this.game_.isChunkUnlocked(cx, cy),
@@ -173,7 +175,7 @@ export class WorldScene extends Phaser.Scene {
     );
     const start = tileToWorld(16.5, 18.5);
     this.camCtl.centerOn(start.x, start.y);
-    this.map.update(this.cameras.main);
+    this.map.update(this.cameras.main, this.camCtl.userZoom);
     this.updateOverlayScale();
 
     this.setupInput();
@@ -213,7 +215,7 @@ export class WorldScene extends Phaser.Scene {
     this.map.animate(time);
     if (time >= this.mapCheckAt) {
       this.mapCheckAt = time + 200;
-      this.map.update(this.cameras.main);
+      this.map.update(this.cameras.main, this.camCtl.userZoom);
     }
     if (this.arrow.visible && this.hintEntityId !== null) {
       const view = this.views.get(this.hintEntityId);
@@ -300,7 +302,7 @@ export class WorldScene extends Phaser.Scene {
       return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y) || this.map.isWildRoad(x, y), entity.x, entity.y));
     }
     if (!entity.built) return ArtKey.construction(Math.min(4, Math.max(def.size.w, def.size.d)));
-    return ArtKey.building(def.id);
+    return treeLook(def.id, entity.x, entity.y)?.key ?? ArtKey.building(def.id);
   }
 
   private cropKeyFor(entity: Entity): string | null {
@@ -380,14 +382,20 @@ export class WorldScene extends Phaser.Scene {
     const { entity } = view;
     const def = getBuildingDef(entity.defId);
     const key = this.textureFor(entity);
+    // Arbres : posés par le pied, avec la même variation que la forêt sauvage.
+    const tree = entity.built ? treeLook(def.id, entity.x, entity.y) : null;
     if (key !== view.textureKey) {
       const piece = this.ctx.art.get(key);
-      view.main.setTexture(key).setOrigin(piece.originX, piece.originY);
+      view.main
+        .setTexture(key)
+        .setOrigin(piece.originX, piece.originY + (tree ? HALF_H / piece.canvas.height : 0))
+        .setScale(tree?.scale ?? 1);
       view.textureKey = key;
     }
     const pos = tileToWorld(entity.x, entity.y);
     const depth = this.isFlat(entity) ? DEPTH_ROAD : depthOf(entity.x, entity.y, def.size.w, def.size.d);
-    view.main.setPosition(pos.x, pos.y).setDepth(depth);
+    const at = tree ? tileToWorld(entity.x + 0.5 + tree.dx, entity.y + 0.5 + tree.dy) : pos;
+    view.main.setPosition(at.x, at.y).setDepth(depth);
     const locked = !this.game_.isTileUnlocked(entity.x, entity.y);
     if (locked) view.main.setTint(LOCKED_TINT);
     else if (this.selectedId !== entity.id) view.main.clearTint();

@@ -3,7 +3,9 @@ import { CROPS } from '@/data/crops';
 import { boatArt, bridgeArt, movingTruckArt, BOAT_TIERS } from './boats';
 import { buildingArt } from './buildings';
 import { decorationArt } from './decorations';
+import type { ShoreKind } from './ground';
 import { createCanvas, type ArtPiece } from './IsoPainter';
+import { BROADLEAF_VARIANTS, CONIFER_VARIANTS, broadleafTree, coniferTree, type PlantKind } from './nature';
 import {
   badge,
   cloud,
@@ -17,37 +19,29 @@ import {
   hammerTool,
   type BadgeKind,
 } from './sprites';
-import {
-  constructionSite,
-  cropOverlay,
-  forSaleSign,
-  grassTile,
-  plotTile,
-  roadTile,
-  sandTile,
-  rockTile,
-  mountainArt,
-  ROCK_VARIANTS,
-  MOUNTAIN_VARIANTS,
-  waterTile,
-  GRASS_COLORS,
-  WATER_VARIANTS,
-} from './terrain';
+import { constructionSite, cropOverlay, forSaleSign, plotTile, roadTile } from './terrain';
 
-export const GRASS_VARIANTS = GRASS_COLORS.length;
 export const WALKER_VARIANTS = 8;
 export const CLOUD_VARIANTS = 2;
-export const SAND_VARIANTS = 2;
-export { WATER_VARIANTS, ROCK_VARIANTS };
+
+export type TreeKind = 'broadleaf' | 'conifer';
+export const TREE_VARIANTS: Record<TreeKind, number> = { broadleaf: BROADLEAF_VARIANTS, conifer: CONIFER_VARIANTS };
+export type GroundKind = 'grass' | 'sand' | 'rock' | 'water';
 
 /** Clés de textures partagées entre le rendu Phaser et l'interface. */
 export const ArtKey = {
-  grass: (variant: number) => `grass_${variant}`,
+  /** Sol : variante (i, j) du motif périodique (voir `GROUND_PERIOD`). */
+  ground: (kind: GroundKind, i: number, j: number) => `${kind}_${i}${j}`,
+  /** Rivage sur une case d'eau (coins terrestres `mask`). */
+  shore: (mask: number, kind: ShoreKind, i: number, j: number) => `shore_${kind}_${mask}_${i}${j}`,
+  /** Écume animée du ressac sur une case d'eau. */
+  surf: (mask: number, i: number, j: number) => `surf_${mask}_${i}${j}`,
+  /** Bordure d'herbe sur une case de sable, de roche ou d'eau (coins herbeux `mask`). */
+  fringe: (mask: number, onWater: boolean, i: number, j: number) => `fringe_${onWater ? 'w' : 'l'}${mask}_${i}${j}`,
   road: (mask: number) => `road_${mask}`,
-  sand: (variant: number) => `sand_${variant}`,
-  rock: (variant: number) => `rock_${variant}`,
   mountain: (variant: number) => `mountain_${variant}`,
-  water: (variant: number, shallow: boolean) => `water_${shallow ? 's' : 'd'}${variant}`,
+  tree: (kind: TreeKind, variant: number) => `tree_${kind}_${variant}`,
+  plant: (kind: PlantKind, variant: number) => `plant_${kind}_${variant}`,
   boat: (tier: number) => `boat_${tier}`,
   truck: (axis: 'x' | 'y') => `truck_${axis}`,
   worker: 'worker',
@@ -94,6 +88,16 @@ export class ArtLibrary {
     return this.pieces.has(key);
   }
 
+  /** Visuel dessiné à la première demande, puis conservé. */
+  getOrCreate(key: string, make: () => ArtPiece): ArtPiece {
+    let piece = this.pieces.get(key);
+    if (!piece) {
+      piece = make();
+      this.pieces.set(key, piece);
+    }
+    return piece;
+  }
+
   /** Vignette (data URL) pour l'interface HTML, réduite à `max` px. */
   iconUrl(key: string, max = 132): string {
     const cacheKey = `${key}@${max}`;
@@ -117,14 +121,9 @@ export class ArtLibrary {
 
   static build(): ArtLibrary {
     const lib = new ArtLibrary();
-    for (let i = 0; i < GRASS_VARIANTS; i++) lib.add(ArtKey.grass(i), grassTile(i));
-    for (let i = 0; i < SAND_VARIANTS; i++) lib.add(ArtKey.sand(i), sandTile(i));
-    for (let i = 0; i < ROCK_VARIANTS; i++) lib.add(ArtKey.rock(i), rockTile(i));
-    for (let i = 0; i < MOUNTAIN_VARIANTS; i++) lib.add(ArtKey.mountain(i), mountainArt(i));
-    for (let i = 0; i < WATER_VARIANTS; i++) {
-      lib.add(ArtKey.water(i, true), waterTile(i, true));
-      lib.add(ArtKey.water(i, false), waterTile(i, false));
-    }
+    // Sols, plantes et montagnes sont dessinés à la demande par la carte (MapLayer).
+    for (let i = 0; i < BROADLEAF_VARIANTS; i++) lib.add(ArtKey.tree('broadleaf', i), broadleafTree(i));
+    for (let i = 0; i < CONIFER_VARIANTS; i++) lib.add(ArtKey.tree('conifer', i), coniferTree(i));
     for (const tier of BOAT_TIERS) lib.add(ArtKey.boat(tier), boatArt(tier));
     lib.add(ArtKey.worker, worker());
     lib.add(ArtKey.hammerTool, hammerTool());

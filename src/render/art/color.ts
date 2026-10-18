@@ -41,3 +41,8 @@ export function seeded(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/** Composantes RVB (0 à 255) d'une couleur hexadécimale. */
+export function toRgb(hex: string): [number, number, number] {
+  return parse(hex);
+}
