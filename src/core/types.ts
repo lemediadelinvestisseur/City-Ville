@@ -20,7 +20,10 @@ export interface Requirements {
   population?: number;
 }
 
-export type BuildingCategory = 'house' | 'business' | 'community' | 'storage' | 'farm' | 'decoration' | 'road';
+export type BuildingCategory = 'house' | 'business' | 'community' | 'storage' | 'farm' | 'port' | 'decoration' | 'road';
+
+/** Nature du sol d'une case. */
+export type Terrain = 'grass' | 'sand' | 'water';
 
 interface BaseDef {
   id: string;
@@ -30,16 +33,18 @@ interface BaseDef {
   size: Size;
   cost: Cost;
   requires?: Requirements;
-  /** XP gagnée à l'achat. */
+  /** XP gagnée quand la construction est terminée (inaugurée). */
   xp: number;
-  /** Nombre de coups de marteau (1 énergie chacun) pour terminer le chantier. 0 = immédiat. */
-  buildSteps: number;
+  /** Durée du chantier en secondes. 0 = construit immédiatement. */
+  buildSec: number;
   /** Peut être vendu en mode édition (défaut : oui). */
   sellable?: boolean;
   /** Visible dans le menu de construction (défaut : oui). */
   inShop?: boolean;
   /** Plusieurs placements d'affilée (routes, champs, décorations). */
   repeatPlacement?: boolean;
+  /** 'shore' : doit toucher l'eau (ports, phare). Par défaut : terre ferme. */
+  placement?: 'land' | 'shore';
 }
 
 export interface HouseDef extends BaseDef {
@@ -70,6 +75,13 @@ export interface FarmDef extends BaseDef {
   category: 'farm';
 }
 
+/** Port de pêche : se pose au bord de l'eau et envoie un bateau en expédition. */
+export interface PortDef extends BaseDef {
+  category: 'port';
+  /** Niveau du bateau : détermine les expéditions possibles. */
+  boatTier: number;
+}
+
 export interface DecorationDef extends BaseDef {
   category: 'decoration';
   /** Bonus (%) appliqué aux loyers et recettes des bâtiments dans le rayon (en cases). */
@@ -80,7 +92,8 @@ export interface RoadDef extends BaseDef {
   category: 'road';
 }
 
-export type BuildingDef = HouseDef | BusinessDef | CommunityDef | StorageDef | FarmDef | DecorationDef | RoadDef;
+export type BuildingDef =
+  HouseDef | BusinessDef | CommunityDef | StorageDef | FarmDef | PortDef | DecorationDef | RoadDef;
 
 export interface CropDef {
   id: string;
@@ -89,6 +102,20 @@ export interface CropDef {
   cost: number;
   goods: number;
   xp: number;
+  requires?: Requirements;
+}
+
+/** Expédition de pêche (même principe qu'une culture, pour les ports). */
+export interface TripDef {
+  id: string;
+  name: string;
+  durationSec: number;
+  /** Coût en pièces (carburant, appâts). */
+  cost: number;
+  goods: number;
+  xp: number;
+  /** Niveau de bateau minimal. */
+  boatTier: number;
   requires?: Requirements;
 }
 
@@ -101,14 +128,16 @@ export interface Entity {
   y: number;
   /** Chantier terminé. */
   built: boolean;
-  /** Coups de marteau déjà donnés. */
-  buildProgress: number;
+  /** Chantier en cours : début et fin (horodatages). */
+  construction?: { startedAt: number; endsAt: number };
   /** Présente dès le début de la partie (ville de départ, forêt). */
   starter?: boolean;
   house?: { readyAt: number };
   /** `readyAt` nul : le commerce attend des marchandises. */
   business?: { readyAt: number | null; suppliedAt: number | null };
   farm?: { cropId: string | null; plantedAt: number; readyAt: number };
+  /** `tripId` nul : le bateau est à quai. */
+  port?: { tripId: string | null; startedAt: number; readyAt: number };
 }
 
 export interface QuestProgress {
@@ -161,13 +190,16 @@ export type FailReason =
   | 'invalid'
   | 'notSellable'
   | 'alreadyOwned'
-  | 'energyFull';
+  | 'energyFull'
+  | 'onWater'
+  | 'needsWater';
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; reason: FailReason; missing?: number };
 
 /** Action principale déclenchée par un toucher sur une construction. */
 export type PrimaryAction =
-  | { type: 'build' }
+  | { type: 'waitBuild'; readyAt: number }
+  | { type: 'finishBuild' }
   | { type: 'collectRent' }
   | { type: 'waitRent'; readyAt: number }
   | { type: 'plant' }
@@ -176,6 +208,9 @@ export type PrimaryAction =
   | { type: 'supply' }
   | { type: 'waitCustomers'; readyAt: number }
   | { type: 'collectBusiness' }
+  | { type: 'sendBoat' }
+  | { type: 'waitBoat'; readyAt: number }
+  | { type: 'unloadBoat' }
   | { type: 'info' };
 
 /** Filtre sur un type de construction : identifiant précis ou catégorie. */
@@ -187,6 +222,7 @@ export interface DefFilter {
 export type QuestTask =
   | ({ type: 'place' | 'build' | 'supply' | 'collectBusiness' | 'collectRent'; count: number } & DefFilter)
   | { type: 'plant' | 'harvest'; count: number; cropId?: string }
+  | { type: 'sendBoat' | 'unloadBoat'; count: number }
   | { type: 'expand'; count: number }
   | { type: 'population' | 'level'; target: number };
 
@@ -213,4 +249,6 @@ export type GameplayEvent =
   | { type: 'harvest'; cropId: string }
   | { type: 'supply'; defId: string }
   | { type: 'collectBusiness'; defId: string }
+  | { type: 'sendBoat'; tripId: string }
+  | { type: 'unloadBoat'; tripId: string }
   | { type: 'expand' };

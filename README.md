@@ -37,10 +37,12 @@ La planche de tous les visuels générés est disponible en développement sur `
 - **Carte isométrique** de 40 × 40 cases : déplacement au doigt avec inertie, zoom par pincement ou molette.
 - **Constructions** : habitations (loyers + habitants), commerces (marchandises → recettes), bâtiments publics
   (population maximale), stockage, champs, décorations (bonus de revenus à proximité) et routes.
-- **Chantiers** en plusieurs coups de marteau (1 énergie chacun), accélérables contre du cash.
-- **Cultures** : fraises, blé, carottes, maïs, citrouilles ; mode plantation en série.
+- **Chantiers à minuteur** (de 30 s à 16 h selon le bâtiment), puis inauguration ; accélérables contre du cash.
+- **Cultures** : 9 cultures, des fraises (5 min) aux pommes (24 h) ; mode plantation en série.
+- **Pêche** : ville au bord de la mer, ponton / port de pêche / port industriel, sorties en mer.
+- **Progression jusqu'au niveau 30** (~3 semaines), 65 constructions, calibrée par un joueur simulé.
 - **Économie** : pièces, cash (monnaie premium), énergie qui se recharge, XP et niveaux avec déblocages.
-- **Objectifs guidés** (12) avec flèches d'aide, récompenses et passages de niveau.
+- **Objectifs guidés** (24) avec flèches d'aide, récompenses et passages de niveau.
 - **Agrandissements** de la ville par zones de 8 × 8.
 - **Mode édition** : déplacer ou vendre une construction.
 - **Boutique** : packs de cash (paiement simulé) et échanges cash → pièces / énergie.

@@ -5,6 +5,11 @@
 Boucle complète (loyers, cultures, commerces, chantiers, énergie, niveaux, objectifs, agrandissements),
 interface mobile, boutique en mode test, sauvegarde locale, graphismes procéduraux.
 
+## V1.1 — chantiers à minuteur, niveau 30, pêche ✅
+
+Chantiers à minuteur et inauguration, 65 constructions jusqu'au niveau 30 (~3 semaines, calibré par simulation),
+mer et plages, ports et bateaux de pêche, 24 objectifs.
+
 ## V1.x — finition
 
 - [ ] Vrais visuels (illustrateur ou packs sous licence) en remplaçant les textures de `render/art/`
@@ -26,7 +31,7 @@ interface mobile, boutique en mode test, sauvegarde locale, graphismes procédur
 
 ## V3 — social
 
-- [ ] Voisins : visiter leurs villes, les aider (énergie, coups de marteau), cadeaux
+- [ ] Voisins : visiter leurs villes, les aider (accélérer un chantier, arroser un champ), cadeaux
 - [ ] Gare et trains pour échanger des marchandises
 - [ ] Objectifs collectifs, classements, événements saisonniers
 

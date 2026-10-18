@@ -22,6 +22,12 @@ function effectLine(def: BuildingDef): string {
       return `+${def.bonus.percent} % de revenus (rayon ${def.bonus.radius})`;
     case 'road':
       return 'Les habitants s’y promènent';
+    case 'port':
+      return def.boatTier === 1
+        ? 'Barque de pêche → marchandises'
+        : def.boatTier === 2
+          ? 'Chalutier → beaucoup de marchandises'
+          : 'Navire-usine → énormément de marchandises';
   }
 }
 
@@ -142,12 +148,12 @@ export class BuildMenu {
         'span',
         { class: 'card__footer' },
         cost,
-        def.buildSteps > 0
+        def.buildSec > 0
           ? h(
               'span',
-              { class: 'card__steps', title: 'Énergie nécessaire au chantier' },
-              icon(Icons.energy),
-              String(def.buildSteps),
+              { class: 'card__steps', title: 'Durée du chantier' },
+              icon(Icons.clock),
+              formatDuration(def.buildSec),
             )
           : null,
       ),

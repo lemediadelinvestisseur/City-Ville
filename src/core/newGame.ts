@@ -5,7 +5,7 @@ import { STARTING_TOWN, wildTrees, type StartingPlacement } from '@/data/startin
 import { chunkKey } from './grid';
 import type { Entity, GameState } from './types';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** Initialise l'état propre à la catégorie d'une construction terminée. */
 export function initBuiltState(entity: Entity, now: number): void {
@@ -20,6 +20,9 @@ export function initBuiltState(entity: Entity, now: number): void {
     case 'farm':
       entity.farm = { cropId: null, plantedAt: 0, readyAt: 0 };
       break;
+    case 'port':
+      entity.port = { tripId: null, startedAt: 0, readyAt: 0 };
+      break;
     default:
       break;
   }
@@ -32,7 +35,6 @@ function starterEntity(id: number, placement: StartingPlacement, now: number): E
     x: placement.x,
     y: placement.y,
     built: true,
-    buildProgress: getBuildingDef(placement.defId).buildSteps,
     starter: true,
   };
   initBuiltState(entity, now);

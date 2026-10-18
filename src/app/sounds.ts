@@ -1,3 +1,4 @@
+import { getBuildingDef } from '@/data/buildings';
 import type { SoundFx } from '@/services/sound';
 import type { AppContext } from './context';
 
@@ -7,7 +8,8 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
   game.events.on('gameplay', (event) => {
     switch (event.type) {
       case 'place':
-        sound.play('place');
+        // Un chantier qui démarre sonne comme un coup de marteau.
+        sound.play(getBuildingDef(event.defId).buildSec > 0 ? 'hammer' : 'place');
         break;
       case 'collectRent':
       case 'collectBusiness':
@@ -20,7 +22,11 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
         sound.play('plant');
         break;
       case 'supply':
+      case 'sendBoat':
         sound.play('supply');
+        break;
+      case 'unloadBoat':
+        sound.play('harvest');
         break;
       case 'expand':
         sound.play('complete');
@@ -32,9 +38,6 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
   game.events.on('constructionComplete', () => sound.play('complete'));
   game.events.on('levelUp', () => sound.play('levelUp'));
   game.events.on('questCompleted', () => sound.play('quest'));
-  bus.on('world:action', ({ type, ok }) => {
-    if (ok && type === 'build') sound.play('hammer');
-  });
   bus.on('world:fail', () => sound.play('error'));
   uiRoot.addEventListener('click', (event) => {
     if (event.target instanceof Element && event.target.closest('button')) sound.play('click');

@@ -63,14 +63,22 @@ export function findQuestHint(game: Game, progress: QuestProgress): HintTarget |
         );
       case 'place':
         return { kind: 'shop', defId: task.defId, category: task.category };
-      case 'build':
-        return (
-          entity(withAction('build', { defId: task.defId, category: task.category })) ?? {
-            kind: 'shop',
-            defId: task.defId,
-            category: task.category,
-          }
-        );
+      case 'build': {
+        const filter = { defId: task.defId, category: task.category };
+        const ready = withAction('finishBuild', filter);
+        if (ready) return entity(ready);
+        // Chantier en cours : il suffit d'attendre (ou d'accélérer).
+        if (withAction('waitBuild', filter)) return null;
+        return { kind: 'shop', defId: task.defId, category: task.category };
+      }
+      case 'sendBoat': {
+        const idle = withAction('sendBoat', { category: 'port' });
+        if (idle) return entity(idle);
+        const hasPort = game.state.entities.some((e) => getBuildingDef(e.defId).category === 'port');
+        return hasPort ? null : { kind: 'shop', defId: 'pier' };
+      }
+      case 'unloadBoat':
+        return entity(withAction('unloadBoat', { category: 'port' }) ?? withAction('sendBoat', { category: 'port' }));
       case 'supply':
         return entity(withAction('supply', { defId: task.defId, category: 'business' }));
       case 'collectBusiness':

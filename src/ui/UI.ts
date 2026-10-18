@@ -1,7 +1,7 @@
 import type { AppContext, PlacementInfo } from '@/app/context';
 import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
 import { findQuestHint, type HintTarget } from '@/core/hints';
-import type { BuildingDef, CropDef, FailReason, Reward } from '@/core/types';
+import type { BuildingDef, CropDef, FailReason, Reward, TripDef } from '@/core/types';
 import { CHUNK_SIZE, ENERGY_REGEN_SEC, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
@@ -21,6 +21,7 @@ import { Modals } from './Modals';
 import { QuestTracker, questIcon } from './QuestTracker';
 import { Shop, type ShopTab } from './Shop';
 import { Toasts } from './Toasts';
+import { TripPicker } from './TripPicker';
 
 type Mode = 'play' | 'edit';
 
@@ -37,6 +38,7 @@ export class UI {
   private modals: Modals;
   private buildMenu: BuildMenu;
   private cropPicker: CropPicker;
+  private tripPicker: TripPicker;
   private bubble: Bubble;
   private shop: Shop;
   private flying: FlyingRewards;
@@ -74,6 +76,12 @@ export class UI {
       (crop) => this.plant(crop),
       () => this.refreshDock(),
     );
+    this.tripPicker = new TripPicker(
+      game,
+      art,
+      (id, trip) => this.sendBoat(id, trip),
+      () => this.refreshDock(),
+    );
     this.bubble = new Bubble(game, {
       speedUp: (id) => this.speedUp(id),
       move: (id) => {
@@ -101,6 +109,7 @@ export class UI {
       this.placebar,
       this.buildMenu.el,
       this.cropPicker.el,
+      this.tripPicker.el,
       this.flying.el,
       this.shop.el,
       this.modals.el,
@@ -149,6 +158,8 @@ export class UI {
         this.plantTarget = entityId;
         this.cropPicker.open();
         this.refreshDock();
+      } else if (action.type === 'sendBoat') {
+        this.tripPicker.open(entityId);
       } else {
         this.bubble.showInfo(entityId, screen);
       }
@@ -182,6 +193,7 @@ export class UI {
     this.bubble.close();
     this.buildMenu.close();
     this.cropPicker.close();
+    this.tripPicker.close();
   }
 
   // ———————————————————————————— Barre d'actions ————————————————————————————
@@ -230,7 +242,10 @@ export class UI {
 
   private refreshDock(): void {
     const placing = this.placement !== null;
-    this.dock.classList.toggle('is-hidden', placing || this.buildMenu.isOpen || this.cropPicker.isOpen);
+    this.dock.classList.toggle(
+      'is-hidden',
+      placing || this.buildMenu.isOpen || this.cropPicker.isOpen || this.tripPicker.isOpen,
+    );
     this.placebar.classList.toggle('is-open', placing);
     this.editButton.classList.toggle('is-active', this.mode === 'edit');
     this.buildButton.classList.toggle('is-hint', this.hint?.kind === 'shop' && !this.buildMenu.isOpen);
@@ -362,6 +377,18 @@ export class UI {
     this.refreshDock();
   }
 
+  private sendBoat(entityId: number, trip: TripDef): void {
+    const result = this.ctx.game.sendBoat(entityId, trip.id);
+    if (!result.ok) {
+      if (result.reason === 'levelLocked')
+        this.toasts.show(`${trip.name} : niveau ${trip.requires?.level} requis.`, 'error');
+      else this.onFail(result.reason, result.missing);
+      return;
+    }
+    this.tripPicker.close();
+    this.toasts.show(`Le bateau part en mer : retour dans ${formatDuration(trip.durationSec)}.`, 'info');
+  }
+
   private checkPlantMode(): void {
     if (!this.plantCropId) return;
     const hasEmpty = this.ctx.game.state.entities.some((e) => e.farm && e.farm.cropId === null);
@@ -466,11 +493,12 @@ export class UI {
         h(
           'ul',
           { class: 'tips' },
+          h('li', {}, icon(Icons.energy), 'Encaisser et récolter coûtent 1 énergie, qui se recharge avec le temps.'),
           h(
             'li',
             {},
-            icon(Icons.energy),
-            'Chaque action (encaisser, récolter, construire) coûte 1 énergie, qui se recharge avec le temps.',
+            icon(Icons.clock),
+            'Les chantiers avancent tout seuls : revenez inaugurer vos bâtiments une fois terminés.',
           ),
           h(
             'li',

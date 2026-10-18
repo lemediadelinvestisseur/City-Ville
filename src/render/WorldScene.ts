@@ -5,7 +5,8 @@ import { CHUNKS_PER_SIDE, chunkOf, roadMask } from '@/core/grid';
 import type { Entity, FailReason, Reward } from '@/core/types';
 import { CHUNK_SIZE, MAP_SIZE } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
-import { ArtKey, CLOUD_VARIANTS, GRASS_VARIANTS } from './art/library';
+import { isShallow, isWater, terrainAt } from '@/data/terrain';
+import { ArtKey, CLOUD_VARIANTS, GRASS_VARIANTS, SAND_VARIANTS, WATER_VARIANTS } from './art/library';
 import type { BadgeKind } from './art/sprites';
 import { CameraController } from './CameraController';
 import { HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } from './iso';
@@ -33,6 +34,9 @@ interface View {
   badgeBaseY: number;
   bar: Phaser.GameObjects.Graphics | null;
   barKey: string;
+  /** Bateau amarré (ou parti en mer) d'un port. */
+  boat: Phaser.GameObjects.Image | null;
+  boatHome: { x: number; y: number } | null;
 }
 
 interface Placement {
@@ -53,6 +57,8 @@ export class WorldScene extends Phaser.Scene {
   private fx!: Effects;
   private views = new Map<number, View>();
   private ground: Phaser.GameObjects.Image[] = [];
+  /** Quelques cases d'eau scintillent doucement. */
+  private waterTiles: Phaser.GameObjects.Image[] = [];
   private limits!: Phaser.GameObjects.Graphics;
   private overlay!: Phaser.GameObjects.Graphics;
   private signs = new Map<string, Phaser.GameObjects.Image>();
@@ -96,7 +102,7 @@ export class WorldScene extends Phaser.Scene {
     for (const [key, piece] of this.ctx.art.pieces) {
       if (!this.textures.exists(key)) this.textures.addCanvas(key, piece.canvas);
     }
-    this.cameras.main.setBackgroundColor('#5f9440');
+    this.cameras.main.setBackgroundColor('#2f9fc7');
     this.fx = new Effects(this);
     this.buildGround();
     this.limits = this.add.graphics().setDepth(DEPTH_LIMITS);
@@ -146,7 +152,11 @@ export class WorldScene extends Phaser.Scene {
     const bob = Math.sin(time / 260) * 5;
     for (const view of this.views.values()) {
       if (view.badge) view.badge.y = view.badgeBaseY + bob * this.overlayScale;
+      if (view.boat?.visible && view.boatHome)
+        view.boat.y = view.boatHome.y + Math.sin(time / 600 + view.entity.id) * 2;
     }
+    const glint = 0.55 + Math.sin(time / 900) * 0.12;
+    for (const tile of this.waterTiles) tile.setAlpha(tile.getData('phase') ? glint : 1);
     if (this.arrow.visible && this.hintEntityId !== null) {
       const view = this.views.get(this.hintEntityId);
       if (view) this.arrow.y = this.topOf(view) - 72 * this.overlayScale + Math.sin(time / 180) * 10;
@@ -162,12 +172,23 @@ export class WorldScene extends Phaser.Scene {
   private buildGround(): void {
     for (let y = 0; y < MAP_SIZE; y++) {
       for (let x = 0; x < MAP_SIZE; x++) {
-        const variant = (x * 7 + y * 13 + ((x * y) % 5)) % GRASS_VARIANTS;
-        const key = ArtKey.grass(variant);
+        const hash = x * 7 + y * 13 + ((x * y) % 5);
+        const terrain = terrainAt(x, y);
+        const key =
+          terrain === 'water'
+            ? ArtKey.water(hash % WATER_VARIANTS, isShallow(x, y))
+            : terrain === 'sand'
+              ? ArtKey.sand(hash % SAND_VARIANTS)
+              : ArtKey.grass(hash % GRASS_VARIANTS);
         const piece = this.ctx.art.get(key);
         const pos = tileToWorld(x, y);
         const tile = this.add.image(pos.x, pos.y, key).setOrigin(piece.originX, piece.originY).setDepth(DEPTH_GROUND);
-        if (!this.game_.isTileUnlocked(x, y)) tile.setTint(LOCKED_TINT);
+        if (terrain === 'water') {
+          if (hash % 4 === 0) {
+            tile.setData('phase', true);
+            this.waterTiles.push(tile);
+          }
+        } else if (!this.game_.isTileUnlocked(x, y)) tile.setTint(LOCKED_TINT);
         this.ground.push(tile);
       }
     }
@@ -177,7 +198,7 @@ export class WorldScene extends Phaser.Scene {
     for (let y = 0; y < MAP_SIZE; y++) {
       for (let x = 0; x < MAP_SIZE; x++) {
         const tile = this.ground[y * MAP_SIZE + x];
-        if (!tile) continue;
+        if (!tile || isWater(x, y)) continue;
         if (this.game_.isTileUnlocked(x, y)) tile.clearTint();
         else tile.setTint(LOCKED_TINT);
       }
@@ -254,7 +275,7 @@ export class WorldScene extends Phaser.Scene {
   private textureFor(entity: Entity): string {
     const def = getBuildingDef(entity.defId);
     if (def.category === 'road') return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y), entity.x, entity.y));
-    if (!entity.built) return ArtKey.construction(Math.min(3, Math.max(def.size.w, def.size.d)));
+    if (!entity.built) return ArtKey.construction(Math.min(4, Math.max(def.size.w, def.size.d)));
     return ArtKey.building(def.id);
   }
 
@@ -269,8 +290,10 @@ export class WorldScene extends Phaser.Scene {
 
   private badgeFor(entity: Entity): BadgeKind | null {
     switch (this.game_.primaryAction(entity).type) {
-      case 'build':
+      case 'finishBuild':
         return 'build';
+      case 'unloadBoat':
+        return 'fish';
       case 'collectRent':
       case 'collectBusiness':
         return 'coin';
@@ -302,6 +325,8 @@ export class WorldScene extends Phaser.Scene {
       badgeBaseY: 0,
       bar: null,
       barKey: '',
+      boat: null,
+      boatHome: null,
     };
     this.views.set(entity.id, view);
     this.syncView(view);
@@ -314,6 +339,7 @@ export class WorldScene extends Phaser.Scene {
     view.crop?.destroy();
     view.badge?.destroy();
     view.bar?.destroy();
+    view.boat?.destroy();
     this.views.delete(id);
     if (this.selectedId === id) this.select(null);
   }
@@ -364,26 +390,34 @@ export class WorldScene extends Phaser.Scene {
         .setScale(this.overlayScale * (badgeKind === 'goods' ? 0.9 : 1));
     }
 
-    const barKey = entity.built
-      ? ''
-      : `${entity.buildProgress}/${def.buildSteps}@${entity.x},${entity.y}:${this.overlayScale}`;
+    const progress = this.buildProgress(entity);
+    const barKey = progress === null ? '' : `${progress}@${entity.x},${entity.y}:${this.overlayScale}`;
     if (barKey !== view.barKey) {
       view.barKey = barKey;
-      if (!barKey) {
+      if (progress === null) {
         view.bar?.destroy();
         view.bar = null;
       } else {
         if (!view.bar) view.bar = this.add.graphics();
-        this.drawBuildBar(view.bar, view, entity.buildProgress, def.buildSteps);
+        this.drawBuildBar(view.bar, view, progress);
       }
     }
+    this.syncBoat(view);
   }
 
-  private drawBuildBar(g: Phaser.GameObjects.Graphics, view: View, done: number, total: number): void {
+  /** Avancement du chantier en vingtièmes (null : pas de chantier en cours). */
+  private buildProgress(entity: Entity): number | null {
+    const c = entity.construction;
+    if (entity.built || !c) return null;
+    const ratio = (this.game_.now() - c.startedAt) / Math.max(1, c.endsAt - c.startedAt);
+    return Math.max(0, Math.min(20, Math.floor(ratio * 20)));
+  }
+
+  private drawBuildBar(g: Phaser.GameObjects.Graphics, view: View, progress: number): void {
     const def = getBuildingDef(view.entity.defId);
     const center = footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d);
     const s = this.overlayScale;
-    const width = Math.max(70, total * 18) * s;
+    const width = 96 * s;
     const height = 12 * s;
     const x = center.x - width / 2;
     const y = center.y + 18 * s;
@@ -391,12 +425,56 @@ export class WorldScene extends Phaser.Scene {
     g.setDepth(DEPTH_OVERLAY + view.main.depth + 0.5);
     g.fillStyle(0x0b2a4a, 0.75);
     g.fillRoundedRect(x - 3 * s, y - 3 * s, width + 6 * s, height + 6 * s, 7 * s);
-    const gap = 3 * s;
-    const seg = (width - gap * (total - 1)) / total;
-    for (let i = 0; i < total; i++) {
-      g.fillStyle(i < done ? 0x4fc3f7 : 0x37506a, 1);
-      g.fillRoundedRect(x + i * (seg + gap), y, seg, height, 4 * s);
+    g.fillStyle(0x37506a, 1);
+    g.fillRoundedRect(x, y, width, height, 5 * s);
+    if (progress > 0) {
+      g.fillStyle(progress >= 20 ? 0x7ed957 : 0x4fc3f7, 1);
+      g.fillRoundedRect(x, y, Math.max(10 * s, (width * progress) / 20), height, 5 * s);
     }
+  }
+
+  /** Case d'eau où le bateau d'un port est amarré. */
+  private moorage(entity: Entity): { x: number; y: number } | null {
+    const def = getBuildingDef(entity.defId);
+    const { w, d } = def.size;
+    // On préfère le côté est (vers le large), puis le sud, le nord et l'ouest.
+    for (let j = d - 1; j >= 0; j--)
+      if (isWater(entity.x + w, entity.y + j)) return { x: entity.x + w, y: entity.y + j };
+    for (let i = w - 1; i >= 0; i--)
+      if (isWater(entity.x + i, entity.y + d)) return { x: entity.x + i, y: entity.y + d };
+    for (let i = w - 1; i >= 0; i--)
+      if (isWater(entity.x + i, entity.y - 1)) return { x: entity.x + i, y: entity.y - 1 };
+    for (let j = d - 1; j >= 0; j--)
+      if (isWater(entity.x - 1, entity.y + j)) return { x: entity.x - 1, y: entity.y + j };
+    return null;
+  }
+
+  /** Bateau visible à quai (ou de retour) ; caché pendant qu'il est en mer. */
+  private syncBoat(view: View): void {
+    const { entity } = view;
+    const def = getBuildingDef(entity.defId);
+    const spot = entity.built && def.category === 'port' ? this.moorage(entity) : null;
+    if (!spot || def.category !== 'port') {
+      view.boat?.destroy();
+      view.boat = null;
+      view.boatHome = null;
+      return;
+    }
+    const key = ArtKey.boat(def.boatTier);
+    if (!view.boat) {
+      const piece = this.ctx.art.get(key);
+      view.boat = this.add.image(0, 0, key).setOrigin(piece.originX, piece.originY);
+    }
+    const pos = tileToWorld(spot.x, spot.y);
+    view.boatHome = pos;
+    const atSea = !!entity.port?.tripId && this.game_.now() < (entity.port?.readyAt ?? 0);
+    view.boat
+      .setPosition(pos.x, pos.y)
+      .setDepth(depthOf(spot.x, spot.y, 1, 1))
+      .setVisible(!atSea);
+    const locked = !this.game_.isTileUnlocked(entity.x, entity.y);
+    if (locked) view.boat.setTint(LOCKED_TINT);
+    else view.boat.clearTint();
   }
 
   /** Haut visuel d'une construction (en coordonnées monde). */
@@ -412,9 +490,14 @@ export class WorldScene extends Phaser.Scene {
   private refreshDynamic(): void {
     for (const view of this.views.values()) {
       const e = view.entity;
-      if (e.house || e.business || e.farm || !e.built) {
+      if (e.house || e.business || e.farm || e.port || !e.built) {
         const badge = this.badgeFor(e);
-        if (badge !== view.badgeKind || this.cropKeyFor(e) !== view.cropKey) this.syncView(view);
+        const progress = this.buildProgress(e);
+        const barChanged = progress !== null && !view.barKey.startsWith(`${progress}@`);
+        const atSea = !!e.port?.tripId && this.game_.now() < e.port.readyAt;
+        const boatChanged = !!view.boat && view.boat.visible === atSea;
+        if (badge !== view.badgeKind || this.cropKeyFor(e) !== view.cropKey || barChanged || boatChanged)
+          this.syncView(view);
       }
     }
     this.refreshHint();
@@ -471,6 +554,7 @@ export class WorldScene extends Phaser.Scene {
         if (entity.defId === 'road') this.refreshRoads();
         const view = this.views.get(entity.id);
         if (view) this.popIn(view);
+        if (view && !entity.built) this.hammerFx(view);
       }),
     );
     on(
@@ -769,9 +853,12 @@ export class WorldScene extends Phaser.Scene {
     const action = game.primaryAction(entity);
     let result: { ok: boolean; reason?: FailReason; missing?: number } | null = null;
     switch (action.type) {
-      case 'build':
-        result = game.buildStep(entity.id);
-        if (result.ok && view) this.hammerFx(view);
+      case 'finishBuild':
+        result = game.finishBuild(entity.id);
+        break;
+      case 'unloadBoat':
+        result = game.unloadBoat(entity.id);
+        if (result.ok && view) this.supplyFx(view);
         break;
       case 'collectRent':
         result = game.collectRent(entity.id);

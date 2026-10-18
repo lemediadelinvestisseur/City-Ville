@@ -1,6 +1,7 @@
 import { findBuildingDef } from '@/data/buildings';
 import { findCropDef } from '@/data/crops';
 import { findQuestDef } from '@/data/quests';
+import { isWater } from '@/data/terrain';
 import { SAVE_VERSION } from './newGame';
 import type { GameState } from './types';
 
@@ -17,11 +18,40 @@ export interface SaveFile {
   state: GameState;
 }
 
+type Migration = (state: Record<string, unknown>, savedAt: number) => Record<string, unknown>;
+
+/** Une construction (format brut) recouvre-t-elle une case d'eau ? */
+function overlapsWater(entity: Record<string, unknown>): boolean {
+  const def = typeof entity.defId === 'string' ? findBuildingDef(entity.defId) : undefined;
+  if (!def || typeof entity.x !== 'number' || typeof entity.y !== 'number') return false;
+  for (let dy = 0; dy < def.size.d; dy++) {
+    for (let dx = 0; dx < def.size.w; dx++) {
+      if (isWater(entity.x + dx, entity.y + dy)) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Migrations successives : `MIGRATIONS[n]` transforme un état de version n
  * en version n + 1. Ajouter une entrée à chaque changement de format.
  */
-const MIGRATIONS: Record<number, (state: Record<string, unknown>) => Record<string, unknown>> = {};
+const MIGRATIONS: Record<number, Migration> = {
+  /** v1 → v2 : chantiers à minuteur (plus de coups de marteau) et arrivée de la mer. */
+  1: (state, savedAt) => {
+    const entities = Array.isArray(state.entities) ? (state.entities as unknown[]) : [];
+    state.entities = entities.filter(isObject).filter((entity) => {
+      if (overlapsWater(entity)) return false;
+      const def = typeof entity.defId === 'string' ? findBuildingDef(entity.defId) : undefined;
+      if (def && entity.built === false) {
+        entity.construction = { startedAt: savedAt, endsAt: savedAt + def.buildSec * 1000 };
+      }
+      delete entity.buildProgress;
+      return true;
+    });
+    return state;
+  },
+};
 
 export function serialize(state: GameState, now: number): string {
   const file: SaveFile = { version: SAVE_VERSION, savedAt: now, state };
@@ -44,13 +74,15 @@ export function deserialize(raw: string | null): GameState | null {
   if (!isObject(parsed) || typeof parsed.version !== 'number' || !isObject(parsed.state)) return null;
   let version = parsed.version;
   let state = parsed.state;
+  const savedAt = typeof parsed.savedAt === 'number' ? parsed.savedAt : Date.now();
   if (version > SAVE_VERSION) return null;
   while (version < SAVE_VERSION) {
     const migrate = MIGRATIONS[version];
     if (!migrate) return null;
-    state = migrate(state);
+    state = migrate(state, savedAt);
     version += 1;
   }
+  state.version = SAVE_VERSION;
   return validate(state) ? (state as unknown as GameState) : null;
 }
 

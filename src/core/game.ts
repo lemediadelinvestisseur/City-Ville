@@ -6,16 +6,17 @@ import {
   MAX_DECORATION_BONUS,
   MAX_LEVEL,
   SELL_REFUND_RATIO,
-  SPEEDUP_SEC_PER_CASH,
   energyMaxForLevel,
   expansionPrice,
   levelUpReward,
+  speedUpCashCost,
   xpForLevel,
 } from '@/data/balance';
 import { BUILDINGS, getBuildingDef } from '@/data/buildings';
-import { CROPS, getCropDef } from '@/data/crops';
+import { CROPS, TRIPS, getCropDef, getTripDef } from '@/data/crops';
 import { findCashOffer, findStoreProduct } from '@/data/products';
 import { QUESTS, getQuestDef } from '@/data/quests';
+import { chunkHasLand, isWater } from '@/data/terrain';
 import { Emitter } from './emitter';
 import { CHUNKS_PER_SIDE, OccupancyGrid, chunkKey, chunkOf, footprintDistance, inBounds } from './grid';
 import { initBuiltState } from './newGame';
@@ -215,11 +216,24 @@ export class Game {
     if (!inBounds(x, y) || !inBounds(x + def.size.w - 1, y + def.size.d - 1)) return 'outOfBounds';
     for (let dy = 0; dy < def.size.d; dy++) {
       for (let dx = 0; dx < def.size.w; dx++) {
+        if (isWater(x + dx, y + dy)) return 'onWater';
         if (!this.isTileUnlocked(x + dx, y + dy)) return 'locked';
       }
     }
     if (!this.grid.isFree(x, y, def.size, ignoreId)) return 'blocked';
+    if (def.placement === 'shore' && !this.touchesWater(x, y, def.size.w, def.size.d)) return 'needsWater';
     return null;
+  }
+
+  /** Vrai si une case voisine (en croix) de l'emprise est de l'eau. */
+  touchesWater(x: number, y: number, w: number, d: number): boolean {
+    for (let i = 0; i < w; i++) {
+      if (isWater(x + i, y - 1) || isWater(x + i, y + d)) return true;
+    }
+    for (let j = 0; j < d; j++) {
+      if (isWater(x - 1, y + j) || isWater(x + w, y + j)) return true;
+    }
+    return false;
   }
 
   /** Raison pour laquelle un achat est impossible (hors emplacement), ou null. */
@@ -277,8 +291,11 @@ export class Game {
   }
 
   primaryAction(entity: Entity): PrimaryAction {
-    if (!entity.built) return { type: 'build' };
     const now = this.now();
+    if (!entity.built) {
+      const endsAt = entity.construction?.endsAt ?? now;
+      return now >= endsAt ? { type: 'finishBuild' } : { type: 'waitBuild', readyAt: endsAt };
+    }
     if (entity.house) {
       return now >= entity.house.readyAt
         ? { type: 'collectRent' }
@@ -294,24 +311,33 @@ export class Game {
       if (cropId === null) return { type: 'plant' };
       return now >= readyAt ? { type: 'harvest' } : { type: 'waitCrop', readyAt };
     }
+    if (entity.port) {
+      const { tripId, readyAt } = entity.port;
+      if (tripId === null) return { type: 'sendBoat' };
+      return now >= readyAt ? { type: 'unloadBoat' } : { type: 'waitBoat', readyAt };
+    }
     return { type: 'info' };
   }
 
   /** Coût en cash pour terminer immédiatement l'attente en cours, ou null. */
   speedUpCost(entity: Entity): number | null {
-    const def = getBuildingDef(entity.defId);
-    if (!entity.built) return Math.max(1, def.buildSteps - entity.buildProgress);
     const action = this.primaryAction(entity);
-    if (action.type === 'waitRent' || action.type === 'waitCrop' || action.type === 'waitCustomers') {
-      const remainingSec = Math.max(0, (action.readyAt - this.now()) / 1000);
-      return Math.max(1, Math.ceil(remainingSec / SPEEDUP_SEC_PER_CASH));
+    switch (action.type) {
+      case 'waitBuild':
+      case 'waitRent':
+      case 'waitCrop':
+      case 'waitCustomers':
+      case 'waitBoat':
+        return speedUpCashCost((action.readyAt - this.now()) / 1000);
+      default:
+        return null;
     }
-    return null;
   }
 
   expansionInfo(cx: number, cy: number): ExpansionInfo {
     if (cx < 0 || cy < 0 || cx >= CHUNKS_PER_SIDE || cy >= CHUNKS_PER_SIDE) return { status: 'unavailable' };
     if (this.isChunkUnlocked(cx, cy)) return { status: 'unlocked' };
+    if (!chunkHasLand(cx, cy)) return { status: 'unavailable' };
     const adjacent =
       this.isChunkUnlocked(cx - 1, cy) ||
       this.isChunkUnlocked(cx + 1, cy) ||
@@ -330,6 +356,7 @@ export class Game {
     const ids: string[] = [];
     for (const def of BUILDINGS) if (def.inShop !== false && def.requires?.level === level) ids.push(def.id);
     for (const crop of CROPS) if (crop.requires?.level === level) ids.push(crop.id);
+    for (const trip of TRIPS) if (trip.requires?.level === level) ids.push(trip.id);
     return ids;
   }
 
@@ -428,20 +455,21 @@ export class Game {
 
     this.spend(def.cost);
     const now = this.now();
-    const built = def.buildSteps === 0;
-    const entity: Entity = { id: this.state.nextEntityId++, defId, x, y, built, buildProgress: 0 };
-    if (built) {
-      entity.buildProgress = def.buildSteps;
-      initBuiltState(entity, now);
-    }
+    const built = def.buildSec <= 0;
+    const entity: Entity = { id: this.state.nextEntityId++, defId, x, y, built };
+    if (built) initBuiltState(entity, now);
+    else entity.construction = { startedAt: now, endsAt: now + def.buildSec * 1000 };
     this.state.entities.push(entity);
     this.byId.set(entity.id, entity);
     this.grid.fill(x, y, def.size, entity.id);
     this.derivedCache = null;
     this.events.emit('entityAdded', entity);
-    this.give({ xp: def.xp }, entity.id);
     this.track({ type: 'place', defId, category: def.category });
-    if (built) this.track({ type: 'build', defId, category: def.category });
+    if (built) {
+      // Construction immédiate : l'XP est gagnée tout de suite.
+      this.give({ xp: def.xp }, entity.id);
+      this.track({ type: 'build', defId, category: def.category });
+    }
     this.changed();
     return { ok: true, entity };
   }
@@ -486,29 +514,25 @@ export class Game {
     return { ok: true, refund };
   }
 
-  buildStep(id: number): Result<{ completed: boolean }> {
+  /** Inaugure un chantier dont le minuteur est écoulé (aucune énergie requise). */
+  finishBuild(id: number): Result<object> {
     const entity = this.byId.get(id);
     if (!entity || entity.built) return fail('invalid');
-    const energy = this.useEnergy();
-    if (!energy.ok) return energy;
-    entity.buildProgress += 1;
-    this.give({ xp: 1 }, entity.id);
-    const def = getBuildingDef(entity.defId);
-    const completed = entity.buildProgress >= def.buildSteps;
-    if (completed) this.completeConstruction(entity);
-    else this.events.emit('entityUpdated', entity);
+    if (this.now() < (entity.construction?.endsAt ?? 0)) return fail('notReady');
+    this.completeConstruction(entity);
     this.changed();
-    return { ok: true, completed };
+    return { ok: true };
   }
 
   private completeConstruction(entity: Entity): void {
     const def = getBuildingDef(entity.defId);
     entity.built = true;
-    entity.buildProgress = def.buildSteps;
+    delete entity.construction;
     initBuiltState(entity, this.now());
     this.derivedCache = null;
     this.events.emit('entityUpdated', entity);
     this.events.emit('constructionComplete', entity);
+    this.give({ xp: def.xp }, entity.id);
     this.track({ type: 'build', defId: entity.defId, category: def.category });
   }
 
@@ -562,6 +586,43 @@ export class Game {
     return { ok: true, goods };
   }
 
+  /** Envoie le bateau d'un port en expédition (coût en pièces). */
+  sendBoat(id: number, tripId: string): Result<object> {
+    const entity = this.byId.get(id);
+    if (!entity?.port || !entity.built || entity.port.tripId !== null) return fail('invalid');
+    const def = getBuildingDef(entity.defId);
+    const trip = getTripDef(tripId);
+    if (def.category !== 'port' || def.boatTier < trip.boatTier) return fail('invalid');
+    const requirement = this.checkRequirements(trip.requires);
+    if (requirement) return fail(requirement);
+    if (this.state.coins < trip.cost) return fail('notEnoughCoins', trip.cost - this.state.coins);
+    this.spend({ coins: trip.cost });
+    const now = this.now();
+    entity.port = { tripId, startedAt: now, readyAt: now + trip.durationSec * 1000 };
+    this.events.emit('entityUpdated', entity);
+    this.track({ type: 'sendBoat', tripId });
+    this.changed();
+    return { ok: true };
+  }
+
+  /** Décharge la pêche d'un bateau revenu (1 énergie). */
+  unloadBoat(id: number): Result<{ goods: number }> {
+    const entity = this.byId.get(id);
+    if (!entity?.port || entity.port.tripId === null) return fail('invalid');
+    if (this.now() < entity.port.readyAt) return fail('notReady');
+    if (this.state.goods >= this.derived().goodsCap) return fail('storageFull');
+    const energy = this.useEnergy();
+    if (!energy.ok) return energy;
+    const trip = getTripDef(entity.port.tripId);
+    const goods = Math.min(trip.goods, this.derived().goodsCap - this.state.goods);
+    entity.port = { tripId: null, startedAt: 0, readyAt: 0 };
+    this.give({ goods, xp: trip.xp }, entity.id);
+    this.events.emit('entityUpdated', entity);
+    this.track({ type: 'unloadBoat', tripId: trip.id });
+    this.changed();
+    return { ok: true, goods };
+  }
+
   supply(id: number): Result<object> {
     const entity = this.byId.get(id);
     if (!entity?.business || !entity.built || entity.business.readyAt !== null) return fail('invalid');
@@ -607,6 +668,7 @@ export class Game {
       if (entity.house) entity.house.readyAt = now;
       if (entity.farm && entity.farm.cropId !== null) entity.farm.readyAt = now;
       if (entity.business && entity.business.readyAt !== null) entity.business.readyAt = now;
+      if (entity.port && entity.port.tripId !== null) entity.port.readyAt = now;
       this.events.emit('entityUpdated', entity);
     }
     this.changed();
@@ -740,6 +802,9 @@ export class Game {
         const filter = task as { cropId?: string };
         return !filter.cropId || filter.cropId === event.cropId;
       }
+      case 'sendBoat':
+      case 'unloadBoat':
+        return true;
       case 'expand':
         return true;
     }
@@ -786,6 +851,14 @@ export class Game {
   /** Fait comme si `ms` millisecondes s'étaient écoulées (décale tous les minuteurs). */
   devSkipTime(ms: number): void {
     for (const entity of this.state.entities) {
+      if (entity.construction) {
+        entity.construction.startedAt -= ms;
+        entity.construction.endsAt -= ms;
+      }
+      if (entity.port && entity.port.tripId !== null) {
+        entity.port.readyAt -= ms;
+        entity.port.startedAt -= ms;
+      }
       if (entity.house) entity.house.readyAt -= ms;
       if (entity.farm && entity.farm.cropId !== null) {
         entity.farm.readyAt -= ms;

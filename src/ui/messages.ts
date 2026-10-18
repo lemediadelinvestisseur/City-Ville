@@ -37,6 +37,10 @@ export function failMessage(reason: FailReason, missing?: number): string {
       return 'Offre déjà achetée.';
     case 'energyFull':
       return 'Votre énergie est déjà au maximum.';
+    case 'onWater':
+      return 'Impossible de construire sur l’eau.';
+    case 'needsWater':
+      return 'Cette construction doit toucher l’eau.';
     case 'invalid':
       return 'Action impossible.';
   }

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ENERGY_REGEN_SEC, energyMaxForLevel, xpForLevel } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
+import { getCropDef, getTripDef } from '@/data/crops';
+import { isWater } from '@/data/terrain';
 import { Game, type Clock } from './game';
 import { findHint, findQuestHint } from './hints';
 import { createNewGame } from './newGame';
@@ -80,7 +82,7 @@ describe('placement', () => {
     expect(game.state.coins).toBe(coins - 250);
     if (result.ok) {
       expect(result.entity.built).toBe(false);
-      expect(game.primaryAction(result.entity)).toEqual({ type: 'build' });
+      expect(game.primaryAction(result.entity)).toMatchObject({ type: 'waitBuild' });
     }
   });
 
@@ -125,29 +127,30 @@ describe('placement', () => {
 });
 
 describe('construction', () => {
-  it('termine le chantier après le bon nombre de coups (1 énergie chacun)', () => {
+  it('attend la fin du minuteur puis inaugure le bâtiment (sans énergie)', () => {
     const { game, clock } = setup();
     const spot = freeSpot(game, 'cottage');
     const placed = game.place('cottage', spot.x, spot.y);
     if (!placed.ok) throw new Error();
     const energy = game.state.energy;
-    expect(game.buildStep(placed.entity.id)).toMatchObject({ ok: true, completed: false });
-    expect(game.buildStep(placed.entity.id)).toMatchObject({ ok: true, completed: false });
-    expect(game.buildStep(placed.entity.id)).toMatchObject({ ok: true, completed: true });
-    expect(game.state.energy).toBe(energy - 3);
+    const xp = game.state.xp;
+    expect(game.primaryAction(placed.entity).type).toBe('waitBuild');
+    expect(game.finishBuild(placed.entity.id)).toMatchObject({ ok: false, reason: 'notReady' });
+    clock.advance(getBuildingDef('cottage').buildSec);
+    expect(game.primaryAction(placed.entity).type).toBe('finishBuild');
+    expect(game.finishBuild(placed.entity.id)).toMatchObject({ ok: true });
+    expect(game.state.energy).toBe(energy);
+    expect(game.state.xp).toBe(xp + getBuildingDef('cottage').xp);
     expect(placed.entity.built).toBe(true);
+    expect(placed.entity.construction).toBeUndefined();
     expect(game.derived().population).toBe(45);
-    clock.advance(180);
+    clock.advance(300);
     expect(game.primaryAction(placed.entity).type).toBe('collectRent');
   });
 
-  it('refuse un coup de marteau sans énergie', () => {
-    const { game } = setup();
-    const spot = freeSpot(game, 'cottage');
-    const placed = game.place('cottage', spot.x, spot.y);
-    if (!placed.ok) throw new Error();
-    game.state.energy = 0;
-    expect(game.buildStep(placed.entity.id)).toMatchObject({ ok: false, reason: 'notEnoughEnergy' });
+  it('allonge les chantiers des bâtiments de haut niveau', () => {
+    expect(getBuildingDef('cottage').buildSec).toBeLessThan(getBuildingDef('apartments').buildSec);
+    expect(getBuildingDef('apartments').buildSec).toBeLessThan(getBuildingDef('skyscraper').buildSec);
   });
 
   it('permet de terminer un chantier contre du cash', () => {
@@ -155,11 +158,51 @@ describe('construction', () => {
     const spot = freeSpot(game, 'bakery');
     const placed = game.place('bakery', spot.x, spot.y);
     if (!placed.ok) throw new Error();
-    expect(game.speedUpCost(placed.entity)).toBe(4);
+    const cost = game.speedUpCost(placed.entity);
+    expect(cost).toBeGreaterThan(0);
     const cash = game.state.cash;
-    expect(game.speedUp(placed.entity.id)).toMatchObject({ ok: true, cost: 4 });
-    expect(game.state.cash).toBe(cash - 4);
+    expect(game.speedUp(placed.entity.id)).toMatchObject({ ok: true, cost });
+    expect(game.state.cash).toBe(cash - cost!);
     expect(placed.entity.built).toBe(true);
+  });
+});
+
+describe('pêche', () => {
+  it('impose le bord de l’eau aux ports et interdit de bâtir sur l’eau', () => {
+    const { game } = setup();
+    game.state.level = 4;
+    const pier = getBuildingDef('pier');
+    const cottage = getBuildingDef('cottage');
+    let water: { x: number; y: number } | null = null;
+    for (let y = 8; y < 32 && !water; y++) for (let x = 8; x < 32; x++) if (isWater(x, y)) water = { x, y };
+    expect(water).not.toBeNull();
+    expect(game.checkPlacement(cottage, water!.x, water!.y)).toBe('onWater');
+    expect(game.checkPlacement(pier, 12, 12)).toBe('needsWater');
+  });
+
+  it('envoie le bateau en mer puis décharge la pêche', () => {
+    const { game, clock } = setup();
+    game.state.level = 4;
+    game.state.coins = 10_000;
+    const spot = freeSpot(game, 'pier');
+    const placed = game.place('pier', spot.x, spot.y);
+    if (!placed.ok) throw new Error();
+    game.speedUp(placed.entity.id);
+    const pier = placed.entity;
+    expect(game.primaryAction(pier).type).toBe('sendBoat');
+    expect(game.sendBoat(pier.id, 'trawl')).toMatchObject({ ok: false, reason: 'invalid' });
+    const trip = getTripDef('coastal');
+    const coins = game.state.coins;
+    expect(game.sendBoat(pier.id, trip.id).ok).toBe(true);
+    expect(game.state.coins).toBe(coins - trip.cost);
+    expect(game.primaryAction(pier).type).toBe('waitBoat');
+    expect(game.unloadBoat(pier.id)).toMatchObject({ ok: false, reason: 'notReady' });
+    clock.advance(trip.durationSec);
+    expect(game.primaryAction(pier).type).toBe('unloadBoat');
+    const goods = game.state.goods;
+    expect(game.unloadBoat(pier.id)).toMatchObject({ ok: true, goods: trip.goods });
+    expect(game.state.goods).toBe(goods + trip.goods);
+    expect(game.primaryAction(pier).type).toBe('sendBoat');
   });
 });
 
@@ -175,20 +218,23 @@ describe('boucle économique', () => {
     expect(game.state.coins).toBeGreaterThanOrEqual(coins + 30);
     expect(game.primaryAction(house).type).toBe('waitRent');
     expect(game.collectRent(house.id)).toMatchObject({ ok: false, reason: 'notReady' });
-    clock.advance(180);
+    const cottage = getBuildingDef('cottage');
+    if (cottage.category !== 'house') throw new Error();
+    clock.advance(cottage.rent.intervalSec);
     expect(game.collectRent(house.id).ok).toBe(true);
   });
 
   it('récolte, replante et fait pousser une culture', () => {
     const plot = byDef(game, 'plot')[0]!;
     const goods = game.state.goods;
-    expect(game.harvest(plot.id)).toMatchObject({ ok: true, goods: 8 });
-    expect(game.state.goods).toBe(goods + 8);
+    const strawberry = getCropDef('strawberry');
+    expect(game.harvest(plot.id)).toMatchObject({ ok: true, goods: strawberry.goods });
+    expect(game.state.goods).toBe(goods + strawberry.goods);
     expect(game.primaryAction(plot).type).toBe('plant');
     expect(game.plant(plot.id, 'wheat')).toMatchObject({ ok: false, reason: 'levelLocked' });
     expect(game.plant(plot.id, 'strawberry').ok).toBe(true);
     expect(game.primaryAction(plot).type).toBe('waitCrop');
-    clock.advance(60);
+    clock.advance(strawberry.growSec);
     expect(game.primaryAction(plot).type).toBe('harvest');
   });
 
@@ -210,10 +256,12 @@ describe('boucle économique', () => {
     game.state.goods = 50;
     expect(game.supply(bakery.id).ok).toBe(true);
     expect(game.state.goods).toBe(30);
-    clock.advance(60);
+    const def = getBuildingDef('bakery');
+    if (def.category !== 'business') throw new Error();
+    clock.advance(def.serveSec / 2);
     expect(game.customersServed(bakery)).toEqual({ served: 5, total: 10 });
     expect(game.collectBusiness(bakery.id)).toMatchObject({ ok: false, reason: 'notReady' });
-    clock.advance(60);
+    clock.advance(def.serveSec / 2);
     const coins = game.state.coins;
     const collected = game.collectBusiness(bakery.id);
     expect(collected.ok).toBe(true);
@@ -296,11 +344,12 @@ describe('objectifs', () => {
     const placed = fresh.place('bakery', spot.x, spot.y);
     if (!placed.ok) throw new Error();
     expect(fresh.questTaskStatus(bakeryQuest().progress).map((t) => t.done)).toEqual([true, false, false, false]);
-    for (let i = 0; i < 4; i++) fresh.buildStep(placed.entity.id);
+    clock.advance(getBuildingDef('bakery').buildSec);
+    fresh.finishBuild(placed.entity.id);
     fresh.state.goods = 100;
     fresh.supply(placed.entity.id);
     expect(fresh.questTaskStatus(bakeryQuest().progress).map((t) => t.done)).toEqual([true, true, true, false]);
-    clock.advance(120);
+    clock.advance(3 * 60);
     fresh.collectBusiness(placed.entity.id);
     expect(fresh.state.quests.completed).toContain('bakery');
   });
@@ -425,6 +474,27 @@ describe('sauvegarde', () => {
     expect(restored!.quests.completed).toEqual([]);
     expect(restored!.entities.find((e) => e.id === plot.id)!.farm!.cropId).toBeNull();
     expect(() => new Game(restored!, clock)).not.toThrow();
+  });
+
+  it('migre une sauvegarde v1 (coups de marteau) vers les minuteurs', () => {
+    const { game, clock } = setup();
+    const spot = freeSpot(game, 'cottage');
+    const placed = game.place('cottage', spot.x, spot.y);
+    if (!placed.ok) throw new Error();
+    const file = JSON.parse(serialize(game.state, clock.now()));
+    file.version = 1;
+    const raw = file.state.entities.find((e: Entity) => e.id === placed.entity.id);
+    delete raw.construction;
+    raw.buildProgress = 1;
+    // Une route posée sur ce qui est désormais la mer disparaît.
+    file.state.entities.push({ id: 9999, defId: 'road', x: 35, y: 20, built: true });
+    const restored = deserialize(JSON.stringify(file))!;
+    expect(restored.version).toBe(2);
+    const migrated = restored.entities.find((e) => e.id === placed.entity.id)!;
+    expect(migrated).not.toHaveProperty('buildProgress');
+    expect(migrated.construction?.endsAt).toBe(clock.now() + getBuildingDef('cottage').buildSec * 1000);
+    expect(restored.entities.some((e) => e.id === 9999)).toBe(false);
+    expect(() => new Game(restored, clock)).not.toThrow();
   });
 
   it('rejette les données corrompues ou futures', () => {
