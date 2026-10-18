@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ENERGY_REGEN_SEC, energyMaxForLevel, xpForLevel } from '@/data/balance';
+import {
+  ENERGY_REGEN_SEC,
+  MAP_H,
+  MAP_W,
+  chunkDistance,
+  energyMaxForLevel,
+  expansionPrice,
+  xpForLevel,
+} from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
 import { getCropDef, getTripDef } from '@/data/crops';
-import { coastX, isWater } from '@/data/terrain';
+import { coastX, isWater, terrainAt } from '@/data/terrain';
+import { sceneryOf } from '@/data/scenery';
 import { Game, type Clock } from './game';
 import { findHint, findQuestHint } from './hints';
 import { createNewGame } from './newGame';
@@ -69,8 +78,8 @@ describe('placement', () => {
     const { game } = setup();
     const hall = byDef(game, 'town_hall')[0]!;
     expect(game.place('cottage', hall.x, hall.y)).toMatchObject({ ok: false, reason: 'blocked' });
-    expect(game.place('cottage', 1, 1)).toMatchObject({ ok: false, reason: 'locked' });
-    expect(game.place('cottage', 39, 39)).toMatchObject({ ok: false, reason: 'outOfBounds' });
+    expect(game.place('cottage', 4, 12)).toMatchObject({ ok: false, reason: 'locked' });
+    expect(game.place('cottage', MAP_W - 1, MAP_H - 1)).toMatchObject({ ok: false, reason: 'outOfBounds' });
   });
 
   it('débite le coût et crée un chantier', () => {
@@ -466,9 +475,30 @@ describe('agrandissements', () => {
     game.devGrant({ xp: xpForLevel(3) });
     const coins = game.state.coins;
     expect(game.buyExpansion(0, 2).ok).toBe(true);
-    expect(game.state.coins).toBe(coins - 2000);
+    expect(game.state.coins).toBe(coins - 1500);
     expect(game.isTileUnlocked(0, 16)).toBe(true);
     expect(game.expansionInfo(0, 1)).toMatchObject({ status: 'purchasable' });
+    // La grande route se prolonge dans la zone achetée (offerte).
+    expect(game.isRoad(4, 20)).toBe(true);
+  });
+
+  it('fait payer plus cher les zones éloignées de la ville', () => {
+    const near = expansionPrice(chunkDistance(4, 2), 0);
+    const far = expansionPrice(chunkDistance(12, 9), 0);
+    expect(far.coins).toBeGreaterThan(near.coins * 15);
+    expect(far.level).toBeGreaterThan(near.level);
+  });
+
+  it('dessine une grande carte avec mer, montagnes, lacs et forêts', () => {
+    const count = { water: 0, rock: 0, grass: 0, sand: 0 };
+    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) count[terrainAt(x, y)]++;
+    expect(count.rock).toBeGreaterThan(300);
+    expect(count.water).toBeGreaterThan(1000);
+    expect(count.grass).toBeGreaterThan(MAP_W * MAP_H * 0.5);
+    // La ville de départ est entièrement constructible.
+    for (let y = 8; y < 32; y++) for (let x = 8; x < 28; x++) expect(terrainAt(x, y)).not.toBe('rock');
+    const trees = sceneryOf(6, 4).filter((item) => item.defId !== 'road').length;
+    expect(trees).toBeGreaterThan(0);
   });
 });
 
@@ -538,7 +568,7 @@ describe('sauvegarde', () => {
     // Une route posée sur ce qui est désormais la mer disparaît.
     file.state.entities.push({ id: 9999, defId: 'road', x: 31, y: 20, built: true });
     const restored = deserialize(JSON.stringify(file))!;
-    expect(restored.version).toBe(3);
+    expect(restored.version).toBe(4);
     const migrated = restored.entities.find((e) => e.id === placed.entity.id)!;
     expect(migrated).not.toHaveProperty('buildProgress');
     expect(migrated.construction?.endsAt).toBe(clock.now() + getBuildingDef('cottage').buildSec * 1000);

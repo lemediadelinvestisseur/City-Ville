@@ -9,7 +9,7 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
     switch (event.type) {
       case 'place':
         // Un chantier qui démarre sonne comme un coup de marteau.
-        sound.play(getBuildingDef(event.defId).buildSec > 0 ? 'hammer' : 'place');
+        sound.play(getBuildingDef(event.defId).buildSec > 0 ? 'construction' : 'place');
         break;
       case 'collectRent':
       case 'collectBusiness':
@@ -39,6 +39,8 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
   game.events.on('levelUp', () => sound.play('levelUp'));
   game.events.on('questCompleted', () => sound.play('quest'));
   bus.on('world:fail', () => sound.play('error'));
+  bus.on('fx:hammer', () => sound.play('hammerSoft'));
+  bus.on('fx:pickup', ({ reward }) => sound.play(reward.coins ? 'coin' : 'click'));
   uiRoot.addEventListener('click', (event) => {
     if (event.target instanceof Element && event.target.closest('button')) sound.play('click');
   });

@@ -3,6 +3,7 @@ import {
   BASE_POP_CAP,
   ENERGY_PER_ACTION,
   EAST_SHORE_LEVEL,
+  chunkDistance,
   ENERGY_REGEN_SEC,
   MAX_DECORATION_BONUS,
   MAX_LEVEL,
@@ -20,7 +21,8 @@ import { CROPS, TRIPS, getCropDef, getTripDef } from '@/data/crops';
 import { MARKET } from '@/data/market';
 import { findCashOffer, findStoreProduct } from '@/data/products';
 import { QUESTS, getQuestDef } from '@/data/quests';
-import { chunkHasLand, isEastChunk, isWater } from '@/data/terrain';
+import { sceneryOf } from '@/data/scenery';
+import { chunkHasLand, isEastChunk, isWater, terrainAt } from '@/data/terrain';
 import { Emitter } from './emitter';
 import { CHUNKS_X, CHUNKS_Y, OccupancyGrid, chunkKey, chunkOf, footprintDistance, inBounds } from './grid';
 import { initBuiltState } from './newGame';
@@ -62,6 +64,11 @@ export interface GameEvents {
   questCompleted: { questId: string; reward: Reward };
   expanded: { cx: number; cy: number };
   gameplay: GameplayEvent;
+}
+
+/** Prime en pièces versée à l'inauguration d'un bâtiment. */
+export function inaugurationBonus(def: BuildingDef): number {
+  return Math.round((def.cost.coins ?? 0) * 0.05);
 }
 
 export interface Derived {
@@ -226,7 +233,9 @@ export class Game {
     if (def.placement === 'bridge') return this.checkBridge(def, x, y, ignoreId);
     for (let dy = 0; dy < def.size.d; dy++) {
       for (let dx = 0; dx < def.size.w; dx++) {
-        if (isWater(x + dx, y + dy)) return 'onWater';
+        const terrain = terrainAt(x + dx, y + dy);
+        if (terrain === 'water') return 'onWater';
+        if (terrain === 'rock') return 'onMountain';
         if (!this.isTileUnlocked(x + dx, y + dy)) return 'locked';
       }
     }
@@ -368,7 +377,7 @@ export class Game {
       this.isChunkUnlocked(cx, cy - 1) ||
       this.isChunkUnlocked(cx, cy + 1);
     if (!adjacent) return { status: 'unavailable' };
-    const price = expansionPrice(this.state.expansionsBought);
+    const price = expansionPrice(chunkDistance(cx, cy), this.state.expansionsBought);
     let reason: FailReason | null = null;
     const east = isEastChunk(cx);
     const level = east ? Math.max(price.level, EAST_SHORE_LEVEL) : price.level;
@@ -559,7 +568,8 @@ export class Game {
     this.derivedCache = null;
     this.events.emit('entityUpdated', entity);
     this.events.emit('constructionComplete', entity);
-    this.give({ xp: def.xp }, entity.id);
+    // Inauguration : l'XP du bâtiment et une petite prime en pièces (5 % du prix).
+    this.give({ xp: def.xp, coins: inaugurationBonus(def) }, entity.id);
     this.track({ type: 'build', defId: entity.defId, category: def.category });
   }
 
@@ -711,11 +721,32 @@ export class Game {
     this.state.unlockedChunks.push(chunkKey(cx, cy));
     this.unlocked.add(chunkKey(cx, cy));
     this.state.expansionsBought += 1;
+    this.adoptScenery(cx, cy);
     this.events.emit('expanded', { cx, cy });
     this.give({ xp: 10 }, null);
     this.track({ type: 'expand' });
     this.changed();
     return { ok: true };
+  }
+
+  /** Les arbres et routes sauvages d'une zone achetée deviennent des constructions du joueur. */
+  private adoptScenery(cx: number, cy: number): void {
+    for (const item of sceneryOf(cx, cy)) {
+      if (!this.grid.isFree(item.x, item.y, { w: 1, d: 1 })) continue;
+      const entity: Entity = {
+        id: this.state.nextEntityId++,
+        defId: item.defId,
+        x: item.x,
+        y: item.y,
+        built: true,
+        starter: true,
+      };
+      this.state.entities.push(entity);
+      this.byId.set(entity.id, entity);
+      this.grid.fill(entity.x, entity.y, { w: 1, d: 1 }, entity.id);
+      this.events.emit('entityAdded', entity);
+    }
+    this.derivedCache = null;
   }
 
   /** Achat d'une offre payée en cash (pièces, énergie). */

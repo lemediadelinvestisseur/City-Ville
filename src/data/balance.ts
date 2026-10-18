@@ -5,8 +5,8 @@
  */
 
 /** Taille de la carte en cases : deux rives séparées par un bras de mer. */
-export const MAP_W = 64;
-export const MAP_H = 40;
+export const MAP_W = 128;
+export const MAP_H = 96;
 /** Largeur du bras de mer (en cases). */
 export const CHANNEL_WIDTH = 4;
 /** Premières zones de la rive est (colonne de zones) et niveau pour y accéder. */
@@ -54,13 +54,13 @@ export const CONTENT_LEVEL = 30;
 /**
  * XP cumulée pour atteindre chaque niveau (index = niveau). Calibrée avec le
  * joueur simulé (src/core/simulation.ts, 4 connexions par jour) : niveau 10
- * vers le 2e jour, niveau 20 vers le 10e, niveau 30 vers le 20e. Un vrai joueur,
+ * vers le 2e jour, niveau 20 vers le 11e, niveau 30 vers le 21e. Un vrai joueur,
  * moins assidu, y arrive en trois semaines environ. Au-delà de la table,
  * chaque niveau coûte 12 % de plus.
  */
 const XP_TABLE: readonly number[] = [
-  0, 0, 15, 55, 120, 210, 400, 570, 760, 1100, 1350, 1850, 2500, 3100, 3800, 4700, 5250, 5850, 6450, 7100, 7750, 8400,
-  9100, 9800, 10550, 11300, 12100, 12900, 13700, 14550, 15400,
+  0, 0, 15, 55, 120, 210, 400, 570, 760, 1100, 1350, 1850, 2500, 3100, 3800, 4700, 5450, 6250, 7050, 7900, 8800, 9700,
+  10650, 11650, 12700, 13750, 14850, 16000, 17150, 18350, 19600,
 ];
 
 export function xpForLevel(level: number): number {
@@ -105,7 +105,17 @@ export function speedUpCashCost(remainingSec: number): number {
 }
 
 /** Coût et niveau requis du n-ième agrandissement (n commence à 0). */
-export function expansionPrice(n: number): { coins: number; level: number } {
-  const coins = Math.round((2000 * Math.pow(1.7, n)) / 100) * 100;
-  return { coins, level: Math.min(CONTENT_LEVEL, 3 + 2 * n) };
+export function expansionPrice(distance: number, bought: number): { coins: number; level: number } {
+  // Plus la zone est loin de la ville de départ, plus elle est chère et tardive ;
+  // chaque achat renchérit aussi un peu les suivants.
+  const d = Math.max(1, distance);
+  const coins = Math.round((1500 * Math.pow(1.45, d - 1) * (1 + 0.08 * bought)) / 100) * 100;
+  return { coins, level: Math.min(CONTENT_LEVEL, 1 + 2 * d + Math.floor(bought / 4)) };
+}
+
+/** Distance (en zones) entre une zone et la ville de départ. */
+export function chunkDistance(cx: number, cy: number): number {
+  let best = Infinity;
+  for (const [sx, sy] of STARTING_CHUNKS) best = Math.min(best, Math.max(Math.abs(cx - sx), Math.abs(cy - sy)));
+  return best;
 }

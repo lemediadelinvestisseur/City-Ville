@@ -23,7 +23,10 @@ chantier, on revient plus tard.
 - **Énergie** : encaisser un loyer ou une recette, récolter, décharger un bateau coûtent 1 énergie.
   +1 toutes les 3 minutes, recharge complète à chaque niveau. C'est le rythme de la session… et un levier de
   monétisation.
-- **Deux rives** : la carte (64 × 40) est coupée du nord au sud par un bras de mer. La rive est s'ouvre au
+- **Grande carte** (128 × 96 cases, 192 zones) : mer au sud et à l'ouest, montagnes enneigées au nord et
+  massif au nord-est (non constructibles), lacs, forêts denses, grandes routes qui se prolongent au loin.
+  Acheter une zone offre ses routes et ses arbres (à défricher en mode édition).
+- **Deux rives** : la carte est coupée du nord au sud par un bras de mer. La rive est s'ouvre au
   niveau 15 : on y pose un **pont** (20 000 pièces, chantier de 3 h) d'une rive à l'autre, puis on achète ses
   zones.
 - **Jour et nuit** : cycle de 30 minutes commun à tous (20 min de jour, 2 de crépuscule, 6 de nuit, 2 d'aube),
@@ -38,7 +41,11 @@ chantier, on revient plus tard.
   commerces exigent un nombre d'habitants minimum.
 - **Marchandises** : produites par les champs, stockées (grange, entrepôt), consommées par les commerces.
 - **Décorations** : bonus de revenus (%) sur les habitations et commerces proches (plafond +50 %).
-- **Agrandissements** : zones de 8 × 8 cases autour de la ville, de plus en plus chères.
+- **Agrandissements** : zones de 8 × 8 cases voisines de celles déjà achetées. Plus la zone est loin de la ville
+  de départ, plus elle est chère et tardive ; chaque achat renchérit un peu les suivants.
+- **Animations** : chantier ouvert à coups de marteau, ouvrier au travail, bâtiment qui s'élève à
+  l'inauguration ; pièces et étoiles d'XP qui tombent au sol et se ramassent (toucher, survol, ou
+  automatiquement) ; camion de déménagement à l'arrivée des habitants.
 
 ## Ressources
 
@@ -176,15 +183,16 @@ avance, plus les chantiers, les cultures et les sorties en mer sont longs, et pl
 | 28     | 15 000     | 43          |
 | 30     | 17 000     | 45          |
 
-| Agrandissement | Prix          | Niveau requis |
-| -------------- | ------------- | ------------- |
-| 1              | 2 000 pièces  | 3             |
-| 2              | 3 400 pièces  | 5             |
-| 3              | 5 800 pièces  | 7             |
-| 4              | 9 800 pièces  | 9             |
-| 5              | 16 700 pièces | 11            |
-| 6              | 28 400 pièces | 13            |
-| 7              | 48 300 pièces | 15            |
+| Distance à la ville (zones) | Prix (premier achat) | Niveau requis |
+| --------------------------- | -------------------- | ------------- |
+| 1                           | 1 500 pièces         | 3             |
+| 2                           | 2 200 pièces         | 5             |
+| 3                           | 3 200 pièces         | 7             |
+| 5                           | 6 600 pièces         | 11            |
+| 8                           | 20 200 pièces        | 17            |
+| 12                          | 89 400 pièces        | 25            |
+
+Chaque zone déjà achetée renchérit les suivantes de 8 % (et retarde d'un niveau toutes les quatre zones).
 
 Autres règles : départ avec 3 000 pièces, 5 cash, 40 marchandises ; vente d'une construction = 20 % du prix en
 pièces ; terminer une attente coûte `⌈0,8 × √minutes restantes⌉` cash (1 cash pour quelques minutes, 6 cash pour
