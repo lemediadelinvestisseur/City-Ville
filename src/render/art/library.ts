@@ -1,6 +1,6 @@
 import { BUILDINGS } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
-import { boatArt, bridgeArt, BOAT_TIERS } from './boats';
+import { boatArt, bridgeArt, movingTruckArt, BOAT_TIERS } from './boats';
 import { buildingArt } from './buildings';
 import { decorationArt } from './decorations';
 import { createCanvas, type ArtPiece } from './IsoPainter';
@@ -13,6 +13,8 @@ import {
   puffParticle,
   starParticle,
   walker,
+  worker,
+  hammerTool,
   type BadgeKind,
 } from './sprites';
 import {
@@ -23,6 +25,10 @@ import {
   plotTile,
   roadTile,
   sandTile,
+  rockTile,
+  mountainArt,
+  ROCK_VARIANTS,
+  MOUNTAIN_VARIANTS,
   waterTile,
   GRASS_COLORS,
   WATER_VARIANTS,
@@ -32,15 +38,20 @@ export const GRASS_VARIANTS = GRASS_COLORS.length;
 export const WALKER_VARIANTS = 8;
 export const CLOUD_VARIANTS = 2;
 export const SAND_VARIANTS = 2;
-export { WATER_VARIANTS };
+export { WATER_VARIANTS, ROCK_VARIANTS };
 
 /** Clés de textures partagées entre le rendu Phaser et l'interface. */
 export const ArtKey = {
   grass: (variant: number) => `grass_${variant}`,
   road: (mask: number) => `road_${mask}`,
   sand: (variant: number) => `sand_${variant}`,
+  rock: (variant: number) => `rock_${variant}`,
+  mountain: (variant: number) => `mountain_${variant}`,
   water: (variant: number, shallow: boolean) => `water_${shallow ? 's' : 'd'}${variant}`,
   boat: (tier: number) => `boat_${tier}`,
+  truck: (axis: 'x' | 'y') => `truck_${axis}`,
+  worker: 'worker',
+  hammerTool: 'hammer_tool',
   building: (defId: string) => `bld_${defId}`,
   crop: (cropId: string, stage: 'sprout' | 'growing' | 'ripe') => `crop_${cropId}_${stage}`,
   cropIcon: (cropId: string) => `cropicon_${cropId}`,
@@ -108,11 +119,17 @@ export class ArtLibrary {
     const lib = new ArtLibrary();
     for (let i = 0; i < GRASS_VARIANTS; i++) lib.add(ArtKey.grass(i), grassTile(i));
     for (let i = 0; i < SAND_VARIANTS; i++) lib.add(ArtKey.sand(i), sandTile(i));
+    for (let i = 0; i < ROCK_VARIANTS; i++) lib.add(ArtKey.rock(i), rockTile(i));
+    for (let i = 0; i < MOUNTAIN_VARIANTS; i++) lib.add(ArtKey.mountain(i), mountainArt(i));
     for (let i = 0; i < WATER_VARIANTS; i++) {
       lib.add(ArtKey.water(i, true), waterTile(i, true));
       lib.add(ArtKey.water(i, false), waterTile(i, false));
     }
     for (const tier of BOAT_TIERS) lib.add(ArtKey.boat(tier), boatArt(tier));
+    lib.add(ArtKey.worker, worker());
+    lib.add(ArtKey.hammerTool, hammerTool());
+    lib.add(ArtKey.truck('x'), movingTruckArt('x'));
+    lib.add(ArtKey.truck('y'), movingTruckArt('y'));
     for (let mask = 0; mask < 16; mask++) lib.add(ArtKey.road(mask), roadTile(mask));
     const plot = plotTile();
     for (const def of BUILDINGS) {

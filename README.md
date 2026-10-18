@@ -52,7 +52,9 @@ La planche de tous les visuels générés est disponible en développement sur `
 - **Application iPhone** (Capacitor) : voir [docs/IOS.md](docs/IOS.md).
 - **Économie** : pièces, cash (monnaie premium), énergie qui se recharge, XP et niveaux avec déblocages.
 - **Objectifs guidés** (25) avec flèches d'aide, récompenses et passages de niveau.
-- **Agrandissements** de la ville par zones de 8 × 8.
+- **Grande carte** de 128 × 96 cases (forêts, montagnes, lacs, routes) ; agrandissements par zones de 8 × 8,
+  plus chers à mesure qu'on s'éloigne.
+- **Animations** : chantiers au marteau, pièces à ramasser, camion de déménagement.
 - **Mode édition** : déplacer ou vendre une construction.
 - **Boutique** : packs de cash (paiement simulé) et échanges cash → pièces / énergie.
 - **Sauvegarde automatique** locale, progression hors-ligne (les cultures poussent pendant votre absence).

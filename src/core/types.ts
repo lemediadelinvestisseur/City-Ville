@@ -23,7 +23,7 @@ export interface Requirements {
 export type BuildingCategory = 'house' | 'business' | 'community' | 'storage' | 'farm' | 'port' | 'decoration' | 'road';
 
 /** Nature du sol d'une case. */
-export type Terrain = 'grass' | 'sand' | 'water';
+export type Terrain = 'grass' | 'sand' | 'water' | 'rock';
 
 interface BaseDef {
   id: string;
@@ -197,7 +197,8 @@ export type FailReason =
   | 'onWater'
   | 'needsWater'
   | 'bridgeSpan'
-  | 'needsBridge';
+  | 'needsBridge'
+  | 'onMountain';
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; reason: FailReason; missing?: number };
 

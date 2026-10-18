@@ -202,6 +202,8 @@ export class UI {
       this.refreshDock();
     });
     bus.on('fx:reward', ({ screen, reward }) => this.flying.launch(screen, reward));
+    bus.on('world:drops', (reward) => this.hud.hold(reward));
+    bus.on('fx:pickup', ({ screen, reward }) => this.flying.launch(screen, reward, () => this.hud.release(reward)));
   }
 
   private tick(): void {

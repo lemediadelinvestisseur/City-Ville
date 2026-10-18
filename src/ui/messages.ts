@@ -43,6 +43,8 @@ export function failMessage(reason: FailReason, missing?: number): string {
       return 'Cette construction doit toucher l’eau.';
     case 'bridgeSpan':
       return 'Le pont doit enjamber le bras de mer, d’une rive à l’autre.';
+    case 'onMountain':
+      return 'Impossible de construire sur la montagne.';
     case 'needsBridge':
       return 'Construisez d’abord un pont pour rejoindre la rive est.';
     case 'invalid':

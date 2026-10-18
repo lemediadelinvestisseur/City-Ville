@@ -20,14 +20,17 @@ function matches(entity: Entity, filter: Filter): boolean {
   return true;
 }
 
+/** Zone achetable la moins chère (la plus proche de la ville). */
 function firstPurchasableChunk(game: Game): { cx: number; cy: number } | null {
+  let best: { cx: number; cy: number; coins: number } | null = null;
   for (let cy = 0; cy < CHUNKS_Y; cy++) {
     for (let cx = 0; cx < CHUNKS_X; cx++) {
       const info = game.expansionInfo(cx, cy);
-      if (info.status === 'purchasable' && info.reason !== 'needsBridge') return { cx, cy };
+      if (info.status !== 'purchasable' || info.reason === 'needsBridge') continue;
+      if (!best || info.coins < best.coins) best = { cx, cy, coins: info.coins };
     }
   }
-  return null;
+  return best && { cx: best.cx, cy: best.cy };
 }
 
 /**
