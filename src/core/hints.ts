@@ -1,6 +1,6 @@
 import { getBuildingDef } from '@/data/buildings';
 import type { Game } from './game';
-import { CHUNKS_PER_SIDE } from './grid';
+import { CHUNKS_X, CHUNKS_Y } from './grid';
 import type { BuildingCategory, Entity, PrimaryAction, QuestProgress } from './types';
 
 /** Cible d'aide visuelle (flèche de tutoriel ou bouton à mettre en avant). */
@@ -21,9 +21,10 @@ function matches(entity: Entity, filter: Filter): boolean {
 }
 
 function firstPurchasableChunk(game: Game): { cx: number; cy: number } | null {
-  for (let cy = 0; cy < CHUNKS_PER_SIDE; cy++) {
-    for (let cx = 0; cx < CHUNKS_PER_SIDE; cx++) {
-      if (game.expansionInfo(cx, cy).status === 'purchasable') return { cx, cy };
+  for (let cy = 0; cy < CHUNKS_Y; cy++) {
+    for (let cx = 0; cx < CHUNKS_X; cx++) {
+      const info = game.expansionInfo(cx, cy);
+      if (info.status === 'purchasable' && info.reason !== 'needsBridge') return { cx, cy };
     }
   }
   return null;

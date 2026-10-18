@@ -2,7 +2,7 @@ import { BUILDINGS, getBuildingDef } from '@/data/buildings';
 import { CROPS, TRIPS } from '@/data/crops';
 import type { Clock } from './game';
 import { Game } from './game';
-import { CHUNKS_PER_SIDE } from './grid';
+import { CHUNKS_X, CHUNKS_Y } from './grid';
 import { createNewGame } from './newGame';
 import type { BuildingDef, Entity } from './types';
 
@@ -170,8 +170,8 @@ function placeSomewhere(game: Game, def: BuildingDef): boolean {
 }
 
 function tryExpand(game: Game): boolean {
-  for (let cy = 0; cy < CHUNKS_PER_SIDE; cy++) {
-    for (let cx = 0; cx < CHUNKS_PER_SIDE; cx++) {
+  for (let cy = 0; cy < CHUNKS_Y; cy++) {
+    for (let cx = 0; cx < CHUNKS_X; cx++) {
       if (game.expansionInfo(cx, cy).status === 'purchasable' && game.buyExpansion(cx, cy).ok) return true;
     }
   }
@@ -193,6 +193,9 @@ function invest(game: Game): number {
 
     const storages = count(game, (d) => d.category === 'storage');
     let def: BuildingDef | null = null;
+    // Le pont ouvre la rive est (beaucoup de place) : priorité dès qu'il est débloqué.
+    const bridge = getBuildingDef('bridge');
+    if (count(game, (d) => d.placement === 'bridge') === 0 && game.checkPurchase(bridge).ok) def = bridge;
     const houseNext = bestAffordable(game, 'house', reserve);
     const popRoom = derived.popCap - derived.populationProjected;
     const houseFits = !!houseNext && houseNext.category === 'house' && popRoom >= houseNext.population;

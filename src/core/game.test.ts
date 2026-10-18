@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ENERGY_REGEN_SEC, energyMaxForLevel, xpForLevel } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
 import { getCropDef, getTripDef } from '@/data/crops';
-import { isWater } from '@/data/terrain';
+import { coastX, isWater } from '@/data/terrain';
 import { Game, type Clock } from './game';
 import { findHint, findQuestHint } from './hints';
 import { createNewGame } from './newGame';
@@ -203,6 +203,35 @@ describe('pêche', () => {
     expect(game.unloadBoat(pier.id)).toMatchObject({ ok: true, goods: trip.goods });
     expect(game.state.goods).toBe(goods + trip.goods);
     expect(game.primaryAction(pier).type).toBe('sendBoat');
+  });
+});
+
+describe('les deux rives', () => {
+  it('sépare la carte par un bras de mer et réserve la rive est au pont', () => {
+    const { game } = setup();
+    game.state.level = 20;
+    game.state.coins = 1_000_000;
+    game.state.cash = 100;
+    // Zone de la rive est voisine de la ville de départ : visible mais fermée.
+    expect(game.expansionInfo(4, 2)).toMatchObject({ status: 'purchasable', reason: 'needsBridge' });
+    expect(game.buyExpansion(4, 2).ok).toBe(false);
+    const bridge = getBuildingDef('bridge');
+    expect(game.checkPlacement(bridge, 20, 20)).toBe('bridgeSpan');
+    const x = coastX(20);
+    expect(game.checkPlacement(bridge, x + 1, 20)).toBe('bridgeSpan');
+    const placed = game.place('bridge', x, 20);
+    if (!placed.ok) throw new Error(placed.reason);
+    game.speedUp(placed.entity.id);
+    expect(game.hasBridge()).toBe(true);
+    expect(game.isRoad(x + 2, 20)).toBe(true);
+    expect(game.expansionInfo(4, 2)).toMatchObject({ status: 'purchasable', reason: null });
+    expect(game.buyExpansion(4, 2).ok).toBe(true);
+  });
+
+  it('exige le niveau 15 pour la rive est', () => {
+    const { game } = setup();
+    game.state.level = 12;
+    expect(game.expansionInfo(4, 2)).toMatchObject({ level: 15, reason: 'levelLocked' });
   });
 });
 
@@ -487,9 +516,9 @@ describe('sauvegarde', () => {
     delete raw.construction;
     raw.buildProgress = 1;
     // Une route posée sur ce qui est désormais la mer disparaît.
-    file.state.entities.push({ id: 9999, defId: 'road', x: 35, y: 20, built: true });
+    file.state.entities.push({ id: 9999, defId: 'road', x: 31, y: 20, built: true });
     const restored = deserialize(JSON.stringify(file))!;
-    expect(restored.version).toBe(2);
+    expect(restored.version).toBe(3);
     const migrated = restored.entities.find((e) => e.id === placed.entity.id)!;
     expect(migrated).not.toHaveProperty('buildProgress');
     expect(migrated.construction?.endsAt).toBe(clock.now() + getBuildingDef('cottage').buildSec * 1000);

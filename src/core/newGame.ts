@@ -5,7 +5,7 @@ import { STARTING_TOWN, wildTrees, type StartingPlacement } from '@/data/startin
 import { chunkKey } from './grid';
 import type { Entity, GameState } from './types';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** Initialise l'état propre à la catégorie d'une construction terminée. */
 export function initBuiltState(entity: Entity, now: number): void {

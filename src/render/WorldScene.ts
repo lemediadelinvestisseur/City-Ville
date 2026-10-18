@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import type { AppContext, ScreenPoint, WorldMode } from '@/app/context';
 import { findHint, type HintTarget } from '@/core/hints';
-import { CHUNKS_PER_SIDE, chunkOf, roadMask } from '@/core/grid';
+import { CHUNKS_X, CHUNKS_Y, chunkOf, roadMask } from '@/core/grid';
 import type { Entity, FailReason, Reward } from '@/core/types';
-import { CHUNK_SIZE, MAP_SIZE } from '@/data/balance';
+import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
 import { isShallow, isWater, terrainAt } from '@/data/terrain';
 import { ArtKey, CLOUD_VARIANTS, GRASS_VARIANTS, SAND_VARIANTS, WATER_VARIANTS } from './art/library';
@@ -127,10 +127,10 @@ export class WorldScene extends Phaser.Scene {
       this.cameras.main,
       this.dpr,
       {
-        x: -MAP_SIZE * HALF_W - margin,
+        x: -MAP_H * HALF_W - margin,
         y: -margin,
-        w: MAP_SIZE * HALF_W * 2 + margin * 2,
-        h: MAP_SIZE * TILE_H + margin * 2,
+        w: (MAP_W + MAP_H) * HALF_W + margin * 2,
+        h: ((MAP_W + MAP_H) * TILE_H) / 2 + margin * 2,
       },
       0.22,
       1.4,
@@ -158,7 +158,7 @@ export class WorldScene extends Phaser.Scene {
       if (view.boat?.visible && view.boatHome)
         view.boat.y = view.boatHome.y + Math.sin(time / 600 + view.entity.id) * 2;
     }
-    const glint = 0.55 + Math.sin(time / 900) * 0.12;
+    const glint = 0.9 + Math.sin(time / 900) * 0.08;
     for (const tile of this.waterTiles) tile.setAlpha(tile.getData('phase') ? glint : 1);
     if (this.arrow.visible && this.hintEntityId !== null) {
       const view = this.views.get(this.hintEntityId);
@@ -166,15 +166,15 @@ export class WorldScene extends Phaser.Scene {
     }
     for (const cloud of this.clouds) {
       cloud.x += (delta / 1000) * (cloud.getData('speed') as number);
-      if (cloud.x > MAP_SIZE * HALF_W + 600) cloud.x = -MAP_SIZE * HALF_W - 600;
+      if (cloud.x > MAP_W * HALF_W + 600) cloud.x = -MAP_H * HALF_W - 600;
     }
   }
 
   // ———————————————————————————— Terrain ————————————————————————————
 
   private buildGround(): void {
-    for (let y = 0; y < MAP_SIZE; y++) {
-      for (let x = 0; x < MAP_SIZE; x++) {
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
         const hash = x * 7 + y * 13 + ((x * y) % 5);
         const terrain = terrainAt(x, y);
         const key =
@@ -198,9 +198,9 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private refreshGroundTint(): void {
-    for (let y = 0; y < MAP_SIZE; y++) {
-      for (let x = 0; x < MAP_SIZE; x++) {
-        const tile = this.ground[y * MAP_SIZE + x];
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const tile = this.ground[y * MAP_W + x];
         if (!tile || isWater(x, y)) continue;
         if (this.game_.isTileUnlocked(x, y)) tile.clearTint();
         else tile.setTint(LOCKED_TINT);
@@ -221,8 +221,8 @@ export class WorldScene extends Phaser.Scene {
         g.lineBetween(s.x, s.y, e.x, e.y);
       }
     };
-    for (let cy = 0; cy < CHUNKS_PER_SIDE; cy++) {
-      for (let cx = 0; cx < CHUNKS_PER_SIDE; cx++) {
+    for (let cy = 0; cy < CHUNKS_Y; cy++) {
+      for (let cx = 0; cx < CHUNKS_X; cx++) {
         if (!this.game_.isChunkUnlocked(cx, cy)) continue;
         const x0 = cx * CHUNK_SIZE;
         const y0 = cy * CHUNK_SIZE;
@@ -236,8 +236,8 @@ export class WorldScene extends Phaser.Scene {
     }
     // Panneaux sur les zones achetables.
     const wanted = new Set<string>();
-    for (let cy = 0; cy < CHUNKS_PER_SIDE; cy++) {
-      for (let cx = 0; cx < CHUNKS_PER_SIDE; cx++) {
+    for (let cy = 0; cy < CHUNKS_Y; cy++) {
+      for (let cx = 0; cx < CHUNKS_X; cx++) {
         if (this.game_.expansionInfo(cx, cy).status !== 'purchasable') continue;
         const key = `${cx},${cy}`;
         wanted.add(key);
@@ -277,7 +277,7 @@ export class WorldScene extends Phaser.Scene {
 
   private textureFor(entity: Entity): string {
     const def = getBuildingDef(entity.defId);
-    if (def.category === 'road') return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y), entity.x, entity.y));
+    if (def.id === 'road') return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y), entity.x, entity.y));
     if (!entity.built) return ArtKey.construction(Math.min(4, Math.max(def.size.w, def.size.d)));
     return ArtKey.building(def.id);
   }
@@ -310,8 +310,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private isFlat(entity: Entity): boolean {
-    const category = getBuildingDef(entity.defId).category;
-    return category === 'road';
+    return entity.defId === 'road';
   }
 
   private addView(entity: Entity): void {
@@ -554,7 +553,7 @@ export class WorldScene extends Phaser.Scene {
   private refreshRoads(): void {
     const roads: Array<{ x: number; y: number }> = [];
     for (const view of this.views.values()) {
-      if (view.entity.defId === 'road') {
+      if (view.entity.defId === 'road' || view.entity.defId === 'bridge') {
         roads.push({ x: view.entity.x, y: view.entity.y });
         const key = this.textureFor(view.entity);
         if (key !== view.textureKey) this.syncView(view);
@@ -599,7 +598,7 @@ export class WorldScene extends Phaser.Scene {
     on(
       game.events.on('entityAdded', (entity) => {
         this.addView(entity);
-        if (entity.defId === 'road') this.refreshRoads();
+        if (entity.defId === 'road' || entity.defId === 'bridge') this.refreshRoads();
         const view = this.views.get(entity.id);
         if (view) this.popIn(view);
         if (view && !entity.built) this.hammerFx(view);
@@ -728,7 +727,7 @@ export class WorldScene extends Phaser.Scene {
       this.placement &&
       this.placement.moveId === null &&
       this.isOnGhost(pointer) &&
-      getBuildingDef(this.placement.defId).category === 'road'
+      this.placement.defId === 'road'
     ) {
       // Glisser depuis la route fantôme trace une route.
       this.gesture = 'paint';
@@ -884,7 +883,7 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     const tile = this.tileAt(x, y);
-    const inMap = tile.x >= 0 && tile.y >= 0 && tile.x < MAP_SIZE && tile.y < MAP_SIZE;
+    const inMap = tile.x >= 0 && tile.y >= 0 && tile.x < MAP_W && tile.y < MAP_H;
     if (inMap && !this.game_.isTileUnlocked(tile.x, tile.y)) {
       const { cx, cy } = chunkOf(tile.x, tile.y);
       this.ctx.bus.emit('world:lockedTap', { cx, cy, screen: this.toCss(x, y) });
@@ -1009,7 +1008,7 @@ export class WorldScene extends Phaser.Scene {
       x = spot.x;
       y = spot.y;
     }
-    const key = def.category === 'road' ? ArtKey.road(0) : ArtKey.building(defId);
+    const key = defId === 'road' ? ArtKey.road(0) : ArtKey.building(defId);
     const piece = this.ctx.art.get(key);
     const ghost = this.add
       .image(0, 0, key)
@@ -1023,7 +1022,8 @@ export class WorldScene extends Phaser.Scene {
 
   private nearestFreeSpot(cx: number, cy: number, defId: string): { x: number; y: number } {
     const def = getBuildingDef(defId);
-    for (let r = 0; r <= 10; r++) {
+    const radius = def.placement === 'bridge' ? 40 : 10;
+    for (let r = 0; r <= radius; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
@@ -1038,8 +1038,8 @@ export class WorldScene extends Phaser.Scene {
     const p = this.placement;
     if (!p || (!force && p.x === x && p.y === y)) return;
     const def = getBuildingDef(p.defId);
-    p.x = Math.max(-def.size.w + 1, Math.min(MAP_SIZE - 1, x));
-    p.y = Math.max(-def.size.d + 1, Math.min(MAP_SIZE - 1, y));
+    p.x = Math.max(-def.size.w + 1, Math.min(MAP_W - 1, x));
+    p.y = Math.max(-def.size.d + 1, Math.min(MAP_H - 1, y));
     let reason = this.game_.checkPlacement(def, p.x, p.y, p.moveId ?? 0);
     if (!reason && p.moveId === null) {
       const purchase = this.game_.checkPurchase(def);
@@ -1047,7 +1047,7 @@ export class WorldScene extends Phaser.Scene {
     }
     p.valid = reason === null;
     p.reason = reason;
-    if (def.category === 'road') {
+    if (def.id === 'road') {
       const mask = roadMask((rx, ry) => this.game_.isRoad(rx, ry), p.x, p.y);
       const key = ArtKey.road(mask);
       const piece = this.ctx.art.get(key);

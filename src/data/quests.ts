@@ -213,6 +213,20 @@ export const QUESTS: readonly QuestDef[] = [
     reward: { coins: 12000, cash: 5 },
   },
   {
+    id: 'bridge',
+    title: 'Sur l’autre rive',
+    intro:
+      'De l’autre côté du bras de mer, une rive entière attend nos habitants ! Construisez un pont d’une rive à l’autre, puis achetez votre première zone sur la rive est.',
+    icon: 'bridge',
+    requires: { level: 15 },
+    tasks: [
+      { type: 'build', count: 1, defId: 'bridge' },
+      { type: 'expand', count: 1 },
+    ],
+    labels: ['Inaugurer un pont', 'Agrandir la ville'],
+    reward: { coins: 10000, cash: 5 },
+  },
+  {
     id: 'metropolis',
     title: 'Une vraie métropole',
     intro: 'Plus de 1 500 habitants : votre ville change de dimension !',

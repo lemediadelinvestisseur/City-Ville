@@ -1,4 +1,4 @@
-import { CHUNK_SIZE, MAP_SIZE, STARTING_CHUNKS } from './balance';
+import { CHUNK_SIZE, MAP_H, MAP_W, STARTING_CHUNKS } from './balance';
 import { coastX, terrainAt } from './terrain';
 
 export interface StartingPlacement {
@@ -72,13 +72,13 @@ export function wildTrees(seed = 2010): StartingPlacement[] {
   const unlocked = new Set(STARTING_CHUNKS.map(([cx, cy]) => `${cx},${cy}`));
   const taken = new Set<string>();
   const list: StartingPlacement[] = [];
-  for (let i = 0; i < 260; i++) {
-    const x = Math.floor(rand() * MAP_SIZE);
-    const y = Math.floor(rand() * MAP_SIZE);
+  for (let i = 0; i < 420; i++) {
+    const x = Math.floor(rand() * MAP_W);
+    const y = Math.floor(rand() * MAP_H);
     const chunk = `${Math.floor(x / CHUNK_SIZE)},${Math.floor(y / CHUNK_SIZE)}`;
     if (unlocked.has(chunk) || taken.has(`${x},${y}`) || terrainAt(x, y) !== 'grass') continue;
     // Plus dense vers les bords de la carte.
-    const edge = Math.min(x, y, MAP_SIZE - 1 - x, MAP_SIZE - 1 - y);
+    const edge = Math.min(x, y, MAP_W - 1 - x, MAP_H - 1 - y);
     if (rand() < edge / 9) continue;
     taken.add(`${x},${y}`);
     list.push({ defId: rand() < 0.6 ? 'tree_pine' : 'tree_oak', x, y });

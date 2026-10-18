@@ -43,8 +43,11 @@ interface BaseDef {
   inShop?: boolean;
   /** Plusieurs placements d'affilée (routes, champs, décorations). */
   repeatPlacement?: boolean;
-  /** 'shore' : doit toucher l'eau (ports, phare). Par défaut : terre ferme. */
-  placement?: 'land' | 'shore';
+  /**
+   * 'shore' : doit toucher l'eau (ports, phare) ; 'bridge' : enjambe le bras de mer d'une rive à l'autre.
+   * Par défaut : terre ferme.
+   */
+  placement?: 'land' | 'shore' | 'bridge';
 }
 
 export interface HouseDef extends BaseDef {
@@ -192,7 +195,9 @@ export type FailReason =
   | 'alreadyOwned'
   | 'energyFull'
   | 'onWater'
-  | 'needsWater';
+  | 'needsWater'
+  | 'bridgeSpan'
+  | 'needsBridge';
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; reason: FailReason; missing?: number };
 

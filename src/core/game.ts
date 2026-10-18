@@ -2,6 +2,7 @@ import {
   BASE_GOODS_CAP,
   BASE_POP_CAP,
   ENERGY_PER_ACTION,
+  EAST_SHORE_LEVEL,
   ENERGY_REGEN_SEC,
   MAX_DECORATION_BONUS,
   MAX_LEVEL,
@@ -16,9 +17,9 @@ import { BUILDINGS, getBuildingDef } from '@/data/buildings';
 import { CROPS, TRIPS, getCropDef, getTripDef } from '@/data/crops';
 import { findCashOffer, findStoreProduct } from '@/data/products';
 import { QUESTS, getQuestDef } from '@/data/quests';
-import { chunkHasLand, isWater } from '@/data/terrain';
+import { chunkHasLand, isEastChunk, isWater } from '@/data/terrain';
 import { Emitter } from './emitter';
-import { CHUNKS_PER_SIDE, OccupancyGrid, chunkKey, chunkOf, footprintDistance, inBounds } from './grid';
+import { CHUNKS_X, CHUNKS_Y, OccupancyGrid, chunkKey, chunkOf, footprintDistance, inBounds } from './grid';
 import { initBuiltState } from './newGame';
 import type {
   BuildingDef,
@@ -177,7 +178,12 @@ export class Game {
 
   isRoad(x: number, y: number): boolean {
     const entity = this.entityAt(x, y);
-    return entity !== undefined && entity.defId === 'road';
+    return entity !== undefined && (entity.defId === 'road' || entity.defId === 'bridge');
+  }
+
+  /** Un pont terminé relie-t-il les deux rives ? */
+  hasBridge(): boolean {
+    return this.state.entities.some((e) => e.built && getBuildingDef(e.defId).placement === 'bridge');
   }
 
   isChunkUnlocked(cx: number, cy: number): boolean {
@@ -214,6 +220,7 @@ export class Game {
   /** Vérifie l'emplacement uniquement (pas le coût). */
   checkPlacement(def: BuildingDef, x: number, y: number, ignoreId = 0): FailReason | null {
     if (!inBounds(x, y) || !inBounds(x + def.size.w - 1, y + def.size.d - 1)) return 'outOfBounds';
+    if (def.placement === 'bridge') return this.checkBridge(def, x, y, ignoreId);
     for (let dy = 0; dy < def.size.d; dy++) {
       for (let dx = 0; dx < def.size.w; dx++) {
         if (isWater(x + dx, y + dy)) return 'onWater';
@@ -222,6 +229,20 @@ export class Game {
     }
     if (!this.grid.isFree(x, y, def.size, ignoreId)) return 'blocked';
     if (def.placement === 'shore' && !this.touchesWater(x, y, def.size.w, def.size.d)) return 'needsWater';
+    return null;
+  }
+
+  /**
+   * Un pont (emprise orientée est-ouest) recouvre uniquement de l'eau et touche
+   * la terre à ses deux extrémités ; seule la rive ouest doit être débloquée.
+   */
+  private checkBridge(def: BuildingDef, x: number, y: number, ignoreId: number): FailReason | null {
+    for (let dy = 0; dy < def.size.d; dy++) {
+      for (let dx = 0; dx < def.size.w; dx++) if (!isWater(x + dx, y + dy)) return 'bridgeSpan';
+      if (isWater(x - 1, y + dy) || isWater(x + def.size.w, y + dy)) return 'bridgeSpan';
+      if (!this.isTileUnlocked(x - 1, y + dy)) return 'locked';
+    }
+    if (!this.grid.isFree(x, y, def.size, ignoreId)) return 'blocked';
     return null;
   }
 
@@ -335,7 +356,7 @@ export class Game {
   }
 
   expansionInfo(cx: number, cy: number): ExpansionInfo {
-    if (cx < 0 || cy < 0 || cx >= CHUNKS_PER_SIDE || cy >= CHUNKS_PER_SIDE) return { status: 'unavailable' };
+    if (cx < 0 || cy < 0 || cx >= CHUNKS_X || cy >= CHUNKS_Y) return { status: 'unavailable' };
     if (this.isChunkUnlocked(cx, cy)) return { status: 'unlocked' };
     if (!chunkHasLand(cx, cy)) return { status: 'unavailable' };
     const adjacent =
@@ -346,9 +367,12 @@ export class Game {
     if (!adjacent) return { status: 'unavailable' };
     const price = expansionPrice(this.state.expansionsBought);
     let reason: FailReason | null = null;
-    if (this.state.level < price.level) reason = 'levelLocked';
+    const east = isEastChunk(cx);
+    const level = east ? Math.max(price.level, EAST_SHORE_LEVEL) : price.level;
+    if (this.state.level < level) reason = 'levelLocked';
+    else if (east && !this.hasBridge()) reason = 'needsBridge';
     else if (this.state.coins < price.coins) reason = 'notEnoughCoins';
-    return { status: 'purchasable', coins: price.coins, level: price.level, reason };
+    return { status: 'purchasable', coins: price.coins, level, reason };
   }
 
   /** Constructions et cultures débloquées à un niveau donné. */

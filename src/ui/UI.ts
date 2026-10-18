@@ -7,6 +7,7 @@ import { findBuildingDef, getBuildingDef } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
 import type { StoreProduct } from '@/data/products';
 import { getQuestDef } from '@/data/quests';
+import { isEastChunk } from '@/data/terrain';
 import { ArtKey } from '@/render/art/library';
 import { Bubble } from './Bubbles';
 import { BuildMenu } from './BuildMenu';
@@ -267,7 +268,7 @@ export class UI {
       ? h('span', {
           class: 'placebar__status is-ok',
           text:
-            def.category === 'road'
+            def.id === 'road'
               ? 'Touchez la route pour la poser, glissez pour en tracer'
               : 'Touchez la carte pour choisir l’emplacement',
         })
@@ -604,21 +605,30 @@ export class UI {
     }
     if (info.status !== 'purchasable') return;
     const levelOk = game.state.level >= info.level;
+    const needsBridge = info.reason === 'needsBridge';
+    const east = isEastChunk(cx);
     this.modals.show({
-      title: 'Agrandir la ville',
+      title: east ? 'La rive est' : 'Agrandir la ville',
       kicker: 'Nouvelle zone',
       body: [
-        h('p', { text: 'Débloquez une nouvelle zone de 8 × 8 cases pour construire encore plus !' }),
+        h('p', {
+          text: east
+            ? 'De l’autre côté du bras de mer, une nouvelle rive attend vos habitants. Un pont permet de la rejoindre.'
+            : 'Débloquez une nouvelle zone de 8 × 8 cases pour construire encore plus !',
+        }),
         h('div', { class: 'chips' }, h('span', { class: 'chip' }, icon(Icons.coin), formatNumber(info.coins))),
         levelOk
           ? null
           : h('p', { class: 'warn', text: `Niveau ${info.level} requis (vous êtes niveau ${game.state.level}).` }),
+        levelOk && needsBridge
+          ? h('p', { class: 'warn', text: 'Construisez d’abord un pont (menu Construire › Routes).' })
+          : null,
       ],
       buttons: [
         { label: 'Plus tard', kind: 'secondary' },
         {
           label: 'Acheter',
-          disabled: !levelOk,
+          disabled: !levelOk || needsBridge,
           onClick: () => {
             const result = game.buyExpansion(cx, cy);
             if (!result.ok) this.onFail(result.reason, result.missing);

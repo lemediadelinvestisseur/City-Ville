@@ -4,8 +4,14 @@
  * d'XP ci-dessous est calibrée par le simulateur (src/core/balance.test.ts).
  */
 
-/** Taille de la carte en cases (carré). */
-export const MAP_SIZE = 40;
+/** Taille de la carte en cases : deux rives séparées par un bras de mer. */
+export const MAP_W = 64;
+export const MAP_H = 40;
+/** Largeur du bras de mer (en cases). */
+export const CHANNEL_WIDTH = 4;
+/** Premières zones de la rive est (colonne de zones) et niveau pour y accéder. */
+export const EAST_CHUNK_X = 4;
+export const EAST_SHORE_LEVEL = 15;
 /** Taille d'une zone d'agrandissement en cases. */
 export const CHUNK_SIZE = 8;
 /** Zones débloquées au départ (bloc central 3 × 3). */
@@ -48,13 +54,13 @@ export const CONTENT_LEVEL = 30;
 /**
  * XP cumulée pour atteindre chaque niveau (index = niveau). Calibrée avec le
  * joueur simulé (src/core/simulation.ts, 4 connexions par jour) : niveau 10
- * vers le 2e jour, niveau 20 vers le 9e, niveau 30 vers le 19e. Un vrai joueur,
+ * vers le 2e jour, niveau 20 vers le 10e, niveau 30 vers le 20e. Un vrai joueur,
  * moins assidu, y arrive en trois semaines environ. Au-delà de la table,
  * chaque niveau coûte 12 % de plus.
  */
 const XP_TABLE: readonly number[] = [
-  0, 0, 15, 55, 120, 210, 400, 570, 760, 1100, 1350, 1850, 2500, 3100, 3800, 4700, 5350, 6000, 6650, 7400, 8100, 8900,
-  9700, 10500, 11350, 12200, 13100, 14050, 15000, 16000, 17000,
+  0, 0, 15, 55, 120, 210, 400, 570, 760, 1100, 1350, 1850, 2500, 3100, 3800, 4700, 5250, 5850, 6450, 7100, 7750, 8400,
+  9100, 9800, 10550, 11300, 12100, 12900, 13700, 14550, 15400,
 ];
 
 export function xpForLevel(level: number): number {

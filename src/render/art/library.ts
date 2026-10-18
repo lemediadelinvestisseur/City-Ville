@@ -1,6 +1,6 @@
 import { BUILDINGS } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
-import { boatArt, BOAT_TIERS } from './boats';
+import { boatArt, bridgeArt, BOAT_TIERS } from './boats';
 import { buildingArt } from './buildings';
 import { decorationArt } from './decorations';
 import { createCanvas, type ArtPiece } from './IsoPainter';
@@ -116,7 +116,11 @@ export class ArtLibrary {
     for (let mask = 0; mask < 16; mask++) lib.add(ArtKey.road(mask), roadTile(mask));
     const plot = plotTile();
     for (const def of BUILDINGS) {
-      if (def.category === 'road') continue;
+      if (def.id === 'road') continue;
+      if (def.id === 'bridge') {
+        lib.add(ArtKey.building(def.id), bridgeArt());
+        continue;
+      }
       if (def.category === 'farm') lib.add(ArtKey.building(def.id), plot);
       else if (def.category === 'decoration') lib.add(ArtKey.building(def.id), decorationArt(def.id));
       else lib.add(ArtKey.building(def.id), buildingArt(def.id));

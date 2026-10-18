@@ -1,6 +1,8 @@
 import { findBuildingDef } from '@/data/buildings';
 import { findCropDef } from '@/data/crops';
 import { findQuestDef } from '@/data/quests';
+import { CHUNK_SIZE, EAST_CHUNK_X } from '@/data/balance';
+import { wildTrees } from '@/data/startingTown';
 import { isWater } from '@/data/terrain';
 import { SAVE_VERSION } from './newGame';
 import type { GameState } from './types';
@@ -49,6 +51,18 @@ const MIGRATIONS: Record<number, Migration> = {
       delete entity.buildProgress;
       return true;
     });
+    return state;
+  },
+  /** v2 → v3 : la mer à l'est devient un bras de mer ; une rive est boisée apparaît. */
+  2: (state) => {
+    const entities = Array.isArray(state.entities) ? (state.entities as unknown[]).filter(isObject) : [];
+    let nextId = typeof state.nextEntityId === 'number' ? state.nextEntityId : entities.length + 1;
+    for (const tree of wildTrees()) {
+      if (tree.x < EAST_CHUNK_X * CHUNK_SIZE) continue;
+      entities.push({ id: nextId++, defId: tree.defId, x: tree.x, y: tree.y, built: true, starter: true });
+    }
+    state.entities = entities;
+    state.nextEntityId = nextId;
     return state;
   },
 };

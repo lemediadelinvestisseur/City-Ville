@@ -758,6 +758,18 @@ export const BUILDINGS: readonly BuildingDef[] = [
     buildSec: 0,
     repeatPlacement: true,
   },
+  {
+    id: 'bridge',
+    name: 'Pont',
+    description: 'Relie les deux rives : la rive est s’ouvre à l’agrandissement. À poser sur le bras de mer.',
+    category: 'road',
+    size: { w: 4, d: 1 },
+    cost: { coins: 20000 },
+    requires: { level: 15 },
+    xp: 400,
+    buildSec: 3 * 3600,
+    placement: 'bridge',
+  },
 ];
 
 const BY_ID = new Map(BUILDINGS.map((def) => [def.id, def]));

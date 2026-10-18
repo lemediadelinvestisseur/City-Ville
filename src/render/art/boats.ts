@@ -91,3 +91,39 @@ export function boatArt(tier: number): ArtPiece {
   if (tier === 2) return trawler();
   return rowboat();
 }
+
+/** Pont routier 4 × 1 (orienté est-ouest) : piles de pierre, tablier et garde-corps. */
+export function bridgeArt(): ArtPiece {
+  const { painter: p, finish } = isoCanvas(4, 1, 40);
+  const deck = 9;
+  // Piles dans l'eau (de l'arrière vers l'avant).
+  for (const x of [1, 2, 3]) {
+    p.groundEllipse(x, 0.5, 0, 0.32, 'rgba(255,255,255,0.35)');
+    p.box(x - 0.14, 0.2, x + 0.14, 0.8, -2, deck, boxColors('#b0a898'));
+  }
+  // Garde-corps arrière.
+  p.line([0, 0.1, deck + 9], [4, 0.1, deck + 9], '#eceff1', 2.5);
+  for (let x = 0.2; x < 4; x += 0.4) p.line([x, 0.1, deck], [x, 0.1, deck + 9], '#cfd8dc', 1.5);
+  // Tablier et chaussée.
+  p.box(0, 0.06, 4, 0.94, deck - 4, deck, boxColors('#a1887f'));
+  p.flat(0, 0.06, 4, 0.94, deck, '#d9d3c5');
+  p.flat(0, 0.18, 4, 0.82, deck, '#5c6169');
+  const { ctx } = p;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,250,235,0.85)';
+  ctx.lineWidth = 2.2;
+  ctx.setLineDash([9, 9]);
+  ctx.beginPath();
+  ctx.moveTo(...p.p(0, 0.5, deck));
+  ctx.lineTo(...p.p(4, 0.5, deck));
+  ctx.stroke();
+  ctx.restore();
+  // Garde-corps avant et lampadaires.
+  for (let x = 0.2; x < 4; x += 0.4) p.line([x, 0.9, deck], [x, 0.9, deck + 9], '#eceff1', 1.5);
+  p.line([0, 0.9, deck + 9], [4, 0.9, deck + 9], '#ffffff', 2.5);
+  for (const x of [0.8, 2, 3.2]) {
+    p.line([x, 0.9, deck], [x, 0.9, deck + 30], '#455a64', 2);
+    p.dot(x, 0.9, deck + 31, 3, '#fff59d', '#455a64');
+  }
+  return finish();
+}
