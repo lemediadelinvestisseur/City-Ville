@@ -4,38 +4,39 @@ Le serveur du jeu est écrit et testé (`convex/`) : comptes avec pseudo, sauveg
 classement, marché, mesures d'audience et interface admin. Tant qu'il n'est pas branché, le jeu tourne en
 **mode démo** (voisins et offres fictifs, rien n'est envoyé).
 
-## 1. Créer le projet Convex (une fois, sur ton Mac)
+## 1. Créer le projet Convex (dans le navigateur, une fois)
 
-1. Crée un compte sur [convex.dev](https://convex.dev) (connexion avec GitHub, gratuit pour démarrer).
-2. Dans le Terminal, à la racine du projet :
-   ```bash
-   npm install
-   npx convex dev
-   ```
-   La commande ouvre le navigateur pour te connecter, propose de créer un projet (nomme-le `city-ville`),
-   envoie le code du dossier `convex/` et écrit l'adresse du serveur dans `.env.local`
-   (`VITE_CONVEX_URL=…` et `CONVEX_DEPLOYMENT=…`). Laisse-la tourner pendant que tu développes : chaque
-   modification de `convex/` est envoyée automatiquement.
-3. Toujours dans le Terminal, choisis la **clé admin** (longue et secrète, à garder dans ton gestionnaire de
-   mots de passe) :
-   ```bash
-   npx convex env set ADMIN_KEY "une-phrase-longue-et-secrete-de-plus-de-16-caracteres"
-   ```
-4. Lance le jeu (`npm run dev`) : l'écran de pseudo apparaît, la sauvegarde part en ligne.
-   L'interface admin est sur `/admin.html` (saisis la clé admin).
+1. Sur [dashboard.convex.dev](https://dashboard.convex.dev) : _Log in with GitHub_, puis **Create Project**
+   (`city-ville`).
+2. En haut, choisis le déploiement **Production**, puis **Settings** :
+   - **Environment Variables** : ajoute `ADMIN_KEY` = une phrase longue et secrète (16 caractères ou plus),
+     à garder dans ton gestionnaire de mots de passe. C'est la clé de l'interface admin.
+   - **General › Deploy Keys › Create Deploy Key** : copie la clé (elle n'est affichée qu'une fois).
+   - Note la **Cloud URL** (`https://….convex.cloud`) : elle va dans `.env.production` (déjà fait pour
+     `combative-wombat-666`).
+3. Sur GitHub : dépôt › **Settings › Secrets and variables › Actions › New repository secret**,
+   nom `CONVEX_DEPLOY_KEY`, valeur = la clé copiée. Ne la colle jamais dans un chat ni dans le code.
 
-> Si une session Claude doit déployer pour toi, ajoute plutôt une **clé de déploiement** (Convex › Settings ›
-> Deploy keys) comme secret `CONVEX_DEPLOY_KEY` dans les réglages de l'environnement — jamais dans le chat.
+## 2. Envoi automatique du serveur
 
-## 2. Production
+À chaque fusion sur `main`, la CI vérifie le projet puis envoie le dossier `convex/` sur la production
+(tâche « Déploiement Convex » dans l'onglet **Actions** de GitHub). Pour relancer l'envoi à la main :
+Actions › CI › **Run workflow** sur `main`. Dans le tableau de bord Convex, l'onglet **Functions** liste alors
+`players`, `saves`, `market`…
+
+Le jeu compilé (`npm run build`, donc `npm run ios:sync`) se connecte à l'adresse de `.env.production`.
+`npm run dev` reste en **mode démo** tant qu'aucun déploiement de développement n'est configuré.
+
+## 3. Développer avec un serveur de test (facultatif, sur ton Mac)
 
 ```bash
-npx convex deploy          # envoie le serveur sur le déploiement de production
-npx convex env set ADMIN_KEY "…" --prod
+npx convex dev
+npx convex env set ADMIN_KEY "une-phrase-longue-et-secrete-de-plus-de-16-caracteres"
 ```
 
-Puis construis le jeu avec l'adresse de production (`VITE_CONVEX_URL=https://….convex.cloud npm run build`).
-L'adresse de production est visible dans le tableau de bord Convex.
+`npx convex dev` crée un déploiement de développement, écrit son adresse dans `.env.local` (utilisée par
+`npm run dev`) et envoie chaque modification de `convex/` pendant que tu développes, sans toucher à la
+production. L'interface admin est sur `/admin.html` (saisis la clé admin).
 
 ## Ce que fait le serveur
 

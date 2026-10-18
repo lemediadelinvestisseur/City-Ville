@@ -13,7 +13,6 @@ Le projet Xcode est prêt dans `ios/` (Capacitor 8, Swift Package Manager). Le j
 ```bash
 git clone https://github.com/lemediadelinvestisseur/City-Ville.git
 cd City-Ville
-git checkout v1
 npm install
 npm run ios:sync     # compile le jeu et le copie dans le projet iOS
 npm run ios:open     # ouvre Xcode
@@ -28,8 +27,8 @@ signing » et choisis ton équipe (Team). Branche ton iPhone, choisis-le en haut
 1. **Nom et identifiant** : dans `capacitor.config.ts`, remplace `appName` et `appId`
    (`fr.lemediadelinvestisseur.cityville` est provisoire ; l'identifiant ne peut plus changer après la
    publication). Mets le même identifiant dans Xcode (Bundle Identifier) et `npm run ios:sync`.
-2. **Serveur de production** : voir [MISE_EN_LIGNE.md](MISE_EN_LIGNE.md), puis
-   `VITE_CONVEX_URL=https://….convex.cloud npm run ios:sync`.
+2. **Serveur de production** : son adresse est dans `.env.production`, reprise automatiquement par
+   `npm run ios:sync` (voir [MISE_EN_LIGNE.md](MISE_EN_LIGNE.md)).
 3. **Désactiver les outils de test** : `DEV_TOOLS = false` dans `src/config.ts`.
 4. **Paiements** : remplacer le fournisseur de test par RevenueCat (voir [MONETIZATION.md](MONETIZATION.md)).
 5. **App Store Connect** ([appstoreconnect.apple.com](https://appstoreconnect.apple.com)) › Apps › « + » :
