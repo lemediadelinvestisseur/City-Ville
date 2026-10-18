@@ -17,10 +17,12 @@ import {
 } from '@/data/balance';
 import { BUILDINGS, getBuildingDef } from '@/data/buildings';
 import { CROPS, TRIPS, getCropDef, getTripDef } from '@/data/crops';
+import { DAILY_MIN_LEVEL } from '@/data/daily';
 import { MARKET } from '@/data/market';
 import { findCashOffer, findStoreProduct } from '@/data/products';
 import { QUESTS, getQuestDef } from '@/data/quests';
 import { chunkHasLand, isEastChunk, isWater } from '@/data/terrain';
+import { dailyMatches, drawDaily, localDay, nextLocalMidnight } from './daily';
 import { Emitter } from './emitter';
 import { CHUNKS_X, CHUNKS_Y, OccupancyGrid, chunkKey, chunkOf, footprintDistance, inBounds } from './grid';
 import { initBuiltState } from './newGame';
@@ -62,6 +64,32 @@ export interface GameEvents {
   questCompleted: { questId: string; reward: Reward };
   expanded: { cx: number; cy: number };
   gameplay: GameplayEvent;
+  /** Des attentes viennent de se terminer (cultures mûres, chantiers finis…). */
+  ready: { items: ReadyItem[] };
+  /** Nouveaux défis du jour tirés. */
+  dailyRefreshed: undefined;
+  /** Un défi du jour vient d'être rempli (récompense à réclamer). */
+  dailyCompleted: { index: number };
+  dailyClaimed: { index: number | 'bonus'; reward: Reward };
+}
+
+/** Ce qui peut devenir « prêt » avec le temps (notifications, messages en jeu). */
+export type ReadyKind = 'build' | 'crop' | 'boat' | 'business';
+
+export interface ReadyItem {
+  entityId: number;
+  kind: ReadyKind;
+  at: number;
+}
+
+export interface DailyInfo {
+  available: boolean;
+  tasks: Array<{ type: string; target: number; count: number; reward: Reward; claimed: boolean; done: boolean }>;
+  bonus: Reward;
+  bonusClaimed: boolean;
+  /** Défis remplis dont la récompense n'est pas encore réclamée (bonus compris). */
+  claimable: number;
+  resetsAt: number;
 }
 
 export interface Derived {
@@ -98,14 +126,18 @@ export class Game {
   private readonly byId = new Map<number, Entity>();
   private unlocked = new Set<string>();
   private derivedCache: Derived | null = null;
+  /** Dernier contrôle des attentes terminées (voir `tick`). */
+  private lastReadyCheck: number;
 
   constructor(
     public readonly state: GameState,
     private readonly clock: Clock = systemClock,
   ) {
+    this.lastReadyCheck = clock.now();
     this.rebuildIndexes();
     this.regenEnergy();
     this.syncQuests();
+    this.refreshDaily();
   }
 
   now(): number {
@@ -457,7 +489,28 @@ export class Game {
 
   /** À appeler régulièrement (≈ 1 fois par seconde). */
   tick(): void {
-    if (this.regenEnergy()) this.changed();
+    let changed = this.regenEnergy();
+    if (this.refreshDaily()) changed = true;
+    const now = this.now();
+    const items = this.readySince(this.lastReadyCheck, now);
+    this.lastReadyCheck = now;
+    if (items.length > 0) this.events.emit('ready', { items });
+    if (changed) this.changed();
+  }
+
+  /** Attentes terminées entre `from` (exclu) et `to` (inclus), dans l'ordre. */
+  readySince(from: number, to: number): ReadyItem[] {
+    const items: ReadyItem[] = [];
+    const push = (entity: Entity, kind: ReadyKind, at: number) => {
+      if (at > from && at <= to) items.push({ entityId: entity.id, kind, at });
+    };
+    for (const entity of this.state.entities) {
+      if (!entity.built && entity.construction) push(entity, 'build', entity.construction.endsAt);
+      if (entity.farm?.cropId) push(entity, 'crop', entity.farm.readyAt);
+      if (entity.port?.tripId) push(entity, 'boat', entity.port.readyAt);
+      if (entity.business && entity.business.readyAt !== null) push(entity, 'business', entity.business.readyAt);
+    }
+    return items.sort((a, b) => a.at - b.at);
   }
 
   private changed(): void {
@@ -468,6 +521,7 @@ export class Game {
     this.state.stats[event.type] = (this.state.stats[event.type] ?? 0) + 1;
     this.events.emit('gameplay', event);
     this.onGameplayForQuests(event);
+    this.onGameplayForDaily(event);
   }
 
   // ———————————————————————————— Actions ————————————————————————————
@@ -868,6 +922,67 @@ export class Game {
     }
   }
 
+  // ———————————————————————————— Défis du jour ————————————————————————————
+
+  /** Tire de nouveaux défis si le jour a changé. Renvoie vrai s'il y a eu un tirage. */
+  private refreshDaily(): boolean {
+    if (this.state.level < DAILY_MIN_LEVEL) return false;
+    const day = localDay(this.now());
+    if (this.state.daily.day === day) return false;
+    this.state.daily = drawDaily(this.state, day);
+    this.events.emit('dailyRefreshed', undefined);
+    return true;
+  }
+
+  dailyInfo(): DailyInfo {
+    const { daily } = this.state;
+    const available = this.state.level >= DAILY_MIN_LEVEL && daily.tasks.length > 0;
+    const tasks = daily.tasks.map((task) => ({ ...task, done: task.count >= task.target }));
+    const allClaimed = tasks.length > 0 && tasks.every((task) => task.claimed);
+    const claimable =
+      tasks.filter((task) => task.done && !task.claimed).length + (allClaimed && !daily.bonusClaimed ? 1 : 0);
+    return {
+      available,
+      tasks,
+      bonus: daily.bonus,
+      bonusClaimed: daily.bonusClaimed,
+      claimable: available ? claimable : 0,
+      resetsAt: nextLocalMidnight(this.now()),
+    };
+  }
+
+  private onGameplayForDaily(event: GameplayEvent): void {
+    this.state.daily.tasks.forEach((task, index) => {
+      if (task.count >= task.target || !dailyMatches(task.type, event)) return;
+      task.count += 1;
+      if (task.count >= task.target) this.events.emit('dailyCompleted', { index });
+    });
+  }
+
+  /** Réclame la récompense d'un défi rempli. */
+  claimDaily(index: number): Result<{ reward: Reward }> {
+    const task = this.state.daily.tasks[index];
+    if (!task || task.claimed) return fail('invalid');
+    if (task.count < task.target) return fail('notReady');
+    task.claimed = true;
+    this.give(task.reward, null);
+    this.events.emit('dailyClaimed', { index, reward: task.reward });
+    this.changed();
+    return { ok: true, reward: task.reward };
+  }
+
+  /** Réclame le bonus une fois les trois défis réclamés. */
+  claimDailyBonus(): Result<{ reward: Reward }> {
+    const { daily } = this.state;
+    if (daily.bonusClaimed || daily.tasks.length === 0) return fail('invalid');
+    if (!daily.tasks.every((task) => task.claimed)) return fail('notReady');
+    daily.bonusClaimed = true;
+    this.give(daily.bonus, null);
+    this.events.emit('dailyClaimed', { index: 'bonus', reward: daily.bonus });
+    this.changed();
+    return { ok: true, reward: daily.bonus };
+  }
+
   /** Renomme la ville (1 à 30 caractères). */
   setCityName(name: string): Result<object> {
     const clean = name.normalize('NFC').trim().replace(/\s+/g, ' ');
@@ -976,6 +1091,7 @@ export class Game {
       }
     }
     this.state.energyUpdatedAt -= ms;
+    this.lastReadyCheck -= ms;
     this.regenEnergy();
     for (const entity of this.state.entities) this.events.emit('entityUpdated', entity);
     this.changed();

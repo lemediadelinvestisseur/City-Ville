@@ -3,9 +3,13 @@ import { getBuildingDef } from '@/data/buildings';
 import { getCropDef } from '@/data/crops';
 import { STARTING_TOWN, wildTrees, type StartingPlacement } from '@/data/startingTown';
 import { chunkKey } from './grid';
-import type { Entity, GameState } from './types';
+import type { DailyState, Entity, GameState } from './types';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
+
+export function emptyDaily(): DailyState {
+  return { day: '', tasks: [], bonus: {}, bonusClaimed: false };
+}
 
 /** Initialise l'état propre à la catégorie d'une construction terminée. */
 export function initBuiltState(entity: Entity, now: number): void {
@@ -68,5 +72,6 @@ export function createNewGame(now: number, cityName = 'Ma ville'): GameState {
     oneTimePurchases: [],
     stats: {},
     tutorial: { introSeen: false },
+    daily: emptyDaily(),
   };
 }

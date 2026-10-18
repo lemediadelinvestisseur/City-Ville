@@ -1,6 +1,7 @@
 import { HALF_H, HALF_W, TILE_H, TILE_W } from '../iso';
 import { rgba, seeded, shade } from './color';
 import { createCanvas, isoCanvas, type ArtPiece, type V3 } from './IsoPainter';
+import { t } from '@/i18n';
 
 export const GRASS_COLORS = ['#86c34b', '#82bf47', '#8ac850', '#7fbb44'] as const;
 
@@ -582,10 +583,10 @@ export function forSaleSign(): ArtPiece {
   ctx.font = '900 15px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('À VENDRE', 55, 23);
+  ctx.fillText(t('world.forSale'), 55, 23, 80);
   ctx.fillStyle = '#5d4037';
   ctx.font = '700 11px system-ui, sans-serif';
-  ctx.fillText('Agrandir ici', 55, 38);
+  ctx.fillText(t('world.expandHere'), 55, 38, 80);
   return { canvas, originX: 0.5, originY: 88 / 96 };
 }
 

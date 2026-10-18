@@ -50,7 +50,8 @@ signing » et choisis ton équipe (Team). Branche ton iPhone, choisis-le en haut
 ## Ce qu'Apple vérifiera (déjà prévu dans le jeu)
 
 - **Suppression du compte** depuis l'app : Réglages › Compte › « Supprimer mon compte » ✅
-- **Contenu entre joueurs** (pseudos, villes) : signaler et bloquer un joueur ✅, modération dans l'admin ✅
+- **Contenu entre joueurs** (pseudos, villes, chat) : signaler et bloquer un joueur ou un message ✅,
+  modération dans l'admin et par les modérateurs dans le jeu ✅, insultes et liens masqués dans le chat ✅
 - **Achats** : uniquement par les achats intégrés d'Apple pour le cash (RevenueCat) — à brancher
 - **Politique de confidentialité** : une page web à fournir (données : pseudo, sauvegarde, statistiques de jeu)
 - **Classification d'âge** et captures d'écran (6,9 pouces et 6,5 pouces) dans App Store Connect
@@ -61,3 +62,9 @@ signing » et choisis ton équipe (Team). Branche ton iPhone, choisis-le en haut
 - Sauvegarde recopiée dans le stockage natif (iOS peut vider le stockage web d'une app)
 - Vibrations légères sur les actions, plus fortes au passage de niveau
 - Barre d'état et écran de démarrage aux couleurs du jeu, orientation portrait sur iPhone
+- **Notifications locales** (`@capacitor/local-notifications`) : « vos fraises sont prêtes ! », chantiers,
+  bateaux, énergie, défis du jour — programmées sur l'iPhone, elles arrivent même jeu fermé. Le jeu demande
+  l'autorisation au bon moment (première attente d'au moins 10 minutes), réglages dans Réglages ›
+  Notifications. Aucun certificat push n'est nécessaire pour ces notifications locales.
+- **Langues** : 11 langues déclarées dans `Info.plist` (`CFBundleLocalizations`), pour que les fenêtres du
+  système (autorisation des notifications…) suivent la langue de l'iPhone.

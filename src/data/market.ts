@@ -20,13 +20,14 @@ export function sellerIncome(qty: number, unitPrice: number): number {
   return Math.floor(qty * unitPrice * (1 - MARKET.taxPercent / 100));
 }
 
-/** Vérifie une mise en vente ; renvoie un message d'erreur ou null. */
-export function checkListing(qty: number, unitPrice: number): string | null {
-  if (!Number.isInteger(qty) || qty < MARKET.minQty || qty > MARKET.maxQty) {
-    return `Entre ${MARKET.minQty} et ${MARKET.maxQty} marchandises par lot.`;
-  }
+/** Problème d'une mise en vente : quantité ou prix hors des bornes. */
+export type ListingProblem = 'qty' | 'price';
+
+/** Vérifie une mise en vente ; renvoie le problème ou null. */
+export function checkListing(qty: number, unitPrice: number): ListingProblem | null {
+  if (!Number.isInteger(qty) || qty < MARKET.minQty || qty > MARKET.maxQty) return 'qty';
   if (!Number.isInteger(unitPrice) || unitPrice < MARKET.minUnitPrice || unitPrice > MARKET.maxUnitPrice) {
-    return `Prix entre ${MARKET.minUnitPrice} et ${MARKET.maxUnitPrice} pièces par marchandise.`;
+    return 'price';
   }
   return null;
 }

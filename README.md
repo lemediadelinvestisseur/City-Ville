@@ -47,8 +47,16 @@ La planche de tous les visuels générés est disponible en développement sur `
 - **Progression jusqu'au niveau 30** (~3 semaines), 66 constructions, calibrée par un joueur simulé.
 - **Deux rives** séparées par un bras de mer, reliées par un pont (niveau 15) ; **cycle jour/nuit**.
 - **En ligne** (serveur Convex) : pseudo, sauvegarde synchronisée, voisins (visite, coup de main quotidien),
-  classement, **marché** entre joueurs, signalement et blocage. Sans serveur : mode démo hors-ligne.
-- **Interface admin** (`/admin.html`) : joueurs actifs, rétention J1/J7/J30, temps de jeu, progression.
+  classement, **marché** entre joueurs, **chat** (salon Monde + salon de sa langue), signalement et blocage.
+  Sans serveur : mode démo hors-ligne.
+- **Rôles** : un seul **administrateur** (désigné en ligne de commande) accède à l'interface admin et aux
+  données ; il nomme des **modérateurs** qui modèrent le chat depuis le jeu.
+- **Interface admin** (`/admin.html`) : joueurs actifs, rétention J1/J7/J30, temps de jeu, progression, langues,
+  **annonces** à tous les joueurs (ou par langue), équipe, modération du chat et des signalements.
+- **11 langues** : français, anglais, espagnol, portugais, allemand, italien, russe, turc, japonais, coréen,
+  chinois — choisie à l'inscription (proposée d'après l'appareil), modifiable dans les réglages.
+- **Défis du jour**, **centre de notifications**, messages en jeu regroupés (« 4 champs sont prêts ! »),
+  résumé au retour, et **notifications de l'appareil** proposées au bon moment (iPhone : même jeu fermé).
 - **Application iPhone** (Capacitor) : voir [docs/IOS.md](docs/IOS.md).
 - **Économie** : pièces, cash (monnaie premium), énergie qui se recharge, XP et niveaux avec déblocages.
 - **Objectifs guidés** (25) avec flèches d'aide, récompenses et passages de niveau.

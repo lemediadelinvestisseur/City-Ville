@@ -1,51 +1,49 @@
+import type { PseudoError } from '@/core/pseudo';
+import { PSEUDO_MAX, PSEUDO_MIN } from '@/core/pseudo';
 import type { FailReason } from '@/core/types';
-import { formatNumber } from './format';
+import { MARKET, type ListingProblem } from '@/data/market';
+import { t, tn } from '@/i18n';
+import { BackendError } from '@/services/online/Backend';
 
 /** Message lisible pour un échec d'action. */
 export function failMessage(reason: FailReason, missing?: number): string {
-  const n = missing !== undefined ? formatNumber(missing) : '';
   switch (reason) {
     case 'notEnoughCoins':
-      return missing ? `Il vous manque ${n} pièces.` : 'Pas assez de pièces.';
+      return missing ? tn('fail.missingCoins', missing) : t('fail.notEnoughCoins');
     case 'notEnoughCash':
-      return missing ? `Il vous manque ${n} cash.` : 'Pas assez de cash.';
+      return missing ? tn('fail.missingCash', missing) : t('fail.notEnoughCash');
     case 'notEnoughGoods':
-      return missing
-        ? `Il manque ${n} marchandises : récoltez vos champs !`
-        : 'Pas assez de marchandises : récoltez vos champs !';
-    case 'notEnoughEnergy':
-      return 'Plus d’énergie ! Elle se recharge avec le temps.';
-    case 'levelLocked':
-      return 'Niveau insuffisant.';
-    case 'populationLocked':
-      return 'Pas encore assez d’habitants.';
-    case 'populationCap':
-      return 'Population maximale atteinte : construisez un bâtiment public (école…).';
-    case 'blocked':
-      return 'Emplacement déjà occupé.';
-    case 'outOfBounds':
-      return 'Hors de la carte.';
-    case 'locked':
-      return 'Cette zone n’est pas encore achetée.';
-    case 'notReady':
-      return 'Pas encore prêt.';
-    case 'storageFull':
-      return 'Entrepôt plein ! Approvisionnez vos commerces ou construisez une grange.';
-    case 'notSellable':
-      return 'Cette construction ne peut pas être vendue.';
-    case 'alreadyOwned':
-      return 'Offre déjà achetée.';
-    case 'energyFull':
-      return 'Votre énergie est déjà au maximum.';
-    case 'onWater':
-      return 'Impossible de construire sur l’eau.';
-    case 'needsWater':
-      return 'Cette construction doit toucher l’eau.';
-    case 'bridgeSpan':
-      return 'Le pont doit enjamber le bras de mer, d’une rive à l’autre.';
-    case 'needsBridge':
-      return 'Construisez d’abord un pont pour rejoindre la rive est.';
-    case 'invalid':
-      return 'Action impossible.';
+      return missing ? tn('fail.missingGoods', missing) : t('fail.notEnoughGoods');
+    default:
+      return t(`fail.${reason}`);
   }
+}
+
+export function pseudoErrorMessage(error: PseudoError | 'taken'): string {
+  switch (error) {
+    case 'tooShort':
+      return t('pseudo.tooShort', { n: PSEUDO_MIN });
+    case 'tooLong':
+      return t('pseudo.tooLong', { n: PSEUDO_MAX });
+    default:
+      return t(`pseudo.${error}`);
+  }
+}
+
+/** Message d'erreur d'un service en ligne (codes renvoyés par le serveur). */
+export function backendErrorMessage(error: unknown): string {
+  const code = error instanceof BackendError ? error.code : 'unknown';
+  switch (code) {
+    case 'tooLarge':
+    case 'invalidSave':
+      return t('error.unknown');
+    default:
+      return t(`error.${code}`);
+  }
+}
+
+export function listingProblemMessage(problem: ListingProblem): string {
+  return problem === 'qty'
+    ? t('market.errorQty', { min: MARKET.minQty, max: MARKET.maxQty })
+    : t('market.errorPrice', { min: MARKET.minUnitPrice, max: MARKET.maxUnitPrice });
 }

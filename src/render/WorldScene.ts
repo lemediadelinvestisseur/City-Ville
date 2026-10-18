@@ -14,6 +14,7 @@ import { DEPTH_FX, Effects } from './Effects';
 import { formatClock } from '@/ui/format';
 import { NightLayer } from './NightLayer';
 import { WalkerSystem } from './WalkerSystem';
+import { t } from '@/i18n';
 
 const DEPTH_GROUND = 0;
 const DEPTH_ROAD = 2;
@@ -1268,7 +1269,7 @@ export class WorldScene extends Phaser.Scene {
     const a = this.anchor(view);
     this.fx.puffs(a.x, a.y, a.w, a.d, 8);
     this.fx.stars(a.x, a.top + 30);
-    this.fx.popText(a.x, a.top + 20, 'Terminé !', '#ffffff', 0, this.overlayScale);
+    this.fx.popText(a.x, a.top + 20, t('world.done'), '#ffffff', 0, this.overlayScale);
   }
 
   private onReward(entityId: number | null, reward: Reward): void {

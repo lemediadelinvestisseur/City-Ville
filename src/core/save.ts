@@ -4,7 +4,7 @@ import { findQuestDef } from '@/data/quests';
 import { CHUNK_SIZE, EAST_CHUNK_X } from '@/data/balance';
 import { wildTrees } from '@/data/startingTown';
 import { isWater } from '@/data/terrain';
-import { SAVE_VERSION } from './newGame';
+import { SAVE_VERSION, emptyDaily } from './newGame';
 import type { GameState } from './types';
 
 /** Accès au stockage clé/valeur (localStorage en web, Preferences en natif…). */
@@ -65,6 +65,11 @@ const MIGRATIONS: Record<number, Migration> = {
     state.nextEntityId = nextId;
     return state;
   },
+  /** v3 → v4 : défis du jour. */
+  3: (state) => {
+    state.daily = emptyDaily();
+    return state;
+  },
 };
 
 export function serialize(state: GameState, now: number): string {
@@ -121,7 +126,22 @@ function validate(state: Record<string, unknown>): boolean {
     (q) => isObject(q) && typeof q.id === 'string' && findQuestDef(q.id) !== undefined && Array.isArray(q.counts),
   );
   quests.completed = (quests.completed as unknown[]).filter((id) => typeof id === 'string' && findQuestDef(id));
+  if (!isValidDaily(state.daily)) state.daily = emptyDaily();
   return true;
+}
+
+function isValidDaily(daily: unknown): boolean {
+  if (!isObject(daily) || typeof daily.day !== 'string' || !Array.isArray(daily.tasks)) return false;
+  if (!isObject(daily.bonus) || typeof daily.bonusClaimed !== 'boolean') return false;
+  return daily.tasks.every(
+    (task) =>
+      isObject(task) &&
+      typeof task.type === 'string' &&
+      typeof task.target === 'number' &&
+      typeof task.count === 'number' &&
+      typeof task.claimed === 'boolean' &&
+      isObject(task.reward),
+  );
 }
 
 export function loadGame(storage: KeyValueStorage, key: string): GameState | null {

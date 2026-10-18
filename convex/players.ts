@@ -1,5 +1,6 @@
 import { v } from 'convex/values';
 import { normalizePseudo, pseudoKey, validatePseudo } from '../src/core/pseudo';
+import { isLanguage } from '../src/data/languages';
 import type { Id, TableNames } from './_generated/dataModel';
 import { mutation, query, type MutationCtx } from './_generated/server';
 import { dayOf, fail, publicProfile, requirePlayer, sha256 } from './lib/util';
@@ -34,8 +35,14 @@ export const pseudoAvailable = query({
 
 /** Crée le compte : le client fournit une clé secrète aléatoire qu'il garde sur l'appareil. */
 export const register = mutation({
-  args: { token: v.string(), pseudo: v.string(), cityName: v.string(), platform: v.string() },
-  handler: async (ctx, { token, pseudo, cityName, platform }) => {
+  args: {
+    token: v.string(),
+    pseudo: v.string(),
+    cityName: v.string(),
+    platform: v.string(),
+    language: v.optional(v.string()),
+  },
+  handler: async (ctx, { token, pseudo, cityName, platform, language }) => {
     if (token.length < 32 || token.length > 128) fail('unauthorized');
     const tokenHash = await sha256(token);
     const known = await ctx.db
@@ -55,6 +62,7 @@ export const register = mutation({
       createdAt: now,
       createdDay: dayOf(now),
       lastSeenAt: now,
+      language: isLanguage(language) ? language : undefined,
     });
     await ctx.db.insert('devices', { playerId, tokenHash, createdAt: now, platform: platform.slice(0, 20) });
     return { playerId };
@@ -65,7 +73,37 @@ export const me = query({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
     const player = await requirePlayer(ctx, token);
-    return { ...publicProfile(player), banned: player.banned === true };
+    return {
+      ...publicProfile(player),
+      banned: player.banned === true,
+      role: player.role ?? null,
+      language: player.language ?? null,
+      mutedUntil: player.mutedUntil ?? null,
+    };
+  },
+});
+
+/** Langue choisie dans les réglages (statistiques, salon de chat, annonces ciblées). */
+export const setLanguage = mutation({
+  args: { token: v.string(), language: v.string() },
+  handler: async (ctx, { token, language }) => {
+    const player = await requirePlayer(ctx, token);
+    if (!isLanguage(language)) fail('forbidden');
+    await ctx.db.patch(player._id, { language });
+  },
+});
+
+/** Déconnecte cet appareil : sa clé secrète est oubliée par le serveur. */
+export const logout = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    if (token.length < 32) return;
+    const tokenHash = await sha256(token);
+    const device = await ctx.db
+      .query('devices')
+      .withIndex('by_tokenHash', (q) => q.eq('tokenHash', tokenHash))
+      .unique();
+    if (device) await ctx.db.delete(device._id);
   },
 });
 
@@ -191,6 +229,10 @@ export async function deletePlayerData(ctx: MutationCtx, playerId: Id<'players'>
     ...(await ctx.db
       .query('listings')
       .withIndex('by_seller', (q) => q.eq('sellerId', playerId))
+      .collect()),
+    ...(await ctx.db
+      .query('chatMessages')
+      .withIndex('by_player', (q) => q.eq('playerId', playerId))
       .collect()),
   ];
   for (const doc of docs) await ctx.db.delete(doc._id);

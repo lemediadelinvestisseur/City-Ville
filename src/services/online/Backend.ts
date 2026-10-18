@@ -18,6 +18,8 @@ export type BackendErrorCode =
   | 'banned'
   | 'invalidCode'
   | 'forbidden'
+  | 'muted'
+  | 'invalidText'
   | 'unknown';
 
 export class BackendError extends Error {
@@ -79,6 +81,47 @@ export interface MyListing {
   income: number;
 }
 
+export type Role = 'admin' | 'moderator';
+
+export interface Me extends Profile {
+  banned: boolean;
+  role: Role | null;
+  language: string | null;
+  mutedUntil: number | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  playerId: string;
+  pseudo: string;
+  role: Role | null;
+  level: number;
+  text: string;
+  createdAt: number;
+  kind: 'message' | 'announcement';
+  mine: boolean;
+}
+
+export interface ChatFeed {
+  messages: ChatMessage[];
+  mutedUntil: number | null;
+  canWrite: boolean;
+  canModerate: boolean;
+}
+
+/** Signal léger : date du dernier message par salon et de la dernière annonce. */
+export interface ChatPulse {
+  latest: Array<{ channel: string; at: number }>;
+  announcementAt: number;
+}
+
+export interface Announcement {
+  id: string;
+  text: string;
+  createdAt: number;
+  pseudo: string;
+}
+
 export interface TrackedEvent {
   type: 'quest' | 'level';
   name: string;
@@ -89,8 +132,9 @@ export interface Backend {
   readonly kind: 'convex' | 'local';
   isRegistered(): boolean;
   pseudoAvailable(pseudo: string): Promise<{ available: boolean; error: string | null }>;
-  register(pseudo: string, cityName: string): Promise<void>;
-  me(): Promise<Profile & { banned: boolean }>;
+  register(pseudo: string, cityName: string, language: string): Promise<void>;
+  me(): Promise<Me>;
+  setLanguage(language: string): Promise<void>;
   rename(pseudo: string): Promise<string>;
   createTransferCode(): Promise<{ code: string; expiresAt: number }>;
   redeemTransferCode(code: string): Promise<void>;
@@ -122,6 +166,16 @@ export interface Backend {
   marketCancel(id: string): Promise<{ goods: number }>;
   /** Encaisse les ventes et récupère les invendus. */
   marketSettle(): Promise<{ coins: number; goods: number; sold: number }>;
+
+  /** Abonnement en temps réel aux messages d'un salon ; renvoie de quoi se désabonner. */
+  watchChat(channel: string, onFeed: (feed: ChatFeed) => void, onError: (error: BackendError) => void): () => void;
+  /** Abonnement léger (pastille « nouveaux messages », annonces). */
+  watchPulse(channels: string[], onPulse: (pulse: ChatPulse) => void): () => void;
+  sendChat(channel: string, text: string): Promise<void>;
+  deleteChat(id: string): Promise<void>;
+  reportChat(id: string): Promise<void>;
+  mute(playerId: string, minutes: number): Promise<void>;
+  announcements(channels: string[]): Promise<Announcement[]>;
 }
 
 /** Plateforme de l'appareil, pour les statistiques. */
@@ -138,32 +192,4 @@ export function detectPlatform(): string {
 export function newDeviceToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-export function backendErrorMessage(error: unknown): string {
-  const code = error instanceof BackendError ? error.code : 'unknown';
-  switch (code) {
-    case 'network':
-      return 'Connexion impossible. Vérifiez votre réseau et réessayez.';
-    case 'pseudoTaken':
-      return 'Ce pseudo est déjà pris.';
-    case 'pseudoInvalid':
-      return 'Ce pseudo n’est pas valide.';
-    case 'alreadyHelped':
-      return 'Vous avez déjà aidé ce voisin aujourd’hui.';
-    case 'blocked':
-      return 'Ce joueur n’est pas disponible.';
-    case 'notFound':
-      return 'Joueur introuvable.';
-    case 'limit':
-      return 'Limite atteinte. Réessayez plus tard.';
-    case 'invalidCode':
-      return 'Code invalide ou expiré.';
-    case 'banned':
-      return 'Votre compte est suspendu.';
-    case 'unauthorized':
-      return 'Session expirée : relancez le jeu.';
-    default:
-      return 'Une erreur est survenue. Réessayez.';
-  }
 }

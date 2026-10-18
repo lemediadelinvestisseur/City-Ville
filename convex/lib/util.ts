@@ -16,7 +16,9 @@ export type ApiError =
   | 'limit'
   | 'banned'
   | 'invalidCode'
-  | 'forbidden';
+  | 'forbidden'
+  | 'muted'
+  | 'invalidText';
 
 export function fail(code: ApiError): never {
   throw new ConvexError(code);
@@ -44,6 +46,29 @@ export async function requirePlayer(ctx: QueryCtx | MutationCtx, token: string):
   const player = await ctx.db.get(device.playerId);
   if (!player) fail('unauthorized');
   return player;
+}
+
+export type Role = NonNullable<Doc<'players'>['role']>;
+
+/** Joueur authentifié possédant l'un des rôles demandés (un compte banni perd ses droits). */
+export async function requireRole(
+  ctx: QueryCtx | MutationCtx,
+  token: string,
+  roles: readonly Role[],
+): Promise<Doc<'players'>> {
+  const player = await requirePlayer(ctx, token);
+  if (player.banned || !player.role || !roles.includes(player.role)) fail('forbidden');
+  return player;
+}
+
+/** Seul le compte administrateur (unique) accède à l'interface admin et aux données. */
+export function requireAdmin(ctx: QueryCtx | MutationCtx, token: string): Promise<Doc<'players'>> {
+  return requireRole(ctx, token, ['admin']);
+}
+
+/** Équipe de modération : l'administrateur et les modérateurs qu'il a nommés. */
+export function requireStaff(ctx: QueryCtx | MutationCtx, token: string): Promise<Doc<'players'>> {
+  return requireRole(ctx, token, ['admin', 'moderator']);
 }
 
 export async function isBlockedEitherWay(

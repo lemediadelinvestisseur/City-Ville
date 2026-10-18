@@ -2,6 +2,8 @@ import type { Game } from '@/core/game';
 import type { TripDef } from '@/core/types';
 import { getBuildingDef } from '@/data/buildings';
 import { TRIPS } from '@/data/crops';
+import { t } from '@/i18n';
+import { tripName } from '@/i18n/content';
 import { ArtKey, type ArtLibrary } from '@/render/art/library';
 import { clear, h, icon } from './dom';
 import { formatDuration, formatNumber } from './format';
@@ -9,7 +11,7 @@ import { Icons } from './icons';
 
 /** Choix de la sortie en mer d'un bateau. */
 export class TripPicker {
-  readonly el = h('section', { class: 'sheet crop-picker', attrs: { 'aria-label': 'Partir en mer' } });
+  readonly el = h('section', { class: 'sheet crop-picker', attrs: { 'aria-label': t('trips.aria') } });
   private list = h('div', { class: 'cards' });
   private entityId: number | null = null;
   isOpen = false;
@@ -24,10 +26,10 @@ export class TripPicker {
       h(
         'div',
         { class: 'sheet__header' },
-        h('h2', { class: 'sheet__title', text: 'Où part le bateau ?' }),
+        h('h2', { class: 'sheet__title', text: t('trips.title') }),
         h(
           'button',
-          { class: 'sheet__close', attrs: { 'aria-label': 'Fermer' }, onClick: () => this.close() },
+          { class: 'sheet__close', attrs: { 'aria-label': t('common.close') }, onClick: () => this.close() },
           icon(Icons.close),
         ),
       ),
@@ -66,7 +68,7 @@ export class TripPicker {
           'button',
           {
             class: `card card--crop${levelLocked ? ' is-locked' : ''}`,
-            attrs: { 'aria-label': trip.name },
+            attrs: { 'aria-label': tripName(trip) },
             onClick: () => {
               if (this.entityId !== null) this.onPick(this.entityId, trip);
             },
@@ -76,7 +78,7 @@ export class TripPicker {
             { class: 'card__img' },
             h('img', { attrs: { src: this.art.iconUrl(ArtKey.boat(trip.boatTier)), alt: '' } }),
           ),
-          h('span', { class: 'card__name', text: trip.name }),
+          h('span', { class: 'card__name', text: tripName(trip) }),
           h(
             'span',
             { class: 'card__effect' },
@@ -91,7 +93,14 @@ export class TripPicker {
             h('span', { class: `cost${tooExpensive ? ' is-short' : ''}` }, icon(Icons.coin), formatNumber(trip.cost)),
             h('span', { class: 'card__steps' }, icon(Icons.xp), String(trip.xp)),
           ),
-          levelLocked ? h('span', { class: 'card__lock' }, icon(Icons.lock), `Niveau ${trip.requires?.level}`) : null,
+          levelLocked
+            ? h(
+                'span',
+                { class: 'card__lock' },
+                icon(Icons.lock),
+                t('common.level', { level: trip.requires?.level ?? 1 }),
+              )
+            : null,
         ),
       );
     }

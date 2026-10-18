@@ -333,6 +333,70 @@ h2 {
   color: var(--soft);
 }
 
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.form--inline {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.field {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+
+.form--inline .field {
+  flex: 1;
+  min-width: 180px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.deleted {
+  color: var(--soft);
+  text-decoration: line-through;
+}
+
+.flash {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 10;
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: #2e7d32;
+  color: #fff;
+  font-weight: 700;
+  transform: translate(-50%, 150%);
+  opacity: 0;
+  transition:
+    transform 0.25s,
+    opacity 0.25s;
+}
+
+.flash.is-bad {
+  background: #c62828;
+}
+
+.flash.is-on {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
 @media (max-width: 600px) {
   #admin {
     padding: 10px;

@@ -1,6 +1,8 @@
 import type { Game } from '@/core/game';
 import type { BuildingCategory, BuildingDef, FailReason } from '@/core/types';
 import { BUILDINGS, SHOP_CATEGORIES } from '@/data/buildings';
+import { t } from '@/i18n';
+import { buildingName, categoryLabel } from '@/i18n/content';
 import { ArtKey, type ArtLibrary } from '@/render/art/library';
 import { clear, h, icon } from './dom';
 import { formatDuration, formatNumber } from './format';
@@ -9,31 +11,39 @@ import { Icons } from './icons';
 function effectLine(def: BuildingDef): string {
   switch (def.category) {
     case 'house':
-      return `+${def.population} habitants · ${def.rent.coins} pièces / ${formatDuration(def.rent.intervalSec)}`;
+      return t('build.effect.house', {
+        population: def.population,
+        coins: def.rent.coins,
+        duration: formatDuration(def.rent.intervalSec),
+      });
     case 'business':
-      return `${def.supplyGoods} marchandises → ${def.payout.coins} pièces (${formatDuration(def.serveSec)})`;
+      return t('build.effect.business', {
+        goods: def.supplyGoods,
+        coins: def.payout.coins,
+        duration: formatDuration(def.serveSec),
+      });
     case 'community':
-      return `+${def.popCap} habitants max`;
+      return t('build.effect.community', { n: def.popCap });
     case 'storage':
-      return `+${def.goodsCap} de stockage`;
+      return t('build.effect.storage', { n: def.goodsCap });
     case 'farm':
-      return 'Pour cultiver des marchandises';
+      return t('build.effect.farm');
     case 'decoration':
-      return `+${def.bonus.percent} % de revenus (rayon ${def.bonus.radius})`;
+      return t('build.effect.decoration', { percent: def.bonus.percent, radius: def.bonus.radius });
     case 'road':
-      return 'Les habitants s’y promènent';
+      return t('build.effect.road');
     case 'port':
       return def.boatTier === 1
-        ? 'Barque de pêche → marchandises'
+        ? t('build.effect.port1')
         : def.boatTier === 2
-          ? 'Chalutier → beaucoup de marchandises'
-          : 'Navire-usine → énormément de marchandises';
+          ? t('build.effect.port2')
+          : t('build.effect.port3');
   }
 }
 
 /** Menu de construction (panneau du bas, onglets par catégorie). */
 export class BuildMenu {
-  readonly el = h('section', { class: 'sheet build-menu', attrs: { 'aria-label': 'Construire' } });
+  readonly el = h('section', { class: 'sheet build-menu', attrs: { 'aria-label': t('build.title') } });
   private tabs = h('div', { class: 'tabs', attrs: { role: 'tablist' } });
   private list = h('div', { class: 'cards' });
   private tab: BuildingCategory = 'house';
@@ -50,10 +60,10 @@ export class BuildMenu {
     const header = h(
       'div',
       { class: 'sheet__header' },
-      h('h2', { class: 'sheet__title', text: 'Construire' }),
+      h('h2', { class: 'sheet__title', text: t('build.title') }),
       h(
         'button',
-        { class: 'sheet__close', attrs: { 'aria-label': 'Fermer' }, onClick: () => this.close() },
+        { class: 'sheet__close', attrs: { 'aria-label': t('common.close') }, onClick: () => this.close() },
         icon(Icons.close),
       ),
     );
@@ -93,7 +103,7 @@ export class BuildMenu {
       this.tabs.append(
         h('button', {
           class: `tab${category.id === this.tab ? ' is-active' : ''}${hasHint ? ' is-hint' : ''}`,
-          text: category.label,
+          text: categoryLabel(category.id),
           attrs: { role: 'tab', 'aria-selected': String(category.id === this.tab) },
           onClick: () => {
             this.tab = category.id;
@@ -119,14 +129,14 @@ export class BuildMenu {
       : h('span', { class: 'cost' }, icon(Icons.coin), formatNumber(def.cost.coins ?? 0));
     if (reason === 'notEnoughCoins' || reason === 'notEnoughCash') cost.classList.add('is-short');
     let lockText = '';
-    if (reason === 'levelLocked') lockText = `Niveau ${def.requires?.level}`;
-    else if (reason === 'populationLocked') lockText = `${def.requires?.population} habitants`;
-    else if (reason === 'populationCap') lockText = 'Population max';
+    if (reason === 'levelLocked') lockText = t('common.level', { level: def.requires?.level ?? 1 });
+    else if (reason === 'populationLocked') lockText = t('build.lockPopulation', { n: def.requires?.population ?? 0 });
+    else if (reason === 'populationCap') lockText = t('build.lockCap');
     const card = h(
       'button',
       {
         class: `card${locked ? ' is-locked' : ''}${reason === 'populationCap' ? ' is-capped' : ''}${def.id === this.hintDefId ? ' is-hint' : ''}`,
-        attrs: { 'aria-label': def.name },
+        attrs: { 'aria-label': buildingName(def) },
         onClick: () => {
           if (check.ok) {
             this.close();
@@ -136,13 +146,13 @@ export class BuildMenu {
           }
         },
       },
-      def.cost.cash ? h('span', { class: 'card__ribbon', text: 'Premium' }) : null,
+      def.cost.cash ? h('span', { class: 'card__ribbon', text: t('build.premium') }) : null,
       h(
         'span',
         { class: 'card__img' },
         h('img', { attrs: { src: this.art.iconUrl(ArtKey.building(def.id)), alt: '' } }),
       ),
-      h('span', { class: 'card__name', text: def.name }),
+      h('span', { class: 'card__name', text: buildingName(def) }),
       h('span', { class: 'card__effect', text: effectLine(def) }),
       h(
         'span',
@@ -151,7 +161,7 @@ export class BuildMenu {
         def.buildSec > 0
           ? h(
               'span',
-              { class: 'card__steps', title: 'Durée du chantier' },
+              { class: 'card__steps', title: t('build.duration') },
               icon(Icons.clock),
               formatDuration(def.buildSec),
             )

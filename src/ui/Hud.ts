@@ -1,4 +1,5 @@
 import type { Game } from '@/core/game';
+import { t } from '@/i18n';
 import { h, icon } from './dom';
 import { formatClock, formatNumber } from './format';
 import { Icons } from './icons';
@@ -22,12 +23,13 @@ export class Hud {
   ) {
     const level = h(
       'div',
-      { class: 'pill pill--level', attrs: { 'aria-label': 'Niveau et expérience' } },
+      { class: 'pill pill--level', attrs: { 'aria-label': t('hud.levelAria') } },
       h('span', { class: 'level' }, icon(Icons.xp, 'level__star'), this.levelNum),
       h('div', { class: 'xpbar' }, this.xpFill, this.xpText),
     );
     this.pills.set('level', level);
 
+    const plusLabels = { coins: t('hud.getCoins'), cash: t('hud.getCash'), energy: t('hud.getEnergy') };
     const pill = (target: HudTarget, svg: string, label: string, plus?: 'coins' | 'cash' | 'energy') => {
       const value = h('span', { class: 'pill__value' });
       this.values.set(target, value);
@@ -39,7 +41,7 @@ export class Hud {
         plus
           ? h(
               'button',
-              { class: 'pill__plus', attrs: { 'aria-label': `Obtenir des ${label}` }, onClick: () => onPlus(plus) },
+              { class: 'pill__plus', attrs: { 'aria-label': plusLabels[plus] }, onClick: () => onPlus(plus) },
               icon(Icons.plus),
             )
           : null,
@@ -50,11 +52,11 @@ export class Hud {
 
     this.el.append(
       level,
-      pill('coins', Icons.coin, 'pièces', 'coins'),
-      pill('cash', Icons.cash, 'cash', 'cash'),
-      pill('energy', Icons.energy, 'énergie', 'energy'),
-      pill('goods', Icons.goods, 'marchandises'),
-      pill('population', Icons.population, 'habitants'),
+      pill('coins', Icons.coin, t('hud.coins'), 'coins'),
+      pill('cash', Icons.cash, t('hud.cash'), 'cash'),
+      pill('energy', Icons.energy, t('hud.energy'), 'energy'),
+      pill('goods', Icons.goods, t('hud.goods')),
+      pill('population', Icons.population, t('hud.population')),
     );
     this.refresh();
   }
@@ -78,7 +80,7 @@ export class Hud {
     const xp = this.game.xpProgress();
     this.levelNum.textContent = String(state.level);
     this.xpFill.style.width = `${Math.round(xp.ratio * 100)}%`;
-    this.xpText.textContent = xp.needed ? `${formatNumber(xp.current)} / ${formatNumber(xp.needed)}` : 'MAX';
+    this.xpText.textContent = xp.needed ? `${formatNumber(xp.current)} / ${formatNumber(xp.needed)}` : t('hud.max');
     this.set('coins', formatNumber(state.coins));
     this.set('cash', formatNumber(state.cash));
     this.set('energy', `${state.energy}/${derived.energyMax}`);
