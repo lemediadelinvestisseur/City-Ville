@@ -9,6 +9,8 @@ import {
   SELL_REFUND_RATIO,
   energyMaxForLevel,
   expansionPrice,
+  helpGivenReward,
+  helpReceivedReward,
   levelUpReward,
   speedUpCashCost,
   xpForLevel,
@@ -863,6 +865,30 @@ export class Game {
       this.give(def.reward, null);
       this.syncQuests();
     }
+  }
+
+  // ———————————————————————————— Voisins ————————————————————————————
+
+  /**
+   * Récompense d'un coup de main donné à un voisin. Le serveur garantit la
+   * limite d'un coup de main par voisin et par jour.
+   */
+  rewardHelpGiven(): Reward {
+    const reward = helpGivenReward(this.state.level);
+    this.give(reward, null);
+    this.track({ type: 'helpNeighbor' });
+    this.changed();
+    return reward;
+  }
+
+  /** Crédite les coups de main reçus pendant l'absence du joueur. */
+  receiveHelps(count: number): Reward {
+    if (count <= 0) return {};
+    const one = helpReceivedReward(this.state.level);
+    const reward = { coins: one.coins * count, xp: one.xp * count };
+    this.give(reward, null);
+    this.changed();
+    return reward;
   }
 
   // ———————————————————————————— Outils de test ————————————————————————————

@@ -16,7 +16,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 2000,
   },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'convex/**/*.test.ts'],
+    server: { deps: { inline: ['convex-test'] } },
     environment: 'node',
   },
 });

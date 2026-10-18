@@ -256,4 +256,5 @@ export type GameplayEvent =
   | { type: 'collectBusiness'; defId: string }
   | { type: 'sendBoat'; tripId: string }
   | { type: 'unloadBoat'; tripId: string }
-  | { type: 'expand' };
+  | { type: 'expand' }
+  | { type: 'helpNeighbor' };

@@ -82,6 +82,16 @@ export function levelUpReward(newLevel: number): { coins: number; cash: number }
   return { coins: Math.round((100 * newLevel * (1 + newLevel / 10)) / 10) * 10, cash: newLevel % 5 === 0 ? 3 : 1 };
 }
 
+/** Récompense de celui qui aide un voisin (une fois par voisin et par jour). */
+export function helpGivenReward(level: number): { coins: number; xp: number } {
+  return { coins: 20 + level * 10, xp: 2 };
+}
+
+/** Récompense par coup de main reçu d'un voisin. */
+export function helpReceivedReward(level: number): { coins: number; xp: number } {
+  return { coins: 30 + level * 15, xp: 1 };
+}
+
 /** Bonus maximal cumulé des décorations (%). */
 export const MAX_DECORATION_BONUS = 50;
 
