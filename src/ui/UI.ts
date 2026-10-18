@@ -57,6 +57,8 @@ export class UI {
   private plantTarget: number | null = null;
   private placement: PlacementInfo | null = null;
   private hint: HintTarget | null = null;
+  /** Outils de test et boutique : réservés au compte testeur (et au développement). */
+  private tester = false;
 
   constructor(
     parent: HTMLElement,
@@ -138,10 +140,21 @@ export class UI {
 
   /** À appeler une fois le monde prêt. */
   start(): void {
+    this.setTester(import.meta.env.DEV);
     // Inscription (pseudo) d'abord, puis l'introduction du tutoriel.
     this.social.start(() => {
       if (!this.ctx.game.state.tutorial.introSeen) this.showIntro();
+      this.options.social.backend
+        .me()
+        .then((me) => this.setTester(me.tester || import.meta.env.DEV))
+        .catch(() => undefined);
     });
+  }
+
+  /** Affiche ou masque la boutique et les outils de test. */
+  setTester(on: boolean): void {
+    this.tester = on;
+    document.body.classList.toggle('is-tester', on);
   }
 
   // ———————————————————————————— Câblage ————————————————————————————
@@ -372,16 +385,18 @@ export class UI {
         this.showEnergyEmpty();
         return;
       case 'notEnoughCoins':
-        this.toasts.show(failMessage(reason, missing), 'error', {
-          label: 'Boutique',
-          onClick: () => this.openShop('coins'),
-        });
+        this.toasts.show(
+          failMessage(reason, missing),
+          'error',
+          this.tester ? { label: 'Boutique', onClick: () => this.openShop('coins') } : undefined,
+        );
         return;
       case 'notEnoughCash':
-        this.toasts.show(failMessage(reason, missing), 'error', {
-          label: 'Obtenir',
-          onClick: () => this.openShop('cash'),
-        });
+        this.toasts.show(
+          failMessage(reason, missing),
+          'error',
+          this.tester ? { label: 'Obtenir', onClick: () => this.openShop('cash') } : undefined,
+        );
         return;
       default:
         this.toasts.show(failMessage(reason, missing), 'error');
@@ -467,6 +482,7 @@ export class UI {
   }
 
   private openShop(tab: ShopTab): void {
+    if (!this.tester) return;
     this.closeTransient();
     this.shop.open(tab);
   }
@@ -698,48 +714,49 @@ export class UI {
   private showSettings(): void {
     const { game } = this.ctx;
     this.closeTransient();
-    const devButtons = DEV_TOOLS
-      ? [
-          h('div', { class: 'modal__section-title', text: 'Outils de test (prototype)' }),
-          h(
-            'div',
-            { class: 'dev-tools' },
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: '+1 000 pièces',
-              onClick: () => game.devGrant({ coins: 1000 }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: '+20 cash',
-              onClick: () => game.devGrant({ cash: 20 }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: 'Énergie au max',
-              onClick: () => game.devGrant({ energy: Math.max(0, game.derived().energyMax - game.state.energy) }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: '+50 marchandises',
-              onClick: () => game.devGrant({ goods: 50 }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: 'Niveau suivant',
-              onClick: () => game.devGrant({ xp: Math.max(0, xpForLevel(game.state.level + 1) - game.state.xp) }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: 'Avancer de 10 min',
-              onClick: () => {
-                game.devSkipTime(10 * 60 * 1000);
-                this.toasts.show('10 minutes ont passé…', 'info');
-              },
-            }),
-          ),
-        ]
-      : [];
+    const devButtons =
+      DEV_TOOLS && this.tester
+        ? [
+            h('div', { class: 'modal__section-title', text: 'Outils de test (prototype)' }),
+            h(
+              'div',
+              { class: 'dev-tools' },
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: '+1 000 pièces',
+                onClick: () => game.devGrant({ coins: 1000 }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: '+20 cash',
+                onClick: () => game.devGrant({ cash: 20 }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: 'Énergie au max',
+                onClick: () => game.devGrant({ energy: Math.max(0, game.derived().energyMax - game.state.energy) }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: '+50 marchandises',
+                onClick: () => game.devGrant({ goods: 50 }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: 'Niveau suivant',
+                onClick: () => game.devGrant({ xp: Math.max(0, xpForLevel(game.state.level + 1) - game.state.xp) }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: 'Avancer de 10 min',
+                onClick: () => {
+                  game.devSkipTime(10 * 60 * 1000);
+                  this.toasts.show('10 minutes ont passé…', 'info');
+                },
+              }),
+            ),
+          ]
+        : [];
     this.modals.show({
       title: 'Réglages',
       body: [

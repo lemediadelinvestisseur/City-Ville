@@ -204,6 +204,7 @@ export const dashboard = query({
         lastSeenAt: p.lastSeenAt,
         activeDays: activeDaysByPlayer.get(p._id)?.size ?? 0,
         banned: p.banned === true,
+        tester: p.tester === true,
         suspicious: p.suspicious ?? 0,
       })),
       reports: reports.map((r) => ({
@@ -223,6 +224,34 @@ export const setBanned = mutation({
   handler: async (ctx, { key, playerId, banned }) => {
     requireAdmin(key);
     await ctx.db.patch(playerId, { banned });
+  },
+});
+
+/** Donne (ou retire) l'accès aux outils de test et à la boutique. */
+export const setTester = mutation({
+  args: { key: v.string(), playerId: v.id('players'), tester: v.boolean() },
+  handler: async (ctx, { key, playerId, tester }) => {
+    requireAdmin(key);
+    await ctx.db.patch(playerId, { tester });
+  },
+});
+
+/** Recherche d'un joueur par pseudo (début du pseudo), pour l'admin. */
+export const findPlayers = query({
+  args: { key: v.string(), text: v.string() },
+  handler: async (ctx, { key, text }) => {
+    requireAdmin(key);
+    const prefix = text
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    if (prefix.length < 2) return [];
+    const found = await ctx.db
+      .query('players')
+      .withIndex('by_pseudoKey', (q) => q.gte('pseudoKey', prefix).lt('pseudoKey', `${prefix}\uffff`))
+      .take(10);
+    return found.map((p) => ({ id: p._id, pseudo: p.pseudo, level: p.level, tester: p.tester === true }));
   },
 });
 

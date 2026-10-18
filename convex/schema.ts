@@ -20,6 +20,8 @@ export default defineSchema({
     createdDay: v.string(),
     lastSeenAt: v.number(),
     banned: v.optional(v.boolean()),
+    /** Compte testeur (le propriétaire du jeu) : outils de test et boutique visibles. */
+    tester: v.optional(v.boolean()),
     /** Sauvegardes à la progression invraisemblable (à examiner dans l'admin). */
     suspicious: v.optional(v.number()),
   })

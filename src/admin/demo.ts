@@ -78,6 +78,7 @@ export function demoDashboard(days = 30): Dashboard {
     lastSeenAt: now - i * 47 * 60_000,
     activeDays: Math.max(1, 14 - i),
     banned: false,
+    tester: i === 0,
     suspicious: i === 7 ? 2 : 0,
   }));
   const avg = (key: 'd1' | 'd7' | 'd30') => {

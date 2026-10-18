@@ -90,7 +90,8 @@ export interface Backend {
   isRegistered(): boolean;
   pseudoAvailable(pseudo: string): Promise<{ available: boolean; error: string | null }>;
   register(pseudo: string, cityName: string): Promise<void>;
-  me(): Promise<Profile & { banned: boolean }>;
+  /** `tester` : compte du propriétaire (outils de test et boutique visibles). */
+  me(): Promise<Profile & { banned: boolean; tester: boolean }>;
   rename(pseudo: string): Promise<string>;
   createTransferCode(): Promise<{ code: string; expiresAt: number }>;
   redeemTransferCode(code: string): Promise<void>;

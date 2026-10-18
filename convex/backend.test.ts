@@ -266,3 +266,39 @@ describe('marché', () => {
     vi.useRealTimers();
   });
 });
+
+describe('compte testeur', () => {
+  beforeEach(() => vi.stubEnv('ADMIN_KEY', 'cle-admin-de-test-tres-longue'));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('n’ouvre les outils de test qu’au compte désigné dans l’admin', async () => {
+    const t = convexTest(schema, modules);
+    const owner = await newPlayer(t, 1, 'Proprio');
+    const other = await newPlayer(t, 2, 'Paul');
+    expect(await t.query(api.players.me, { token: owner.token })).toMatchObject({ tester: false });
+    const [found] = await t.query(api.admin.findPlayers, { key: 'cle-admin-de-test-tres-longue', text: 'prop' });
+    expect(found).toMatchObject({ pseudo: 'Proprio', tester: false });
+    await t.mutation(api.admin.setTester, {
+      key: 'cle-admin-de-test-tres-longue',
+      playerId: owner.playerId,
+      tester: true,
+    });
+    expect(await t.query(api.players.me, { token: owner.token })).toMatchObject({ tester: true });
+    expect(await t.query(api.players.me, { token: other.token })).toMatchObject({ tester: false });
+    await expect(
+      t.mutation(api.admin.setTester, { key: 'mauvaise', playerId: other.playerId, tester: true }),
+    ).rejects.toThrow(/forbidden/);
+  });
+});
+
+describe('page de confidentialité', () => {
+  it('est servie en HTML sur /confidentialite', async () => {
+    const t = convexTest(schema, modules);
+    const res = await t.fetch('/confidentialite', { method: 'GET' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    const html = await res.text();
+    expect(html).toContain('Politique de confidentialité');
+    expect(html).toContain('Supprimer mon compte');
+  });
+});

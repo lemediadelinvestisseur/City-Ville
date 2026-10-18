@@ -120,7 +120,8 @@ export class LocalBackend implements Backend {
   }
 
   async me() {
-    return { ...this.myProfile(), banned: false };
+    // Démo hors-ligne : c'est l'appareil du propriétaire, tout est visible.
+    return { ...this.myProfile(), banned: false, tester: true };
   }
 
   async rename(pseudo: string): Promise<string> {

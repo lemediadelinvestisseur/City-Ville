@@ -265,6 +265,16 @@ export class SocialUi {
     buttons.push(
       h('button', { class: 'btn btn--danger', text: 'Supprimer mon compte', onClick: () => this.confirmDelete() }),
     );
+    const privacy = privacyUrl();
+    if (privacy) {
+      buttons.push(
+        h('a', {
+          class: 'settings__link',
+          text: 'Politique de confidentialité',
+          attrs: { href: privacy, target: '_blank', rel: 'noopener' },
+        }),
+      );
+    }
     return h(
       'div',
       { class: 'settings__account' },
@@ -364,4 +374,10 @@ export class SocialUi {
       220,
     );
   }
+}
+
+/** Page de confidentialité servie par Convex (…convex.cloud → …convex.site/confidentialite). */
+function privacyUrl(): string | null {
+  const url = import.meta.env.VITE_CONVEX_URL as string | undefined;
+  return url ? url.replace(/\.convex\.cloud\/?$/, '.convex.site') + '/confidentialite' : null;
 }

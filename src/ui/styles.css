@@ -2197,3 +2197,17 @@ body.is-visiting .placebar {
 .btn.is-short {
   opacity: 0.6;
 }
+
+/* Boutique et boutons « + » : réservés au compte testeur tant que les vrais paiements ne sont pas branchés. */
+body:not(.is-tester) .dock__btn--shop,
+body:not(.is-tester) .pill__plus {
+  display: none;
+}
+
+.settings__link {
+  display: block;
+  margin-top: 10px;
+  text-align: center;
+  color: var(--muted, #5b6b56);
+  font-size: 0.9rem;
+}
