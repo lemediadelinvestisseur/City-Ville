@@ -327,3 +327,64 @@ export function hintArrow(): ArtPiece {
   ctx.fillRect(21, 7, 5, 22);
   return { canvas, originX: 0.5, originY: 1 };
 }
+
+/** Ouvrier de chantier (casque jaune, gilet orange). */
+export function worker(): ArtPiece {
+  const { canvas, ctx } = createCanvas(24, 46);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(12, 43, 7, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#1e3a5f';
+  ctx.lineWidth = 3.2;
+  ctx.beginPath();
+  ctx.moveTo(9.5, 31);
+  ctx.lineTo(9, 42);
+  ctx.moveTo(14.5, 31);
+  ctx.lineTo(15, 42);
+  ctx.stroke();
+  ctx.fillStyle = '#ff8f00';
+  ctx.strokeStyle = '#b35c00';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(6, 17, 12, 16, 4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#fff59d';
+  ctx.fillRect(6, 25, 12, 2);
+  ctx.fillStyle = '#f1c27d';
+  ctx.beginPath();
+  ctx.arc(12, 12, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fdd835';
+  ctx.strokeStyle = '#c49000';
+  ctx.beginPath();
+  ctx.arc(12, 10, 6.5, Math.PI, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillRect(4.5, 9.5, 15, 2);
+  return { canvas, originX: 0.5, originY: 43 / 46 };
+}
+
+/** Marteau tenu par l'ouvrier (origine au bout du manche, pour le faire pivoter). */
+export function hammerTool(): ArtPiece {
+  const { canvas, ctx } = createCanvas(24, 24);
+  ctx.strokeStyle = '#8d5a30';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(4, 20);
+  ctx.lineTo(16, 8);
+  ctx.stroke();
+  ctx.fillStyle = '#78909c';
+  ctx.strokeStyle = '#37474f';
+  ctx.lineWidth = 1;
+  ctx.save();
+  ctx.translate(17, 7);
+  ctx.rotate(-Math.PI / 4);
+  ctx.fillRect(-7, -3, 14, 6);
+  ctx.strokeRect(-7, -3, 14, 6);
+  ctx.restore();
+  return { canvas, originX: 4 / 24, originY: 20 / 24 };
+}

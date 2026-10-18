@@ -43,6 +43,8 @@ export interface AppEvents {
   'world:drops': Reward;
   /** Une récompense au sol vient d'être ramassée. */
   'fx:pickup': { screen: ScreenPoint; reward: Reward };
+  /** Coup de marteau sur un chantier visible (bruitage discret). */
+  'fx:hammer': undefined;
   // Interface → monde
   'ui:startPlacement': { defId: string };
   'ui:startMove': { entityId: number };

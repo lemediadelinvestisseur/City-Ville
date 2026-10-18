@@ -13,6 +13,8 @@ import {
   puffParticle,
   starParticle,
   walker,
+  worker,
+  hammerTool,
   type BadgeKind,
 } from './sprites';
 import {
@@ -42,6 +44,8 @@ export const ArtKey = {
   water: (variant: number, shallow: boolean) => `water_${shallow ? 's' : 'd'}${variant}`,
   boat: (tier: number) => `boat_${tier}`,
   truck: (axis: 'x' | 'y') => `truck_${axis}`,
+  worker: 'worker',
+  hammerTool: 'hammer_tool',
   building: (defId: string) => `bld_${defId}`,
   crop: (cropId: string, stage: 'sprout' | 'growing' | 'ripe') => `crop_${cropId}_${stage}`,
   cropIcon: (cropId: string) => `cropicon_${cropId}`,
@@ -114,6 +118,8 @@ export class ArtLibrary {
       lib.add(ArtKey.water(i, false), waterTile(i, false));
     }
     for (const tier of BOAT_TIERS) lib.add(ArtKey.boat(tier), boatArt(tier));
+    lib.add(ArtKey.worker, worker());
+    lib.add(ArtKey.hammerTool, hammerTool());
     lib.add(ArtKey.truck('x'), movingTruckArt('x'));
     lib.add(ArtKey.truck('y'), movingTruckArt('y'));
     for (let mask = 0; mask < 16; mask++) lib.add(ArtKey.road(mask), roadTile(mask));

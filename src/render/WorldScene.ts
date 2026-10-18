@@ -40,6 +40,8 @@ interface View {
   barKey: string;
   /** Compte à rebours affiché en permanence (chantier, bateau en mer). */
   timer: Phaser.GameObjects.Text | null;
+  /** Ouvrier qui travaille sur le chantier. */
+  crew: { worker: Phaser.GameObjects.Image; hammer: Phaser.GameObjects.Image } | null;
   /** Bateau amarré (ou parti en mer) d'un port. */
   boat: Phaser.GameObjects.Image | null;
   boatHome: { x: number; y: number } | null;
@@ -100,6 +102,9 @@ export class WorldScene extends Phaser.Scene {
   private readonly readOnly: boolean;
   private nearEdge = false;
   private edgeCheckAt = 0;
+  /** Prochains rafraîchissements périodiques (horloge réelle, indépendante de la fluidité). */
+  private refreshAt = 0;
+  private hammerAt = 0;
 
   constructor(
     private readonly ctx: AppContext,
@@ -162,7 +167,6 @@ export class WorldScene extends Phaser.Scene {
     this.setupInput();
     this.subscribe();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
-    this.time.addEvent({ delay: 500, loop: true, callback: () => this.refreshDynamic() });
     this.refreshDynamic();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubscribers.forEach((u) => u());
@@ -174,6 +178,15 @@ export class WorldScene extends Phaser.Scene {
   override update(time: number, delta: number): void {
     if (this.camCtl.update(delta)) this.ctx.bus.emit('world:cameraMoved', undefined);
     this.drops.update(time);
+    // Cadencé sur l'horloge réelle : reste juste même si l'affichage rame.
+    if (time >= this.refreshAt) {
+      this.refreshAt = time + 500;
+      this.refreshDynamic();
+    }
+    if (time >= this.hammerAt) {
+      this.hammerAt = time + 1400;
+      this.hammerTick();
+    }
     if (time > this.edgeCheckAt) {
       this.edgeCheckAt = time + 300;
       this.checkEdge();
@@ -355,6 +368,7 @@ export class WorldScene extends Phaser.Scene {
       bar: null,
       barKey: '',
       timer: null,
+      crew: null,
       boat: null,
       boatHome: null,
     };
@@ -370,6 +384,8 @@ export class WorldScene extends Phaser.Scene {
     view.badge?.destroy();
     view.bar?.destroy();
     view.timer?.destroy();
+    view.crew?.worker.destroy();
+    view.crew?.hammer.destroy();
     view.boat?.destroy();
     this.views.delete(id);
     if (this.selectedId === id) this.select(null);
@@ -435,6 +451,80 @@ export class WorldScene extends Phaser.Scene {
     }
     this.syncBoat(view);
     this.syncTimer(view);
+    this.syncCrew(view);
+  }
+
+  /** Un ouvrier au marteau sur chaque chantier en cours. */
+  private syncCrew(view: View): void {
+    const { entity } = view;
+    const working =
+      !entity.built &&
+      !!entity.construction &&
+      this.game_.now() < entity.construction.endsAt &&
+      this.game_.isTileUnlocked(entity.x, entity.y);
+    if (!working) {
+      view.crew?.worker.destroy();
+      view.crew?.hammer.destroy();
+      view.crew = null;
+      return;
+    }
+    const def = getBuildingDef(entity.defId);
+    if (!view.crew) {
+      const w = this.ctx.art.get(ArtKey.worker);
+      const hm = this.ctx.art.get(ArtKey.hammerTool);
+      view.crew = {
+        worker: this.add.image(0, 0, ArtKey.worker).setOrigin(w.originX, w.originY).setScale(2.2),
+        hammer: this.add.image(0, 0, ArtKey.hammerTool).setOrigin(hm.originX, hm.originY).setScale(2.2),
+      };
+    }
+    const pos = tileToWorld(entity.x + def.size.w * 0.12, entity.y + def.size.d * 0.95);
+    const depth = view.main.depth + 0.02;
+    view.crew.worker.setPosition(pos.x, pos.y).setDepth(depth);
+    view.crew.hammer.setPosition(pos.x + 12, pos.y - 52).setDepth(depth + 0.001);
+  }
+
+  /** Coups de marteau réguliers sur les chantiers ; seul le plus proche du centre s'entend. */
+  private hammerTick(): void {
+    const cam = this.cameras.main;
+    const view = cam.worldView;
+    let loudest: { d: number } | null = null;
+    for (const v of this.views.values()) {
+      if (!v.crew) continue;
+      const { hammer } = v.crew;
+      this.tweens.add({
+        targets: hammer,
+        angle: { from: -75, to: 15 },
+        duration: 150,
+        delay: (v.entity.id % 5) * 90,
+        yoyo: true,
+        ease: 'Quad.easeIn',
+        onYoyo: () => this.fx.puffs(hammer.x - 6, hammer.y + 24, 0.4, 0.4, 1),
+      });
+      if (view.contains(hammer.x, hammer.y)) {
+        const d = Phaser.Math.Distance.Between(hammer.x, hammer.y, view.centerX, view.centerY);
+        if (!loudest || d < loudest.d) loudest = { d };
+      }
+    }
+    if (loudest && !this.readOnly) this.ctx.bus.emit('fx:hammer', undefined);
+  }
+
+  /** Ouverture du chantier : trois coups de marteau (synchronisés avec le bruitage). */
+  private openSiteFx(view: View): void {
+    const a = this.anchor(view);
+    [0, 260, 520].forEach((delay, i) => {
+      this.time.delayedCall(delay, () => {
+        this.fx.puffs(a.x, a.y, a.w, a.d, 2 + i);
+        this.fx.shake(0.001);
+      });
+    });
+  }
+
+  /** Inauguration : le bâtiment s'élève depuis ses fondations. */
+  private riseFx(view: View): void {
+    const { main } = view;
+    const target = main.scaleY;
+    main.setScale(main.scaleX, target * 0.15);
+    this.tweens.add({ targets: main, scaleY: target, duration: 700, ease: 'Back.easeOut' });
   }
 
   /** Fin de l'attente à afficher en direct, ou null. */
@@ -657,7 +747,7 @@ export class WorldScene extends Phaser.Scene {
         if (entity.defId === 'road' || entity.defId === 'bridge') this.refreshRoads();
         const view = this.views.get(entity.id);
         if (view) this.popIn(view);
-        if (view && !entity.built) this.hammerFx(view);
+        if (view && !entity.built) this.openSiteFx(view);
       }),
     );
     on(
@@ -683,7 +773,10 @@ export class WorldScene extends Phaser.Scene {
     on(
       game.events.on('constructionComplete', (entity) => {
         const view = this.views.get(entity.id);
-        if (view) this.celebrate(view);
+        if (view) {
+          this.riseFx(view);
+          this.celebrate(view);
+        }
         this.refreshRoads();
         const def = getBuildingDef(entity.defId);
         if (def.category === 'house' && view) {
@@ -1283,12 +1376,6 @@ export class WorldScene extends Phaser.Scene {
     this.fx.popIn(view.main);
     const a = this.anchor(view);
     this.fx.puffs(a.x, a.y, a.w, a.d, 5);
-  }
-
-  private hammerFx(view: View): void {
-    const a = this.anchor(view);
-    this.fx.puffs(a.x, a.y, a.w, a.d, 3);
-    this.fx.shake();
   }
 
   private supplyFx(view: View): void {
