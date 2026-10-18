@@ -1,6 +1,6 @@
 import { BUILDINGS } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
-import { boatArt, bridgeArt, BOAT_TIERS } from './boats';
+import { boatArt, bridgeArt, movingTruckArt, BOAT_TIERS } from './boats';
 import { buildingArt } from './buildings';
 import { decorationArt } from './decorations';
 import { createCanvas, type ArtPiece } from './IsoPainter';
@@ -41,6 +41,7 @@ export const ArtKey = {
   sand: (variant: number) => `sand_${variant}`,
   water: (variant: number, shallow: boolean) => `water_${shallow ? 's' : 'd'}${variant}`,
   boat: (tier: number) => `boat_${tier}`,
+  truck: (axis: 'x' | 'y') => `truck_${axis}`,
   building: (defId: string) => `bld_${defId}`,
   crop: (cropId: string, stage: 'sprout' | 'growing' | 'ripe') => `crop_${cropId}_${stage}`,
   cropIcon: (cropId: string) => `cropicon_${cropId}`,
@@ -113,6 +114,8 @@ export class ArtLibrary {
       lib.add(ArtKey.water(i, false), waterTile(i, false));
     }
     for (const tier of BOAT_TIERS) lib.add(ArtKey.boat(tier), boatArt(tier));
+    lib.add(ArtKey.truck('x'), movingTruckArt('x'));
+    lib.add(ArtKey.truck('y'), movingTruckArt('y'));
     for (let mask = 0; mask < 16; mask++) lib.add(ArtKey.road(mask), roadTile(mask));
     const plot = plotTile();
     for (const def of BUILDINGS) {

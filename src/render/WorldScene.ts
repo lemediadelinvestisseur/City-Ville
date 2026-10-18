@@ -13,6 +13,7 @@ import { HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } fr
 import { DEPTH_FX, Effects } from './Effects';
 import { formatClock } from '@/ui/format';
 import { DropSystem } from './Drops';
+import { MovingVan } from './MovingVan';
 import { NightLayer } from './NightLayer';
 import { WalkerSystem } from './WalkerSystem';
 
@@ -70,6 +71,7 @@ export class WorldScene extends Phaser.Scene {
   private walkers!: WalkerSystem;
   private night!: NightLayer;
   private drops!: DropSystem;
+  private van!: MovingVan;
   private clouds: Phaser.GameObjects.Image[] = [];
   private arrow!: Phaser.GameObjects.Image;
   private hintKey = '';
@@ -126,6 +128,7 @@ export class WorldScene extends Phaser.Scene {
       const screen = this.camCtl.worldToScreen(wx, wy);
       this.ctx.bus.emit('fx:pickup', { screen: this.toCss(screen.x, screen.y), reward });
     });
+    this.van = new MovingVan(this, this.ctx.art, (x, y) => this.game_.isRoad(x, y));
     this.night = new NightLayer(this, DEPTH_OVERLAY - 10, this.ctx.prefs.dayNight);
     for (const entity of this.game_.state.entities) this.addView(entity);
     this.refreshRoads();
@@ -682,6 +685,20 @@ export class WorldScene extends Phaser.Scene {
         const view = this.views.get(entity.id);
         if (view) this.celebrate(view);
         this.refreshRoads();
+        const def = getBuildingDef(entity.defId);
+        if (def.category === 'house' && view) {
+          // Les nouveaux habitants arrivent en camion de déménagement.
+          this.van.play(
+            { x: entity.x, y: entity.y, w: def.size.w, d: def.size.d },
+            'Emménagement',
+            this.overlayScale,
+            () => {
+              const a = this.anchor(view);
+              this.fx.popText(a.x, a.top, `+${def.population} habitants`, '#c5e1a5', 0, this.overlayScale);
+              this.fx.bounce([view.main]);
+            },
+          );
+        }
       }),
     );
     on(game.events.on('reward', ({ entityId, reward }) => this.onReward(entityId, reward)));
