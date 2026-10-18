@@ -7,6 +7,7 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.production
 # Capacitor (à venir)
 android/app/build/
 ios/App/Pods/
