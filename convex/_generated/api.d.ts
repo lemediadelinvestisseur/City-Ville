@@ -9,23 +9,29 @@
  */
 import type { ApiFromModules, FilterApi, FunctionReference } from 'convex/server';
 import type * as admin from '../admin.js';
+import type * as chat from '../chat.js';
+import type * as crons from '../crons.js';
 import type * as leaderboard from '../leaderboard.js';
 import type * as lib_util from '../lib/util.js';
 import type * as market from '../market.js';
 import type * as moderation from '../moderation.js';
 import type * as neighbors from '../neighbors.js';
 import type * as players from '../players.js';
+import type * as roles from '../roles.js';
 import type * as saves from '../saves.js';
 import type * as stats from '../stats.js';
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  chat: typeof chat;
+  crons: typeof crons;
   leaderboard: typeof leaderboard;
   'lib/util': typeof lib_util;
   market: typeof market;
   moderation: typeof moderation;
   neighbors: typeof neighbors;
   players: typeof players;
+  roles: typeof roles;
   saves: typeof saves;
   stats: typeof stats;
 }>;

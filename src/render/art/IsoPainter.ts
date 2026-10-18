@@ -358,6 +358,7 @@ export class IsoPainter {
     z: number,
     font: string,
     fill: string,
+    maxWidth?: number,
   ): void {
     const { ctx } = this;
     const [sx, sy] = side === 'left' ? this.p(along, plane, z) : this.p(plane, along, z);
@@ -367,7 +368,9 @@ export class IsoPainter {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = fill;
-    ctx.fillText(text, 0, 0);
+    // Une traduction plus longue est resserrée pour tenir sur l'enseigne.
+    if (maxWidth) ctx.fillText(text, 0, 0, maxWidth);
+    else ctx.fillText(text, 0, 0);
     ctx.restore();
   }
 
@@ -386,7 +389,8 @@ export class IsoPainter {
     const quad = side === 'left' ? this.leftQuad.bind(this) : this.rightQuad.bind(this);
     quad(a, b, za, zb, plane, bg, shade(bg, -0.4));
     const size = Math.max(7, Math.min(13, (zb - za) * 0.75));
-    this.faceText(side, text, (a + b) / 2, plane, (za + zb) / 2, `800 ${size}px system-ui, sans-serif`, fg);
+    const maxWidth = Math.abs(b - a) * Math.hypot(HALF_W, HALF_H) * 0.92;
+    this.faceText(side, text, (a + b) / 2, plane, (za + zb) / 2, `800 ${size}px system-ui, sans-serif`, fg, maxWidth);
   }
 
   pyramidRoof(x0: number, y0: number, x1: number, y1: number, z: number, h: number, color: string, ov = 0.08): void {

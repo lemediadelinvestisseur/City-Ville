@@ -1,14 +1,18 @@
 import type { AppContext } from '@/app/context';
+import { PSEUDO_MAX, validatePseudo } from '@/core/pseudo';
 import type { Reward } from '@/core/types';
-import { backendErrorMessage, type Backend, type Profile, type Visit } from '@/services/online/Backend';
-import { PSEUDO_MAX, pseudoErrorMessage, validatePseudo } from '@/core/pseudo';
-import { h, icon } from './dom';
-import { formatDuration, formatNumber } from './format';
+import { formatList, language, t, type Language } from '@/i18n';
+import { isNativeApp } from '@/services/native';
+import type { Backend, Me, Profile, Visit } from '@/services/online/Backend';
+import { h, icon, rich } from './dom';
+import { formatDuration } from './format';
 import { Icons } from './icons';
-import type { Modals } from './Modals';
 import { MarketView } from './MarketView';
+import { backendErrorMessage, pseudoErrorMessage } from './messages';
+import type { Modals } from './Modals';
 import { NeighborsPanel } from './NeighborsPanel';
-import { showPseudoForm } from './Onboarding';
+import type { Notices } from './Notices';
+import { languageName, showLanguagePicker, showPseudoForm } from './Onboarding';
 import type { Toasts } from './Toasts';
 import { VisitBar } from './VisitBar';
 
@@ -24,6 +28,8 @@ export interface SocialOptions {
   redeemTransfer: (code: string) => Promise<void>;
   /** Après suppression du compte : efface la partie locale et redémarre. */
   wipeLocal: () => void;
+  /** Change la langue du jeu (enregistre le choix puis recharge si besoin). */
+  setLanguage: (code: Language) => void;
 }
 
 interface Deps {
@@ -31,6 +37,7 @@ interface Deps {
   modals: Modals;
   toasts: Toasts;
   social: SocialOptions;
+  notices: () => Notices;
   /** À appeler quand un panneau s'ouvre ou se ferme (barre d'actions). */
   onLayoutChange: () => void;
   closeTransient: () => void;
@@ -43,6 +50,8 @@ export class SocialUi {
   readonly edgePill: HTMLButtonElement;
   private visiting: Visit | null = null;
   private loadingVisit = false;
+  /** Profil du joueur connecté (rôle compris), connu après le premier appel au serveur. */
+  me: Me | null = null;
 
   constructor(private readonly deps: Deps) {
     const { social, toasts } = deps;
@@ -66,10 +75,12 @@ export class SocialUi {
       addNeighbor: async () => {
         if (!this.visiting) return;
         await social.backend.addNeighbor(this.visiting.profile.id);
-        toasts.show(`${this.visiting.profile.pseudo} est maintenant votre voisin !`, 'success');
+        toasts.show(t('neighbors.nowNeighbor', { pseudo: this.visiting.profile.pseudo }), 'success');
       },
       report: () => this.confirmReport(),
-      block: () => this.confirmBlock(),
+      block: () => {
+        if (this.visiting) this.confirmBlock(this.visiting.profile.id, this.visiting.profile.pseudo, true);
+      },
       leave: () => this.leaveVisit(),
       toast: (text, kind) => toasts.show(text, kind),
     });
@@ -77,7 +88,7 @@ export class SocialUi {
       'button',
       { class: 'edge-pill', onClick: () => this.openNeighbors() },
       icon(Icons.population),
-      ' Voir mes voisins',
+      ` ${t('neighbors.edge')}`,
     );
   }
 
@@ -85,24 +96,47 @@ export class SocialUi {
     return this.visiting !== null;
   }
 
-  /** Inscription si nécessaire, puis la suite (introduction du tutoriel). */
+  /** Inscription si nécessaire (langue, puis pseudo), puis la suite (introduction du tutoriel). */
   start(next: () => void): void {
     const { social, modals, ctx } = this.deps;
     if (social.backend.isRegistered()) {
       social.startSync();
+      this.refreshMe();
       next();
       return;
     }
-    const open = () =>
+    const onDone = () => {
+      social.startSync();
+      this.refreshMe();
+      next();
+    };
+    const pickLanguage = () => showLanguagePicker(modals, { dismissible: false, onPick: (code) => chosen(code) });
+    const chosen = (code: Language) => {
+      social.setLanguage(code);
+      if (code === language()) setTimeout(open, 220);
+    };
+    const open = (): void =>
       showPseudoForm(modals, social.backend, ctx.game, {
-        onDone: () => {
-          social.startSync();
-          next();
-        },
+        onDone,
         onTransfer: (code) => social.redeemTransfer(code),
         onBack: () => setTimeout(open, 220),
+        onChangeLanguage: pickLanguage,
       });
-    open();
+    // Première ouverture : la langue d'abord (proposée d'après l'appareil).
+    if (ctx.prefs.language === null) pickLanguage();
+    else open();
+  }
+
+  /** Profil à jour (rôle, langue enregistrée sur le serveur). */
+  private refreshMe(): void {
+    const { backend } = this.deps.social;
+    backend
+      .me()
+      .then((me) => {
+        this.me = me;
+        if (me.language !== language()) void backend.setLanguage(language()).catch(() => undefined);
+      })
+      .catch(() => undefined);
   }
 
   setEdge(near: boolean): void {
@@ -119,21 +153,26 @@ export class SocialUi {
     const { social, ctx, toasts } = this.deps;
     await social.backend.help(profile.id);
     const reward = ctx.game.rewardHelpGiven();
-    toasts.show(`Merci pour ${profile.pseudo} ! +${formatNumber(reward.coins ?? 0)} pièces`, 'success');
+    toasts.show(t('social.thanksHelp', { pseudo: profile.pseudo, coins: reward.coins ?? 0 }), 'success');
+  }
+
+  /** Visite la ville d'un joueur connu seulement par son identifiant (depuis le chat). */
+  visitPlayer(playerId: string, pseudo: string): void {
+    void this.visit({ id: playerId, pseudo, cityName: '', level: 0, population: 0, lastSeenAt: 0 });
   }
 
   private async visit(profile: Profile): Promise<void> {
     if (this.loadingVisit) return;
     const { social, toasts } = this.deps;
     this.loadingVisit = true;
-    toasts.show(`En route vers ${profile.cityName}…`, 'info');
+    toasts.show(t('social.travel', { city: profile.cityName || profile.pseudo }), 'info');
     try {
       const visit = await social.backend.visit(profile.id);
       if (!visit.data) {
-        toasts.show(`${profile.pseudo} n’a pas encore construit sa ville.`, 'info');
+        toasts.show(t('social.noCity', { pseudo: profile.pseudo }), 'info');
         return;
       }
-      this.panel.close();
+      this.deps.closeTransient();
       this.visiting = visit;
       social.openVisit(visit);
       this.visitBar.show(visit);
@@ -161,13 +200,13 @@ export class SocialUi {
     if (!visit) return;
     const { modals, social, toasts } = this.deps;
     const reasons: Array<[string, string]> = [
-      ['pseudo', 'Pseudo inapproprié'],
-      ['ville', 'Nom de ville inapproprié'],
-      ['autre', 'Autre comportement'],
+      ['pseudo', t('report.pseudo')],
+      ['ville', t('report.city')],
+      ['autre', t('report.other')],
     ];
     modals.show({
-      title: `Signaler ${visit.profile.pseudo}`,
-      body: h('p', { text: 'Notre équipe examinera le signalement. Merci de nous aider à garder le jeu agréable.' }),
+      title: t('report.title', { pseudo: visit.profile.pseudo }),
+      body: h('p', { text: t('report.body') }),
       buttons: [
         ...reasons.map(([reason, label]) => ({
           label,
@@ -175,35 +214,32 @@ export class SocialUi {
           onClick: () => {
             social.backend
               .report(visit.profile.id, reason)
-              .then(() => toasts.show('Signalement envoyé. Merci !', 'success'))
+              .then(() => toasts.show(t('report.sent'), 'success'))
               .catch((e: unknown) => toasts.show(backendErrorMessage(e), 'error'));
           },
         })),
-        { label: 'Annuler', kind: 'secondary' },
+        { label: t('common.cancel'), kind: 'secondary' },
       ],
     });
   }
 
-  private confirmBlock(): void {
-    const visit = this.visiting;
-    if (!visit) return;
+  /** Bloque un joueur après confirmation (depuis une visite ou le chat). */
+  confirmBlock(playerId: string, pseudo: string, leave = false): void {
     const { modals, social, toasts } = this.deps;
     modals.show({
-      title: `Bloquer ${visit.profile.pseudo} ?`,
-      body: h('p', {
-        text: 'Vous ne vous verrez plus : ni voisins, ni suggestions, ni visites. Vous pourrez le débloquer plus tard.',
-      }),
+      title: t('block.title', { pseudo }),
+      body: h('p', { text: t('block.body') }),
       buttons: [
-        { label: 'Annuler', kind: 'secondary' },
+        { label: t('common.cancel'), kind: 'secondary' },
         {
-          label: 'Bloquer',
+          label: t('block.confirm'),
           kind: 'danger',
           onClick: () => {
             social.backend
-              .block(visit.profile.id)
+              .block(playerId)
               .then(() => {
-                toasts.show(`${visit.profile.pseudo} est bloqué.`, 'info');
-                this.leaveVisit();
+                toasts.show(t('block.done', { pseudo }), 'info');
+                if (leave) this.leaveVisit();
               })
               .catch((e: unknown) => toasts.show(backendErrorMessage(e), 'error'));
           },
@@ -216,67 +252,108 @@ export class SocialUi {
   askConflict(remote: { revision: number; savedAt: number }, choose: (keep: 'local' | 'remote') => void): void {
     const ago = formatDuration(Math.max(0, (Date.now() - remote.savedAt) / 1000));
     this.deps.modals.show({
-      title: 'Deux versions de votre ville',
-      kicker: 'Synchronisation',
+      title: t('conflict.title'),
+      kicker: t('conflict.kicker'),
       dismissible: false,
       urgent: true,
-      body: h('p', {
-        text: `Votre ville a aussi été modifiée sur un autre appareil (il y a ${ago}). Quelle version voulez-vous garder ? L’autre sera remplacée.`,
-      }),
+      body: h('p', { text: t('conflict.body', { ago }) }),
       buttons: [
-        { label: 'Celle de l’autre appareil', kind: 'secondary', onClick: () => choose('remote') },
-        { label: 'Celle-ci', onClick: () => choose('local') },
+        { label: t('conflict.remote'), kind: 'secondary', onClick: () => choose('remote') },
+        { label: t('conflict.local'), onClick: () => choose('local') },
       ],
     });
   }
 
   showHelpsReceived(helpers: string[], reward: Reward): void {
-    const names = helpers.length > 1 ? `${helpers.slice(0, -1).join(', ')} et ${helpers.at(-1)}` : helpers[0];
-    this.deps.toasts.show(
-      `${names ?? 'Vos voisins'} ${helpers.length > 1 ? 'vous ont' : 'vous a'} donné un coup de main : +${formatNumber(reward.coins ?? 0)} pièces !`,
-      'success',
-    );
+    const names = helpers.length ? formatList(helpers) : t('helps.someone');
+    // « Vos voisins » (personne de nommé) appelle aussi le pluriel.
+    const text = t(helpers.length === 1 ? 'helps.one' : 'helps.many', { names, coins: reward.coins ?? 0 });
+    this.deps.notices().post('neighbor', text, { kind: 'neighbors' }, Icons.population, 'success');
   }
 
   /** Section « Compte » des réglages. */
   accountSection(): HTMLElement {
     const { social } = this.deps;
-    const name = h('strong', { text: '…' });
+    const name = h('strong', { text: this.me?.pseudo ?? '…' });
+    const role = h('span', { class: 'settings__role' });
+    const adminButton = h('button', {
+      class: 'btn btn--gold',
+      text: t('settings.admin'),
+      onClick: () => window.open('./admin.html', '_blank', 'noopener'),
+    });
+    const showRole = (me: Me) => {
+      name.textContent = me.pseudo;
+      role.textContent = me.role
+        ? ` · ${t(me.role === 'admin' ? 'account.role.admin' : 'account.role.moderator')}`
+        : '';
+      // L'interface admin n'est proposée qu'au compte administrateur, dans un navigateur (pas dans l'appli).
+      const show = me.role === 'admin' && social.backend.kind === 'convex' && !isNativeApp();
+      adminButton.style.display = show ? '' : 'none';
+    };
+    adminButton.style.display = 'none';
+    if (this.me) showRole(this.me);
     social.backend
       .me()
       .then((me) => {
-        name.textContent = me.pseudo;
+        this.me = me;
+        showRole(me);
       })
       .catch(() => {
-        name.textContent = 'hors ligne';
+        if (!this.me) name.textContent = t('common.offline');
       });
     const buttons: HTMLElement[] = [
-      h('button', { class: 'btn btn--secondary', text: 'Changer de pseudo', onClick: () => this.renameForm() }),
+      h(
+        'button',
+        {
+          class: 'btn btn--secondary',
+          onClick: () => this.changeLanguage(),
+        },
+        icon(Icons.globe),
+        ` ${t('lang.setting', { language: languageName(language()) })}`,
+      ),
+      h('button', { class: 'btn btn--secondary', text: t('account.rename'), onClick: () => this.renameForm() }),
     ];
     if (social.backend.kind === 'convex') {
       buttons.push(
         h('button', {
           class: 'btn btn--secondary',
-          text: 'Code de transfert (autre appareil)',
+          text: t('account.transfer'),
           onClick: () => this.showTransferCode(),
         }),
       );
     }
     buttons.push(
-      h('button', { class: 'btn btn--danger', text: 'Supprimer mon compte', onClick: () => this.confirmDelete() }),
+      h('button', { class: 'btn btn--danger', text: t('account.delete'), onClick: () => this.confirmDelete() }),
     );
     return h(
       'div',
       { class: 'settings__account' },
-      h('div', { class: 'modal__section-title', text: 'Compte' }),
-      h('p', { class: 'settings__who' }, 'Connecté en tant que ', name),
-      social.backend.kind === 'local'
-        ? h('p', {
-            class: 'muted settings__hint',
-            text: 'Mode démo hors-ligne : vos voisins sont fictifs, rien n’est envoyé sur Internet.',
-          })
-        : null,
+      h('div', { class: 'modal__section-title', text: t('account.title') }),
+      h('p', { class: 'settings__who' }, rich('account.loggedAs', { name }), role),
+      social.backend.kind === 'local' ? h('p', { class: 'muted settings__hint', text: t('account.demo') }) : null,
+      adminButton,
       ...buttons,
+    );
+  }
+
+  private changeLanguage(): void {
+    const { modals, social } = this.deps;
+    modals.close();
+    setTimeout(
+      () =>
+        showLanguagePicker(modals, {
+          dismissible: true,
+          title: t('lang.changeTitle'),
+          onPick: (code) => {
+            if (code === language()) return;
+            // Le serveur garde la langue (salon du chat, annonces ciblées) ; le jeu recharge ensuite.
+            void social.backend
+              .setLanguage(code)
+              .catch(() => undefined)
+              .finally(() => social.setLanguage(code));
+          },
+        }),
+      220,
     );
   }
 
@@ -288,13 +365,13 @@ export class SocialUi {
     setTimeout(
       () =>
         modals.show({
-          title: 'Changer de pseudo',
+          title: t('account.rename'),
           className: 'modal--form',
           body: [input, error],
           buttons: [
-            { label: 'Annuler', kind: 'secondary' },
+            { label: t('common.cancel'), kind: 'secondary' },
             {
-              label: 'Valider',
+              label: t('common.validate'),
               onClick: () => {
                 const problem = validatePseudo(input.value);
                 if (problem) {
@@ -303,7 +380,7 @@ export class SocialUi {
                 }
                 social.backend
                   .rename(input.value)
-                  .then((pseudo) => toasts.show(`Vous vous appelez maintenant ${pseudo}.`, 'success'))
+                  .then((pseudo) => toasts.show(t('account.renamed', { pseudo }), 'success'))
                   .catch((e: unknown) => toasts.show(backendErrorMessage(e), 'error'));
                 return true;
               },
@@ -323,13 +400,13 @@ export class SocialUi {
         setTimeout(
           () =>
             modals.show({
-              title: 'Code de transfert',
+              title: t('account.transferTitle'),
               body: [
-                h('p', { text: 'Sur votre nouvel appareil, choisissez « J’ai déjà une ville » et saisissez :' }),
+                h('p', { text: t('account.transferBody') }),
                 h('p', { class: 'transfer-code', text: code }),
-                h('p', { class: 'muted', text: 'Valable 24 heures, une seule fois. Ne le partagez avec personne.' }),
+                h('p', { class: 'muted', text: t('account.transferNote') }),
               ],
-              buttons: [{ label: 'Compris' }],
+              buttons: [{ label: t('common.gotIt') }],
             }),
           220,
         );
@@ -343,14 +420,12 @@ export class SocialUi {
     setTimeout(
       () =>
         modals.show({
-          title: 'Supprimer votre compte ?',
-          body: h('p', {
-            text: 'Votre pseudo, votre ville, vos voisins et toutes vos données seront définitivement effacés, sur cet appareil comme sur nos serveurs. Les achats ne sont pas remboursés.',
-          }),
+          title: t('account.deleteTitle'),
+          body: h('p', { text: t('account.deleteBody') }),
           buttons: [
-            { label: 'Annuler', kind: 'secondary' },
+            { label: t('common.cancel'), kind: 'secondary' },
             {
-              label: 'Tout supprimer',
+              label: t('account.deleteConfirm'),
               kind: 'danger',
               onClick: () => {
                 social.backend

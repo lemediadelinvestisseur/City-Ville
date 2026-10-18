@@ -3,8 +3,10 @@ import type { Game } from '@/core/game';
 import type { Entity } from '@/core/types';
 import { getBuildingDef } from '@/data/buildings';
 import { getCropDef, getTripDef } from '@/data/crops';
-import { clear, h, icon } from './dom';
-import { formatClock, formatNumber } from './format';
+import { t } from '@/i18n';
+import { buildingName, cropName, tripName } from '@/i18n/content';
+import { clear, h, icon, rich } from './dom';
+import { formatClock } from './format';
 import { Icons } from './icons';
 
 export interface BubbleCallbacks {
@@ -134,7 +136,7 @@ export class Bubble {
     if (this.refs.timer && timing.remaining !== null) this.refs.timer.textContent = formatClock(timing.remaining);
     if (this.refs.fill) this.refs.fill.style.width = `${Math.round(Math.max(0, Math.min(1, timing.progress)) * 100)}%`;
     if (this.refs.served && timing.served) {
-      this.refs.served.textContent = `Clients servis : ${timing.served.served}/${timing.served.total}`;
+      this.refs.served.textContent = t('bubble.served', timing.served);
     }
   }
 
@@ -153,20 +155,20 @@ export class Bubble {
     const sellable = def.sellable !== false;
     const refund = this.game.sellValue(entity);
     this.el.append(
-      h('div', { class: 'bubble__title', text: def.name }),
+      h('div', { class: 'bubble__title', text: buildingName(def) }),
       h(
         'div',
         { class: 'bubble__actions' },
         h('button', {
           class: 'btn btn--primary btn--small',
-          text: 'Déplacer',
+          text: t('bubble.move'),
           onClick: () => this.callbacks.move(entity.id),
         }),
         sellable
           ? h(
               'button',
               { class: 'btn btn--danger btn--small', onClick: () => this.callbacks.sell(entity.id) },
-              refund > 0 ? `Vendre (+${formatNumber(refund)})` : 'Retirer',
+              refund > 0 ? t('bubble.sell', { coins: refund }) : t('bubble.remove'),
             )
           : null,
       ),
@@ -179,16 +181,13 @@ export class Bubble {
     const action = game.primaryAction(entity);
     const timing = this.timing(entity);
     const lines: Array<HTMLElement | string> = [];
-    let title = def.name;
+    const name = buildingName(def);
+    let title = name;
 
     if (!entity.built) {
-      title = `Chantier : ${def.name}`;
-      lines.push(
-        action.type === 'finishBuild'
-          ? 'Les travaux sont finis : touchez le bâtiment pour l’inaugurer !'
-          : 'Les ouvriers sont à l’œuvre. Revenez l’inaugurer à la fin du chantier.',
-      );
-      lines.push(h('span', {}, 'Inauguration : ', icon(Icons.xp), ` ${def.xp} XP`));
+      title = t('bubble.site', { name });
+      lines.push(action.type === 'finishBuild' ? t('bubble.siteDone') : t('bubble.siteWorking'));
+      lines.push(rich('bubble.inauguration', { icon: icon(Icons.xp), xp: def.xp }));
     }
 
     if (entity.built)
@@ -196,52 +195,52 @@ export class Bubble {
         case 'port': {
           if (entity.port?.tripId) {
             const trip = getTripDef(entity.port.tripId);
-            title = `${def.name} — ${trip.name}`;
-            lines.push(h('span', {}, 'Pêche : ', icon(Icons.goods), ` ${trip.goods} marchandises`));
+            title = t('bubble.titleWith', { name, detail: tripName(trip) });
+            lines.push(rich('bubble.catch', { icon: icon(Icons.goods), n: trip.goods }));
           } else {
-            lines.push('Le bateau est à quai. Touchez le port pour l’envoyer en mer.');
+            lines.push(t('bubble.docked'));
           }
           break;
         }
         case 'house': {
           const rent = game.rentFor(entity);
-          lines.push(h('span', {}, 'Loyer : ', icon(Icons.coin), ` ${formatNumber(rent.coins)}`));
-          lines.push(`${def.population} habitants`);
+          lines.push(rich('bubble.rent', { icon: icon(Icons.coin), coins: rent.coins }));
+          lines.push(t('bubble.residents', { n: def.population }));
           break;
         }
         case 'business': {
           if (action.type === 'supply') {
-            lines.push(h('span', {}, 'Besoin de ', icon(Icons.goods), ` ${def.supplyGoods} marchandises`));
-            lines.push('Touchez le commerce pour l’approvisionner.');
+            lines.push(rich('bubble.needs', { icon: icon(Icons.goods), n: def.supplyGoods }));
+            lines.push(t('bubble.supplyHint'));
           } else if (timing.served) {
-            this.refs.served = h('span', { text: `Clients servis : ${timing.served.served}/${timing.served.total}` });
+            this.refs.served = h('span', { text: t('bubble.served', timing.served) });
             lines.push(this.refs.served);
-            lines.push(h('span', {}, 'Recette : ', icon(Icons.coin), ` ${formatNumber(game.payoutFor(entity).coins)}`));
+            lines.push(rich('bubble.revenue', { icon: icon(Icons.coin), coins: game.payoutFor(entity).coins }));
           }
           break;
         }
         case 'farm': {
           if (entity.farm?.cropId) {
             const crop = getCropDef(entity.farm.cropId);
-            title = `${def.name} — ${crop.name}`;
-            lines.push(h('span', {}, 'Récolte : ', icon(Icons.goods), ` ${crop.goods} marchandises`));
+            title = t('bubble.titleWith', { name, detail: cropName(crop) });
+            lines.push(rich('bubble.harvest', { icon: icon(Icons.goods), n: crop.goods }));
           }
           break;
         }
         case 'community':
-          lines.push(`+${def.popCap} habitants max`);
+          lines.push(t('bubble.popCap', { n: def.popCap }));
           break;
         case 'storage':
-          lines.push(`+${def.goodsCap} de stockage`);
+          lines.push(t('bubble.storage', { n: def.goodsCap }));
           break;
         case 'decoration':
-          lines.push(`+${def.bonus.percent} % de revenus aux bâtiments proches (rayon ${def.bonus.radius})`);
+          lines.push(t('bubble.decoration', { percent: def.bonus.percent, radius: def.bonus.radius }));
           break;
         default:
           break;
       }
     const bonus = game.decorationBonus(entity);
-    if (bonus > 0) lines.push(h('span', { class: 'bubble__bonus', text: `Bonus décorations : +${bonus} %` }));
+    if (bonus > 0) lines.push(h('span', { class: 'bubble__bonus', text: t('bubble.bonus', { percent: bonus }) }));
 
     this.el.append(h('div', { class: 'bubble__title', text: title }));
     for (const line of lines) this.el.append(h('div', { class: 'bubble__line' }, line));
@@ -268,9 +267,7 @@ export class Bubble {
           h(
             'button',
             { class: 'btn btn--gold btn--small', onClick: () => this.callbacks.speedUp(entity.id) },
-            'Terminer maintenant · ',
-            icon(Icons.cash),
-            ` ${cost}`,
+            rich('bubble.speedUp', { icon: icon(Icons.cash), cash: cost }),
           ),
         ),
       );

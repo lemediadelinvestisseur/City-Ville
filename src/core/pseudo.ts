@@ -57,16 +57,3 @@ export function validatePseudo(raw: string): PseudoError | null {
   }
   return null;
 }
-
-export function pseudoErrorMessage(error: PseudoError): string {
-  switch (error) {
-    case 'tooShort':
-      return `Au moins ${PSEUDO_MIN} caractères.`;
-    case 'tooLong':
-      return `${PSEUDO_MAX} caractères maximum.`;
-    case 'invalidChars':
-      return 'Lettres, chiffres, espace, tiret, point ou tiret bas uniquement.';
-    case 'forbidden':
-      return 'Ce pseudo n’est pas autorisé.';
-  }
-}

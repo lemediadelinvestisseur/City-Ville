@@ -150,6 +150,23 @@ export interface QuestProgress {
   startedAt: number;
 }
 
+/** Un défi du jour tiré au sort. */
+export interface DailyTask {
+  type: string;
+  target: number;
+  count: number;
+  reward: Reward;
+  claimed: boolean;
+}
+
+export interface DailyState {
+  /** Jour des défis (AAAA-MM-JJ, heure locale de l'appareil) ; vide tant qu'ils ne sont pas débloqués. */
+  day: string;
+  tasks: DailyTask[];
+  bonus: Reward;
+  bonusClaimed: boolean;
+}
+
 export interface GameState {
   version: number;
   createdAt: number;
@@ -175,6 +192,7 @@ export interface GameState {
   oneTimePurchases: string[];
   stats: Record<string, number>;
   tutorial: { introSeen: boolean };
+  daily: DailyState;
 }
 
 export type FailReason =

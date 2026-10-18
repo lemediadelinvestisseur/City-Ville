@@ -1,7 +1,11 @@
 import type { Game } from '@/core/game';
-import { PSEUDO_MAX, pseudoErrorMessage, validatePseudo, type PseudoError } from '@/core/pseudo';
-import { backendErrorMessage, type Backend } from '@/services/online/Backend';
-import { h } from './dom';
+import { PSEUDO_MAX, validatePseudo, type PseudoError } from '@/core/pseudo';
+import { LANGUAGES } from '@/data/languages';
+import { availableLanguages, language, t, type Language } from '@/i18n';
+import type { Backend } from '@/services/online/Backend';
+import { h, icon } from './dom';
+import { Icons } from './icons';
+import { backendErrorMessage, pseudoErrorMessage } from './messages';
 import type { Modals } from './Modals';
 
 /** Champ de saisie avec libellé et message d'aide. */
@@ -9,15 +13,60 @@ function field(label: string, input: HTMLInputElement, help: HTMLElement): HTMLE
   return h('label', { class: 'field' }, h('span', { class: 'field__label', text: label }), input, help);
 }
 
+export function languageName(code: string): string {
+  return LANGUAGES.find((l) => l.code === code)?.name ?? code;
+}
+
+/**
+ * Choix de la langue (première ouverture, puis depuis les réglages). Chaque
+ * langue est écrite dans sa propre langue ; la langue actuelle est mise en avant.
+ */
+export function showLanguagePicker(
+  modals: Modals,
+  options: { onPick: (code: Language) => void; dismissible: boolean; title?: string },
+): void {
+  const current = language();
+  const grid = h(
+    'div',
+    { class: 'languages', attrs: { role: 'listbox' } },
+    ...availableLanguages().map((code) =>
+      h('button', {
+        class: `language${code === current ? ' is-current' : ''}`,
+        text: languageName(code),
+        attrs: { lang: code, role: 'option', 'aria-selected': String(code === current) },
+        onClick: () => {
+          modals.close();
+          options.onPick(code);
+        },
+      }),
+    ),
+  );
+  modals.show({
+    title: options.title ?? t('lang.title'),
+    kicker: t('lang.kicker'),
+    dismissible: options.dismissible,
+    urgent: true,
+    className: 'modal--languages',
+    body: [h('div', { class: 'language-globe' }, icon(Icons.globe)), h('p', { text: t('lang.body') }), grid],
+    buttons: [],
+  });
+}
+
 /**
  * Inscription : choix du pseudo (unique, visible des autres joueurs) et du
- * nom de la ville. Propose aussi de récupérer une ville avec un code de transfert.
+ * nom de la ville. Propose aussi de changer de langue et de récupérer une ville
+ * avec un code de transfert.
  */
 export function showPseudoForm(
   modals: Modals,
   backend: Backend,
   game: Game,
-  options: { onDone: () => void; onTransfer: (code: string) => Promise<void>; onBack: () => void },
+  options: {
+    onDone: () => void;
+    onTransfer: (code: string) => Promise<void>;
+    onBack: () => void;
+    onChangeLanguage: () => void;
+  },
 ): void {
   const pseudo = h('input', {
     class: 'field__input',
@@ -28,16 +77,14 @@ export function showPseudoForm(
       spellcheck: 'false',
     },
   });
-  const city = h('input', {
-    class: 'field__input',
-    attrs: { maxlength: '30', autocapitalize: 'words', value: game.state.cityName },
-  });
+  const defaultCity = t('signup.cityPlaceholder');
+  const city = h('input', { class: 'field__input', attrs: { maxlength: '30', autocapitalize: 'words' } });
   city.value = game.state.cityName === 'Ma ville' ? '' : game.state.cityName;
-  city.placeholder = 'Ma ville';
-  pseudo.placeholder = 'Ex. : MaireDeLyon';
-  const pseudoHelp = h('span', { class: 'field__help', text: 'Visible par vos voisins et dans le classement.' });
+  city.placeholder = defaultCity;
+  pseudo.placeholder = t('signup.pseudoPlaceholder');
+  const pseudoHelp = h('span', { class: 'field__help', text: t('signup.pseudoHelp') });
   const error = h('p', { class: 'form-error' });
-  const submit = h('button', { class: 'btn btn--primary btn--wide', text: 'C’est parti !' });
+  const submit = h('button', { class: 'btn btn--primary btn--wide', text: t('signup.go') });
   submit.disabled = true;
 
   let checkTimer = 0;
@@ -46,9 +93,8 @@ export function showPseudoForm(
   const describe = (problem: PseudoError | 'taken' | null) => {
     pseudoHelp.classList.toggle('is-bad', problem !== null);
     pseudoHelp.classList.toggle('is-ok', problem === null && available);
-    if (problem === 'taken') pseudoHelp.textContent = 'Ce pseudo est déjà pris.';
-    else if (problem) pseudoHelp.textContent = pseudoErrorMessage(problem);
-    else pseudoHelp.textContent = available ? 'Pseudo disponible !' : 'Vérification…';
+    if (problem) pseudoHelp.textContent = pseudoErrorMessage(problem);
+    else pseudoHelp.textContent = available ? t('signup.available') : t('signup.checking');
   };
   pseudo.addEventListener('input', () => {
     available = false;
@@ -58,7 +104,7 @@ export function showPseudoForm(
     const local = validatePseudo(value);
     if (local) {
       describe(value.trim().length === 0 ? null : local);
-      if (value.trim().length === 0) pseudoHelp.textContent = 'Visible par vos voisins et dans le classement.';
+      if (value.trim().length === 0) pseudoHelp.textContent = t('signup.pseudoHelp');
       return;
     }
     describe(null);
@@ -76,7 +122,7 @@ export function showPseudoForm(
           // Hors-ligne : on laisse tenter l'inscription, l'erreur s'affichera.
           available = true;
           submit.disabled = false;
-          pseudoHelp.textContent = 'Impossible de vérifier pour le moment.';
+          pseudoHelp.textContent = t('signup.cantCheck');
         });
     }, 350);
   });
@@ -84,9 +130,9 @@ export function showPseudoForm(
   submit.addEventListener('click', () => {
     submit.disabled = true;
     error.textContent = '';
-    const cityName = city.value.trim() || 'Ma ville';
+    const cityName = city.value.trim() || defaultCity;
     backend
-      .register(pseudo.value, cityName)
+      .register(pseudo.value, cityName, language())
       .then(() => {
         game.setCityName(cityName);
         modals.close();
@@ -102,28 +148,41 @@ export function showPseudoForm(
     backend.kind === 'convex'
       ? h('button', {
           class: 'link-btn',
-          text: 'J’ai déjà une ville (code de transfert)',
+          text: t('signup.haveCity'),
           onClick: () => {
             modals.close();
             setTimeout(() => showTransferForm(modals, options), 220);
           },
         })
       : null;
+  const changeLanguage = h(
+    'button',
+    {
+      class: 'link-btn link-btn--language',
+      onClick: () => {
+        modals.close();
+        setTimeout(options.onChangeLanguage, 220);
+      },
+    },
+    icon(Icons.globe),
+    ` ${t('signup.language', { language: languageName(language()) })}`,
+  );
 
   modals.show({
-    title: 'Bienvenue, Maire !',
-    kicker: 'Votre compte',
+    title: t('signup.title'),
+    kicker: t('signup.kicker'),
     avatar: true,
     dismissible: false,
     urgent: true,
     className: 'modal--form',
     body: [
-      h('p', { text: 'Choisissez votre pseudo et donnez un nom à votre ville.' }),
-      field('Pseudo', pseudo, pseudoHelp),
-      field('Nom de la ville', city, h('span', { class: 'field__help', text: '30 caractères maximum.' })),
+      h('p', { text: t('signup.body') }),
+      field(t('signup.pseudo'), pseudo, pseudoHelp),
+      field(t('signup.city'), city, h('span', { class: 'field__help', text: t('signup.cityHelp') })),
       error,
       submit,
       transfer,
+      changeLanguage,
     ],
     buttons: [],
   });
@@ -140,7 +199,7 @@ function showTransferForm(
   });
   code.placeholder = 'ABCD-EFGH-JKLM';
   const error = h('p', { class: 'form-error' });
-  const submit = h('button', { class: 'btn btn--primary btn--wide', text: 'Récupérer ma ville' });
+  const submit = h('button', { class: 'btn btn--primary btn--wide', text: t('transfer.submit') });
   submit.addEventListener('click', () => {
     submit.disabled = true;
     error.textContent = '';
@@ -150,21 +209,19 @@ function showTransferForm(
     });
   });
   modals.show({
-    title: 'Récupérer ma ville',
-    kicker: 'Code de transfert',
+    title: t('transfer.title'),
+    kicker: t('transfer.kicker'),
     dismissible: false,
     urgent: true,
     className: 'modal--form',
     body: [
-      h('p', {
-        text: 'Sur votre ancien appareil : Réglages › Compte › « Code de transfert ». Le code est valable 24 heures.',
-      }),
-      field('Code', code, h('span', { class: 'field__help', text: '12 lettres et chiffres.' })),
+      h('p', { text: t('transfer.body') }),
+      field(t('transfer.code'), code, h('span', { class: 'field__help', text: t('transfer.help') })),
       error,
       submit,
       h('button', {
         class: 'link-btn',
-        text: '← Créer un nouveau compte',
+        text: t('transfer.back'),
         onClick: () => {
           modals.close();
           options.onBack();

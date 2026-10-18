@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { h, icon, type Child } from './dom';
 import { Icons, LEA_AVATAR } from './icons';
 
@@ -76,7 +77,7 @@ export class Modals {
             'button',
             {
               class: 'modal__close',
-              attrs: { 'aria-label': 'Fermer' },
+              attrs: { 'aria-label': t('common.close') },
               onClick: () => {
                 if (isCurrent()) this.close();
               },

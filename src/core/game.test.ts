@@ -568,7 +568,8 @@ describe('sauvegarde', () => {
     // Une route posée sur ce qui est désormais la mer disparaît.
     file.state.entities.push({ id: 9999, defId: 'road', x: 31, y: 20, built: true });
     const restored = deserialize(JSON.stringify(file))!;
-    expect(restored.version).toBe(4);
+    expect(restored.version).toBe(5);
+    expect(restored.daily).toEqual({ day: '', tasks: [], bonus: {}, bonusClaimed: false });
     const migrated = restored.entities.find((e) => e.id === placed.entity.id)!;
     expect(migrated).not.toHaveProperty('buildProgress');
     expect(migrated.construction?.endsAt).toBe(clock.now() + getBuildingDef('cottage').buildSec * 1000);

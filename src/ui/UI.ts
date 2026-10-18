@@ -1,36 +1,63 @@
 import type { AppContext, PlacementInfo } from '@/app/context';
+import type { InboxStore, InboxTarget } from '@/app/inbox';
+import type { ReminderScheduler } from '@/app/reminders';
 import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
 import { findQuestHint, type HintTarget } from '@/core/hints';
 import { DAY_NIGHT_MODES, dayNightAt, type DayNightMode } from '@/core/dayNight';
+import type { KeyValueStorage } from '@/core/save';
 import type { BuildingDef, CropDef, FailReason, Reward, TripDef } from '@/core/types';
 import { CHUNK_SIZE, ENERGY_REGEN_SEC, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
-import type { StoreProduct } from '@/data/products';
+import { findCashOffer, type StoreProduct } from '@/data/products';
 import { getQuestDef } from '@/data/quests';
 import { isEastChunk } from '@/data/terrain';
+import { t } from '@/i18n';
+import {
+  buildingName,
+  cropName,
+  productDescription,
+  productTitle,
+  questIntro,
+  questLabels,
+  questTitle,
+  tripName,
+} from '@/i18n/content';
 import { ArtKey } from '@/render/art/library';
+import type { DeviceNotifier } from '@/services/notifications';
 import { Bubble } from './Bubbles';
 import { BuildMenu } from './BuildMenu';
+import { ChatPanel } from './ChatPanel';
 import { CropPicker } from './CropPicker';
-import { h, icon, type Child } from './dom';
+import { DailyPanel, rewardChips } from './DailyPanel';
+import { h, icon } from './dom';
 import { FlyingRewards } from './FlyingRewards';
-import { formatClock, formatDuration, formatNumber } from './format';
+import { formatClock, formatDuration } from './format';
 import { Hud } from './Hud';
 import { Icons } from './icons';
+import { InboxPanel } from './InboxPanel';
 import { failMessage } from './messages';
 import { Modals } from './Modals';
+import { Notices } from './Notices';
+import { NotificationsUi } from './NotificationsUi';
 import { QuestTracker, questIcon } from './QuestTracker';
 import { Shop, type ShopTab } from './Shop';
+import { SideButtons, type SideButton } from './SideButtons';
 import { SocialUi, type SocialOptions } from './SocialUi';
 import { Toasts } from './Toasts';
 import { TripPicker } from './TripPicker';
 
 type Mode = 'play' | 'edit';
 
+const ANNOUNCEMENT_SEEN_KEY = 'city-ville:announcement-seen';
+
 export interface UiOptions {
   onReset: () => void;
   social: SocialOptions;
+  storage: KeyValueStorage;
+  inbox: InboxStore;
+  notifier: DeviceNotifier;
+  reminders: ReminderScheduler;
 }
 
 /** Interface HTML superposée au jeu : relie le moteur, le monde et les composants. */
@@ -47,7 +74,13 @@ export class UI {
   private shop: Shop;
   private flying: FlyingRewards;
   readonly social: SocialUi;
-  private dock = h('nav', { class: 'dock', attrs: { 'aria-label': 'Actions' } });
+  private side: SideButtons;
+  private chat: ChatPanel;
+  private inboxPanel: InboxPanel;
+  private daily: DailyPanel;
+  private notices: Notices;
+  private notifications: NotificationsUi;
+  private dock = h('nav', { class: 'dock', attrs: { 'aria-label': t('dock.aria') } });
   private placebar = h('div', { class: 'placebar' });
   private banner = h('div', { class: 'banner' });
   private buildButton!: HTMLButtonElement;
@@ -57,14 +90,18 @@ export class UI {
   private plantTarget: number | null = null;
   private placement: PlacementInfo | null = null;
   private hint: HintTarget | null = null;
+  private announcementSeen: number;
+  /** Joueur identifié : les raccourcis (chat, notifications, défis) apparaissent. */
+  private started = false;
 
   constructor(
     parent: HTMLElement,
     private readonly ctx: AppContext,
     private readonly options: UiOptions,
   ) {
-    const { game, art, payments } = ctx;
+    const { game, art, payments, prefs } = ctx;
     this.root = h('div', { class: 'ui' });
+    this.announcementSeen = Number(options.storage.getItem(ANNOUNCEMENT_SEEN_KEY) ?? '0') || 0;
     this.hud = new Hud(game, (target) => this.openShop(target === 'cash' ? 'cash' : 'coins'));
     this.quests = new QuestTracker(game, art, (id) => this.showQuest(id));
     this.modals = new Modals((open) => ctx.bus.emit('ui:modalOpen', open));
@@ -102,19 +139,52 @@ export class UI {
       () => undefined,
     );
     this.flying = new FlyingRewards(this.hud);
+    this.side = new SideButtons((which) => this.openSide(which));
     this.social = new SocialUi({
       ctx,
       modals: this.modals,
       toasts: this.toasts,
       social: options.social,
+      notices: () => this.notices,
       onLayoutChange: () => this.refreshDock(),
       closeTransient: () => this.closeTransient(),
     });
+    this.notices = new Notices({
+      game,
+      toasts: this.toasts,
+      inbox: options.inbox,
+      side: this.side,
+      storage: options.storage,
+      go: (target) => this.go(target),
+    });
+    this.chat = new ChatPanel(options.social.backend, this.modals, options.storage, {
+      toast: (text, kind) => this.toasts.show(text, kind),
+      visit: (playerId, pseudo) => this.social.visitPlayer(playerId, pseudo),
+      block: (playerId, pseudo) => this.social.confirmBlock(playerId, pseudo),
+      onToggle: () => this.refreshDock(),
+      onUnread: (unread) => this.side.setBadge('chat', unread),
+      onAnnouncement: (at) => this.onAnnouncement(at),
+    });
+    this.inboxPanel = new InboxPanel(options.inbox, {
+      go: (target) => this.go(target),
+      onToggle: () => this.refreshDock(),
+    });
+    this.daily = new DailyPanel(game, this.modals);
+    this.notifications = new NotificationsUi({
+      game,
+      notifier: options.notifier,
+      prefs,
+      scheduler: options.reminders,
+      modals: this.modals,
+      toast: (text, kind) => this.toasts.show(text, kind),
+    });
+    options.inbox.events.on('change', () => this.refreshSide());
 
     this.buildDock();
     this.root.append(
       this.hud.el,
       this.quests.el,
+      this.side.el,
       this.toasts.el,
       this.banner,
       this.bubble.el,
@@ -124,6 +194,8 @@ export class UI {
       this.cropPicker.el,
       this.tripPicker.el,
       this.social.panel.el,
+      this.chat.el,
+      this.inboxPanel.el,
       this.social.edgePill,
       this.social.visitBar.el,
       this.flying.el,
@@ -134,13 +206,19 @@ export class UI {
     this.subscribe();
     window.setInterval(() => this.tick(), 500);
     this.refreshDock();
+    this.refreshSide();
   }
 
   /** À appeler une fois le monde prêt. */
   start(): void {
-    // Inscription (pseudo) d'abord, puis l'introduction du tutoriel.
+    // Inscription (langue, pseudo) d'abord, puis l'introduction du tutoriel.
     this.social.start(() => {
+      this.started = true;
+      this.refreshDock();
       if (!this.ctx.game.state.tutorial.introSeen) this.showIntro();
+      else this.notices.welcomeBack();
+      this.chat.watch();
+      this.options.reminders.start();
     });
   }
 
@@ -154,22 +232,28 @@ export class UI {
       this.buildMenu.refresh();
       this.shop.refresh();
       this.checkPlantMode();
+      this.refreshSide();
     });
     game.events.on('levelUp', ({ level, reward, unlocked }) => this.showLevelUp(level, reward, unlocked));
     game.events.on('questCompleted', ({ questId, reward }) => this.showQuestCompleted(questId, reward));
     game.events.on('questStarted', ({ questId }) => {
       if (!game.state.tutorial.introSeen) return;
       this.quests.markNew(questId);
-      const quest = getQuestDef(questId);
-      this.toasts.show(`Nouvel objectif : ${quest.title}`, 'info', {
-        label: 'Voir',
-        onClick: () => this.showQuest(questId),
-      });
+      this.toasts.show(
+        t('toast.newQuest', { title: questTitle(questId) }),
+        'info',
+        { label: t('common.see'), onClick: () => this.showQuest(questId) },
+        { icon: Icons.trophy },
+      );
     });
     game.events.on('constructionComplete', (entity) => {
-      this.toasts.show(`Construction terminée : ${getBuildingDef(entity.defId).name} !`, 'success');
+      this.toasts.show(t('toast.built', { name: buildingName(entity.defId) }), 'success', undefined, {
+        icon: Icons.build,
+      });
     });
-    game.events.on('expanded', () => this.toasts.show('Nouvelle zone débloquée !', 'success'));
+    game.events.on('expanded', () =>
+      this.toasts.show(t('toast.expanded'), 'success', undefined, { icon: Icons.expand }),
+    );
 
     bus.on('world:entityInfo', ({ entityId, screen, action }) => {
       this.closeTransient();
@@ -217,6 +301,8 @@ export class UI {
     this.cropPicker.close();
     this.tripPicker.close();
     this.social.panel.close();
+    this.chat.close();
+    this.inboxPanel.close();
   }
 
   // ———————————————————————————— Barre d'actions ————————————————————————————
@@ -229,16 +315,16 @@ export class UI {
         h('span', { class: 'dock__icon', html: svg }),
         h('span', { class: 'dock__label', text: label }),
       );
-    this.buildButton = button('Construire', Icons.build, 'dock__btn--build', () => this.toggleBuildMenu());
-    this.editButton = button('Déplacer', Icons.move, 'dock__btn--edit', () =>
+    this.buildButton = button(t('dock.build'), Icons.build, 'dock__btn--build', () => this.toggleBuildMenu());
+    this.editButton = button(t('dock.move'), Icons.move, 'dock__btn--edit', () =>
       this.setMode(this.mode === 'edit' ? 'play' : 'edit'),
     );
     this.dock.append(
       this.buildButton,
       this.editButton,
-      button('Voisins', Icons.population, 'dock__btn--social', () => this.social.openNeighbors()),
-      button('Boutique', Icons.shop, 'dock__btn--shop', () => this.openShop('cash')),
-      button('Réglages', Icons.settings, 'dock__btn--settings', () => this.showSettings()),
+      button(t('dock.neighbors'), Icons.population, 'dock__btn--social', () => this.social.openNeighbors()),
+      button(t('dock.shop'), Icons.shop, 'dock__btn--shop', () => this.openShop('cash')),
+      button(t('dock.settings'), Icons.settings, 'dock__btn--settings', () => this.showSettings()),
     );
   }
 
@@ -249,6 +335,8 @@ export class UI {
     }
     this.bubble.close();
     this.cropPicker.close();
+    this.chat.close();
+    this.inboxPanel.close();
     this.exitPlantMode();
     if (this.mode === 'edit') this.setMode('play');
     const focus = this.hint?.kind === 'shop' ? { defId: this.hint.defId, category: this.hint.category } : undefined;
@@ -266,14 +354,17 @@ export class UI {
 
   private refreshDock(): void {
     const placing = this.placement !== null;
-    this.dock.classList.toggle(
+    const panelOpen =
+      this.buildMenu.isOpen ||
+      this.cropPicker.isOpen ||
+      this.tripPicker.isOpen ||
+      this.social.panel.isOpen ||
+      this.chat.isOpen ||
+      this.inboxPanel.isOpen;
+    this.dock.classList.toggle('is-hidden', placing || panelOpen || this.social.isVisiting);
+    this.side.el.classList.toggle(
       'is-hidden',
-      placing ||
-        this.buildMenu.isOpen ||
-        this.cropPicker.isOpen ||
-        this.tripPicker.isOpen ||
-        this.social.panel.isOpen ||
-        this.social.isVisiting,
+      !this.started || placing || this.social.isVisiting || this.mode === 'edit',
     );
     this.placebar.classList.toggle('is-open', placing);
     this.editButton.classList.toggle('is-active', this.mode === 'edit');
@@ -282,45 +373,77 @@ export class UI {
     this.renderBanner();
   }
 
+  /** Boutons latéraux : défis du jour (s'ils sont débloqués) et pastilles. */
+  private refreshSide(): void {
+    const daily = this.ctx.game.dailyInfo();
+    this.side.setVisible('daily', daily.available);
+    this.side.setBadge('daily', daily.claimable);
+    this.side.setBadge('inbox', this.options.inbox.unread());
+  }
+
+  private openSide(which: SideButton): void {
+    const wasOpen = which === 'chat' ? this.chat.isOpen : which === 'inbox' ? this.inboxPanel.isOpen : false;
+    this.closeTransient();
+    if (this.mode === 'edit') this.setMode('play');
+    if (wasOpen) return;
+    if (which === 'daily') this.daily.open();
+    else if (which === 'inbox') this.inboxPanel.open();
+    else this.chat.open();
+  }
+
+  /** Mène là où un message renvoie (construction, défis, chat, voisins). */
+  private go(target: InboxTarget): void {
+    if (this.social.isVisiting) this.social.leaveVisit();
+    this.closeTransient();
+    if (target.kind === 'entity') {
+      if (this.ctx.game.getEntity(target.entityId)) this.ctx.bus.emit('ui:focusEntity', { entityId: target.entityId });
+    } else if (target.kind === 'daily') this.daily.open();
+    else if (target.kind === 'chat') this.chat.open();
+    else this.social.openNeighbors();
+  }
+
   private renderPlacebar(): void {
     const info = this.placement;
     this.placebar.replaceChildren();
     if (!info) return;
     const def = getBuildingDef(info.defId);
     const cost = info.moving
-      ? h('span', { class: 'placebar__cost', text: 'Déplacement gratuit' })
+      ? h('span', { class: 'placebar__cost', text: t('place.freeMove') })
       : def.cost.cash
-        ? h('span', { class: 'placebar__cost' }, icon(Icons.cash), ` ${formatNumber(def.cost.cash)}`)
-        : h('span', { class: 'placebar__cost' }, icon(Icons.coin), ` ${formatNumber(def.cost.coins ?? 0)}`);
+        ? h('span', { class: 'placebar__cost' }, icon(Icons.cash), ` ${def.cost.cash}`)
+        : h('span', { class: 'placebar__cost' }, icon(Icons.coin), ` ${def.cost.coins ?? 0}`);
     const status = info.valid
       ? h('span', {
           class: 'placebar__status is-ok',
-          text:
-            def.id === 'road'
-              ? 'Touchez la route pour la poser, glissez pour en tracer'
-              : 'Touchez la carte pour choisir l’emplacement',
+          text: def.id === 'road' ? t('place.roadHint') : t('place.tapHint'),
         })
       : h('span', {
           class: 'placebar__status is-bad',
-          text: info.reason ? failMessage(info.reason) : 'Emplacement invalide',
+          text: info.reason ? failMessage(info.reason) : t('place.invalid'),
         });
     this.placebar.append(
       h(
         'button',
         {
           class: 'round-btn round-btn--cancel',
-          attrs: { 'aria-label': 'Annuler' },
+          attrs: { 'aria-label': t('common.cancel') },
           onClick: () => this.ctx.bus.emit('ui:cancelPlacement', undefined),
         },
         icon(Icons.close),
       ),
-      h('div', { class: 'placebar__info' }, h('span', { class: 'placebar__name', text: def.name }), cost, status),
+      h(
+        'div',
+        { class: 'placebar__info' },
+        h('span', { class: 'placebar__name', text: buildingName(def) }),
+        cost,
+        status,
+      ),
       (() => {
         const ok = h(
           'button',
           {
             class: 'round-btn round-btn--ok',
-            attrs: { 'aria-label': 'Placer ici' },
+            attrs: { 'aria-label': t('place.confirm') },
             onClick: () => this.ctx.bus.emit('ui:confirmPlacement', undefined),
           },
           icon(Icons.check),
@@ -339,17 +462,19 @@ export class UI {
       text = '';
     } else if (this.plantCropId) {
       const crop = CROPS.find((c) => c.id === this.plantCropId);
-      text = `Plantation : ${crop?.name ?? ''} · touchez les champs vides`;
+      text = t('banner.planting', { crop: crop ? cropName(crop) : '' });
       onDone = () => this.exitPlantMode();
     } else if (this.mode === 'edit') {
-      text = 'Touchez une construction à déplacer ou à vendre';
+      text = t('banner.edit');
       onDone = () => this.setMode('play');
     }
     this.banner.classList.toggle('is-open', text !== '');
     if (!text) return;
     this.banner.append(h('span', { text }));
     if (onDone)
-      this.banner.append(h('button', { class: 'btn btn--small btn--primary', text: 'Terminer', onClick: onDone }));
+      this.banner.append(
+        h('button', { class: 'btn btn--small btn--primary', text: t('common.finish'), onClick: onDone }),
+      );
   }
 
   // ———————————————————————————— Actions ————————————————————————————
@@ -360,10 +485,12 @@ export class UI {
   }
 
   private onBuildBlocked(reason: FailReason, missing: number | undefined, def: BuildingDef): void {
-    if (reason === 'levelLocked') this.toasts.show(`${def.name} : niveau ${def.requires?.level} requis.`, 'error');
-    else if (reason === 'populationLocked')
-      this.toasts.show(`${def.name} : il faut ${def.requires?.population} habitants.`, 'error');
-    else this.onFail(reason, missing);
+    const name = buildingName(def);
+    if (reason === 'levelLocked') {
+      this.toasts.show(t('toast.levelRequired', { name, level: def.requires?.level ?? 1 }), 'error');
+    } else if (reason === 'populationLocked') {
+      this.toasts.show(t('toast.populationRequired', { name, population: def.requires?.population ?? 0 }), 'error');
+    } else this.onFail(reason, missing);
   }
 
   private onFail(reason: FailReason, missing?: number): void {
@@ -373,13 +500,13 @@ export class UI {
         return;
       case 'notEnoughCoins':
         this.toasts.show(failMessage(reason, missing), 'error', {
-          label: 'Boutique',
+          label: t('dock.shop'),
           onClick: () => this.openShop('coins'),
         });
         return;
       case 'notEnoughCash':
         this.toasts.show(failMessage(reason, missing), 'error', {
-          label: 'Obtenir',
+          label: t('toast.getCash'),
           onClick: () => this.openShop('cash'),
         });
         return;
@@ -393,9 +520,9 @@ export class UI {
     if (target === null) return;
     const result = this.ctx.game.plant(target, crop.id);
     if (!result.ok) {
-      if (result.reason === 'levelLocked')
-        this.toasts.show(`${crop.name} : niveau ${crop.requires?.level} requis.`, 'error');
-      else this.onFail(result.reason, result.missing);
+      if (result.reason === 'levelLocked') {
+        this.toasts.show(t('toast.levelRequired', { name: cropName(crop), level: crop.requires?.level ?? 1 }), 'error');
+      } else this.onFail(result.reason, result.missing);
       return;
     }
     this.cropPicker.close();
@@ -409,13 +536,15 @@ export class UI {
   private sendBoat(entityId: number, trip: TripDef): void {
     const result = this.ctx.game.sendBoat(entityId, trip.id);
     if (!result.ok) {
-      if (result.reason === 'levelLocked')
-        this.toasts.show(`${trip.name} : niveau ${trip.requires?.level} requis.`, 'error');
-      else this.onFail(result.reason, result.missing);
+      if (result.reason === 'levelLocked') {
+        this.toasts.show(t('toast.levelRequired', { name: tripName(trip), level: trip.requires?.level ?? 1 }), 'error');
+      } else this.onFail(result.reason, result.missing);
       return;
     }
     this.tripPicker.close();
-    this.toasts.show(`Le bateau part en mer : retour dans ${formatDuration(trip.durationSec)}.`, 'info');
+    this.toasts.show(t('toast.boatSent', { duration: formatDuration(trip.durationSec) }), 'info', undefined, {
+      icon: Icons.boat,
+    });
   }
 
   private checkPlantMode(): void {
@@ -441,21 +570,16 @@ export class UI {
     const { game } = this.ctx;
     const entity = game.getEntity(entityId);
     if (!entity) return;
-    const def = getBuildingDef(entity.defId);
+    const name = buildingName(entity.defId);
     const refund = game.sellValue(entity);
     this.bubble.close();
     this.modals.show({
-      title: refund > 0 ? `Vendre : ${def.name} ?` : `Retirer : ${def.name} ?`,
-      body: h('p', {
-        text:
-          refund > 0
-            ? `Vous récupérerez ${formatNumber(refund)} pièces.`
-            : 'Cette construction sera retirée de la carte.',
-      }),
+      title: refund > 0 ? t('sell.title', { name }) : t('sell.removeTitle', { name }),
+      body: h('p', { text: refund > 0 ? t('sell.refund', { coins: refund }) : t('sell.removeBody') }),
       buttons: [
-        { label: 'Annuler', kind: 'secondary' },
+        { label: t('common.cancel'), kind: 'secondary' },
         {
-          label: refund > 0 ? 'Vendre' : 'Retirer',
+          label: refund > 0 ? t('sell.sell') : t('sell.remove'),
           kind: 'danger',
           onClick: () => {
             const result = game.sell(entityId);
@@ -473,17 +597,6 @@ export class UI {
 
   // ———————————————————————————— Fenêtres ————————————————————————————
 
-  private rewardChips(reward: Reward): HTMLElement {
-    const chips: Child[] = [];
-    const chip = (svg: string, text: string) => h('span', { class: 'chip' }, icon(svg), text);
-    if (reward.coins) chips.push(chip(Icons.coin, `+${formatNumber(reward.coins)}`));
-    if (reward.cash) chips.push(chip(Icons.cash, `+${formatNumber(reward.cash)}`));
-    if (reward.xp) chips.push(chip(Icons.xp, `+${formatNumber(reward.xp)} XP`));
-    if (reward.goods) chips.push(chip(Icons.goods, `+${formatNumber(reward.goods)}`));
-    if (reward.energy) chips.push(chip(Icons.energy, `+${formatNumber(reward.energy)}`));
-    return h('div', { class: 'chips' }, ...chips);
-  }
-
   private taskList(questId: string): HTMLElement {
     const { game } = this.ctx;
     const progress = game.state.quests.active.find((q) => q.id === questId);
@@ -494,16 +607,14 @@ export class UI {
     return h(
       'ul',
       { class: 'tasks' },
-      ...def.labels.map((label, i) => {
+      ...questLabels(def).map((label, i) => {
         const s = status[i];
         return h(
           'li',
           { class: `task${s?.done ? ' is-done' : ''}` },
           h('span', { class: 'task__check', html: s?.done ? Icons.check : '' }),
           h('span', { class: 'task__label', text: label }),
-          s && s.target > 1
-            ? h('span', { class: 'task__count', text: `${formatNumber(s.value)}/${formatNumber(s.target)}` })
-            : null,
+          s && s.target > 1 ? h('span', { class: 'task__count', text: `${s.value}/${s.target}` }) : null,
         );
       }),
     );
@@ -513,33 +624,23 @@ export class UI {
     const { game } = this.ctx;
     const quest = getQuestDef('welcome');
     this.modals.show({
-      title: `Bienvenue à ${GAME_TITLE} !`,
-      kicker: 'Léa, votre adjointe',
+      title: t('intro.title', { game: GAME_TITLE }),
+      kicker: t('intro.kicker'),
       avatar: true,
       dismissible: false,
       body: [
-        h('p', { text: quest.intro }),
+        h('p', { text: questIntro(quest) }),
         h(
           'ul',
           { class: 'tips' },
-          h('li', {}, icon(Icons.energy), 'Encaisser et récolter coûtent 1 énergie, qui se recharge avec le temps.'),
-          h(
-            'li',
-            {},
-            icon(Icons.clock),
-            'Les chantiers avancent tout seuls : revenez inaugurer vos bâtiments une fois terminés.',
-          ),
-          h(
-            'li',
-            {},
-            icon(Icons.goods),
-            'Récoltez vos champs pour obtenir des marchandises et approvisionner vos commerces.',
-          ),
-          h('li', {}, icon(Icons.population), 'Glissez pour vous déplacer, pincez (ou molette) pour zoomer.'),
+          h('li', {}, icon(Icons.energy), t('intro.tipEnergy')),
+          h('li', {}, icon(Icons.clock), t('intro.tipBuild')),
+          h('li', {}, icon(Icons.goods), t('intro.tipGoods')),
+          h('li', {}, icon(Icons.population), t('intro.tipCamera')),
         ),
         this.taskList('welcome'),
       ],
-      buttons: [{ label: 'C’est parti !', onClick: () => game.markIntroSeen() }],
+      buttons: [{ label: t('intro.start'), onClick: () => game.markIntroSeen() }],
     });
   }
 
@@ -551,21 +652,21 @@ export class UI {
     const buttons: Array<{ label: string; kind?: 'primary' | 'secondary'; onClick?: () => void }> = [];
     if (hint) {
       buttons.push({
-        label: 'Montre-moi',
+        label: t('quest.showMe'),
         kind: 'secondary',
         onClick: () => this.showHint(hint),
       });
     }
-    buttons.push({ label: 'OK' });
+    buttons.push({ label: t('common.ok') });
     this.modals.show({
-      title: def.title,
-      kicker: 'Objectif',
+      title: questTitle(def),
+      kicker: t('quest.kicker'),
       avatar: true,
       body: [
-        h('p', { text: def.intro }),
+        h('p', { text: questIntro(def) }),
         this.taskList(questId),
-        h('div', { class: 'modal__section-title', text: 'Récompense' }),
-        this.rewardChips(def.reward),
+        h('div', { class: 'modal__section-title', text: t('quest.reward') }),
+        rewardChips(def.reward),
       ],
       buttons,
     });
@@ -578,7 +679,7 @@ export class UI {
       this.buildMenu.open({ defId: hint.defId, category: hint.category });
     } else {
       this.ctx.bus.emit('ui:focusTile', { x: (hint.cx + 0.5) * CHUNK_SIZE, y: (hint.cy + 0.5) * CHUNK_SIZE });
-      this.toasts.show('Touchez le panneau « À vendre » pour agrandir la ville.', 'info');
+      this.toasts.show(t('hint.expand'), 'info');
     }
     this.refreshDock();
   }
@@ -586,11 +687,11 @@ export class UI {
   private showQuestCompleted(questId: string, reward: Reward): void {
     const def = getQuestDef(questId);
     this.modals.show({
-      title: def.title,
-      kicker: 'Objectif accompli !',
+      title: questTitle(def),
+      kicker: t('quest.completedKicker'),
       className: 'modal--celebrate',
-      body: [h('div', { class: 'celebrate-icon' }, questIcon(this.ctx.art, def.icon)), this.rewardChips(reward)],
-      buttons: [{ label: 'Super !' }],
+      body: [h('div', { class: 'celebrate-icon' }, questIcon(this.ctx.art, def.icon)), rewardChips(reward)],
+      buttons: [{ label: t('quest.great') }],
     });
   }
 
@@ -605,21 +706,21 @@ export class UI {
         'div',
         { class: 'unlock' },
         h('img', { attrs: { src, alt: '' } }),
-        h('span', { text: building?.name ?? crop?.name ?? id }),
+        h('span', { text: building ? buildingName(building) : crop ? cropName(crop) : tripName(id) }),
       );
     });
     this.modals.show({
-      title: `Niveau ${level} !`,
-      kicker: 'Niveau supérieur',
+      title: t('level.title', { level }),
+      kicker: t('level.kicker'),
       className: 'modal--celebrate modal--level',
       body: [
         h('div', { class: 'level-badge', html: Icons.xp }, h('span', { text: String(level) })),
-        this.rewardChips(reward),
-        h('p', { class: 'muted', text: 'Énergie rechargée !' }),
-        items.length ? h('div', { class: 'modal__section-title', text: 'Nouveautés débloquées' }) : null,
+        rewardChips(reward),
+        h('p', { class: 'muted', text: t('level.energy') }),
+        items.length ? h('div', { class: 'modal__section-title', text: t('level.unlocked') }) : null,
         items.length ? h('div', { class: 'unlocks' }, ...items) : null,
       ],
-      buttons: [{ label: 'Génial !' }],
+      buttons: [{ label: t('level.great') }],
     });
   }
 
@@ -628,7 +729,7 @@ export class UI {
     this.closeTransient();
     const info = game.expansionInfo(cx, cy);
     if (info.status === 'unavailable') {
-      this.toasts.show('Achetez d’abord une zone voisine de la ville.', 'info');
+      this.toasts.show(t('expand.unavailable'), 'info');
       return;
     }
     if (info.status !== 'purchasable') return;
@@ -636,26 +737,23 @@ export class UI {
     const needsBridge = info.reason === 'needsBridge';
     const east = isEastChunk(cx);
     this.modals.show({
-      title: east ? 'La rive est' : 'Agrandir la ville',
-      kicker: 'Nouvelle zone',
+      title: east ? t('expand.eastTitle') : t('expand.title'),
+      kicker: t('expand.kicker'),
       body: [
-        h('p', {
-          text: east
-            ? 'De l’autre côté du bras de mer, une nouvelle rive attend vos habitants. Un pont permet de la rejoindre.'
-            : 'Débloquez une nouvelle zone de 8 × 8 cases pour construire encore plus !',
-        }),
-        h('div', { class: 'chips' }, h('span', { class: 'chip' }, icon(Icons.coin), formatNumber(info.coins))),
+        h('p', { text: east ? t('expand.eastBody') : t('expand.body') }),
+        rewardChips({ coins: info.coins }),
         levelOk
           ? null
-          : h('p', { class: 'warn', text: `Niveau ${info.level} requis (vous êtes niveau ${game.state.level}).` }),
-        levelOk && needsBridge
-          ? h('p', { class: 'warn', text: 'Construisez d’abord un pont (menu Construire › Routes).' })
-          : null,
+          : h('p', {
+              class: 'warn',
+              text: t('expand.levelRequired', { level: info.level, current: game.state.level }),
+            }),
+        levelOk && needsBridge ? h('p', { class: 'warn', text: t('expand.needsBridge') }) : null,
       ],
       buttons: [
-        { label: 'Plus tard', kind: 'secondary' },
+        { label: t('common.later'), kind: 'secondary' },
         {
-          label: 'Acheter',
+          label: t('expand.buy'),
           disabled: !levelOk || needsBridge,
           onClick: () => {
             const result = game.buyExpansion(cx, cy);
@@ -672,103 +770,129 @@ export class UI {
     const wait = next !== null ? formatClock((next - game.now()) / 1000) : '';
     const buy = (offerId: string) => () => {
       const result = game.buyCashOffer(offerId);
-      if (result.ok) this.toasts.show('Énergie rechargée !', 'success');
+      if (result.ok) this.toasts.show(t('energy.refilled'), 'success');
       else this.onFail(result.reason, result.missing);
     };
+    const duration = formatDuration(ENERGY_REGEN_SEC);
     this.modals.show({
-      title: 'Plus d’énergie !',
-      kicker: 'Énergie',
+      title: t('energy.title'),
+      kicker: t('energy.kicker'),
       body: [
-        h(
-          'p',
-          {},
-          `Chaque action coûte 1 énergie. Vous en regagnez 1 toutes les ${formatDuration(ENERGY_REGEN_SEC)}`,
-          wait ? ` (prochaine dans ${wait}).` : '.',
-        ),
-        h('p', { class: 'muted', text: 'Astuce : chaque passage de niveau recharge entièrement l’énergie.' }),
+        h('p', { text: wait ? t('energy.bodyNext', { duration, wait }) : t('energy.body', { duration }) }),
+        h('p', { class: 'muted', text: t('energy.tip') }),
       ],
       buttons: [
-        { label: 'Attendre', kind: 'secondary' },
-        { label: '+5 · 4 cash', kind: 'gold', onClick: buy('energy_5') },
-        { label: 'Max · 10 cash', kind: 'gold', onClick: buy('energy_full') },
+        { label: t('energy.wait'), kind: 'secondary' },
+        {
+          label: t('energy.buy5', { cash: findCashOffer('energy_5')?.cash ?? 0 }),
+          kind: 'gold',
+          onClick: buy('energy_5'),
+        },
+        {
+          label: t('energy.buyMax', { cash: findCashOffer('energy_full')?.cash ?? 0 }),
+          kind: 'gold',
+          onClick: buy('energy_full'),
+        },
       ],
     });
+  }
+
+  /** Annonce de l'équipe : affichée une fois en fenêtre, puis gardée dans le centre de notifications. */
+  private onAnnouncement(at: number): void {
+    if (at <= this.announcementSeen) return;
+    const since = this.announcementSeen;
+    this.announcementSeen = at;
+    try {
+      this.options.storage.setItem(ANNOUNCEMENT_SEEN_KEY, String(at));
+    } catch {
+      // Sans gravité : l'annonce pourrait réapparaître.
+    }
+    this.options.social.backend
+      .announcements(this.chat.watchedChannels)
+      .then((list) => {
+        const fresh = list.filter((a) => a.createdAt > since);
+        for (const announcement of [...fresh].reverse()) {
+          this.options.inbox.add({
+            kind: 'announcement',
+            text: t('inbox.announcement', { text: announcement.text }),
+            at: announcement.createdAt,
+            target: { kind: 'chat' },
+          });
+        }
+        // Seule la plus récente s'affiche en grand ; les autres restent dans les notifications.
+        const latest = fresh[0];
+        if (!latest) return;
+        this.modals.show({
+          title: t('announce.title'),
+          kicker: t('announce.kicker'),
+          className: 'modal--announcement',
+          body: [h('div', { class: 'announce-icon', html: Icons.megaphone }), h('p', { text: latest.text })],
+          buttons: [{ label: t('common.thanks') }],
+        });
+      })
+      .catch(() => {
+        this.announcementSeen = since;
+      });
   }
 
   private showSettings(): void {
     const { game } = this.ctx;
     this.closeTransient();
+    const devButton = (text: string, onClick: () => void) =>
+      h('button', { class: 'btn btn--small btn--secondary', text, onClick });
     const devButtons = DEV_TOOLS
       ? [
-          h('div', { class: 'modal__section-title', text: 'Outils de test (prototype)' }),
+          h('div', { class: 'modal__section-title', text: t('settings.dev') }),
           h(
             'div',
             { class: 'dev-tools' },
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: '+1 000 pièces',
-              onClick: () => game.devGrant({ coins: 1000 }),
+            devButton(t('dev.coins', { n: 1000 }), () => game.devGrant({ coins: 1000 })),
+            devButton(t('dev.cash', { n: 20 }), () => game.devGrant({ cash: 20 })),
+            devButton(t('dev.energy'), () =>
+              game.devGrant({ energy: Math.max(0, game.derived().energyMax - game.state.energy) }),
+            ),
+            devButton(t('dev.goods', { n: 50 }), () => game.devGrant({ goods: 50 })),
+            devButton(t('dev.level'), () =>
+              game.devGrant({ xp: Math.max(0, xpForLevel(game.state.level + 1) - game.state.xp) }),
+            ),
+            devButton(t('dev.skip', { n: 10 }), () => {
+              game.devSkipTime(10 * 60 * 1000);
+              this.toasts.show(t('dev.skipped', { n: 10 }), 'info');
             }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: '+20 cash',
-              onClick: () => game.devGrant({ cash: 20 }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: 'Énergie au max',
-              onClick: () => game.devGrant({ energy: Math.max(0, game.derived().energyMax - game.state.energy) }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: '+50 marchandises',
-              onClick: () => game.devGrant({ goods: 50 }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: 'Niveau suivant',
-              onClick: () => game.devGrant({ xp: Math.max(0, xpForLevel(game.state.level + 1) - game.state.xp) }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: 'Avancer de 10 min',
-              onClick: () => {
-                game.devSkipTime(10 * 60 * 1000);
-                this.toasts.show('10 minutes ont passé…', 'info');
-              },
-            }),
+            devButton(t('dev.notify'), () => void this.options.reminders.test(t('notif.test'))),
           ),
         ]
       : [];
     this.modals.show({
-      title: 'Réglages',
+      title: t('settings.title'),
       body: [
         h(
           'div',
           { class: 'settings' },
           this.soundToggle(),
           this.dayNightToggle(),
+          this.notifications.settingsSection(),
           this.social.accountSection(),
           h('button', {
             class: 'btn btn--secondary',
-            text: 'Revoir l’introduction',
+            text: t('settings.replayIntro'),
             onClick: () => this.replayIntro(),
           }),
-          h('button', { class: 'btn btn--danger', text: 'Recommencer la partie', onClick: () => this.confirmReset() }),
+          h('button', { class: 'btn btn--danger', text: t('settings.reset'), onClick: () => this.confirmReset() }),
         ),
         ...devButtons,
         h('p', {
           class: 'muted small',
-          text: `${GAME_TITLE} · version ${GAME_VERSION} · prototype (graphismes provisoires)`,
+          text: t('settings.version', { game: GAME_TITLE, version: GAME_VERSION }),
         }),
       ],
-      buttons: [{ label: 'Fermer' }],
+      buttons: [{ label: t('common.close') }],
     });
   }
 
   private soundToggle(): HTMLButtonElement {
     const { sound } = this.ctx;
-    const label = () => (sound.muted ? 'Son : désactivé' : 'Son : activé');
+    const label = () => (sound.muted ? t('settings.soundOff') : t('settings.soundOn'));
     const toggle = h('button', {
       class: 'btn btn--secondary',
       text: label(),
@@ -783,9 +907,9 @@ export class UI {
   private dayNightToggle(): HTMLElement {
     const { prefs, bus } = this.ctx;
     const names: Record<DayNightMode, string> = {
-      cycle: 'Jour / nuit : cycle de 30 min',
-      real: 'Jour / nuit : heure réelle',
-      off: 'Jour / nuit : toujours le jour',
+      cycle: t('daynight.cycle'),
+      real: t('daynight.real'),
+      off: t('daynight.off'),
     };
     const status = h('span', { class: 'muted settings__hint' });
     const describe = () => {
@@ -796,12 +920,12 @@ export class UI {
         const wait = formatDuration((state.nextChangeAt - Date.now()) / 1000);
         status.textContent =
           state.phase === 'day'
-            ? `Il fait jour — la nuit tombe dans ${wait}.`
+            ? t('daynight.day', { wait })
             : state.phase === 'night'
-              ? `Il fait nuit — le jour se lève dans ${wait}.`
+              ? t('daynight.night', { wait })
               : state.phase === 'dusk'
-                ? 'Le soleil se couche…'
-                : 'Le soleil se lève…';
+                ? t('daynight.dusk')
+                : t('daynight.dawn');
       }
     };
     const toggle = h('button', {
@@ -829,11 +953,11 @@ export class UI {
     setTimeout(
       () =>
         this.modals.show({
-          title: 'Recommencer ?',
-          body: h('p', { text: 'Toute votre progression sera effacée. Cette action est définitive.' }),
+          title: t('reset.title'),
+          body: h('p', { text: t('reset.body') }),
           buttons: [
-            { label: 'Annuler', kind: 'secondary' },
-            { label: 'Tout effacer', kind: 'danger', onClick: () => this.options.onReset() },
+            { label: t('common.cancel'), kind: 'secondary' },
+            { label: t('reset.confirm'), kind: 'danger', onClick: () => this.options.onReset() },
           ],
         }),
       250,
@@ -843,14 +967,12 @@ export class UI {
   /** La partie a été modifiée dans un autre onglet : on impose un rechargement. */
   showStale(reload: () => void): void {
     this.modals.show({
-      title: 'Partie ouverte ailleurs',
-      kicker: 'Sauvegarde',
+      title: t('stale.title'),
+      kicker: t('stale.kicker'),
       urgent: true,
       dismissible: false,
-      body: h('p', {
-        text: 'Votre ville a été modifiée dans un autre onglet. Rechargez la page pour reprendre la partie la plus récente.',
-      }),
-      buttons: [{ label: 'Recharger', onClick: reload }],
+      body: h('p', { text: t('stale.body') }),
+      buttons: [{ label: t('stale.reload'), onClick: reload }],
     });
   }
 
@@ -863,19 +985,16 @@ export class UI {
         resolve(value);
       };
       this.modals.show({
-        title: 'Paiement simulé',
-        kicker: 'Mode test',
+        title: t('pay.title'),
+        kicker: t('pay.kicker'),
         urgent: true,
         body: [
-          h('p', {}, h('strong', { text: product.title }), ` — ${product.description}`),
-          h('p', {
-            class: 'muted',
-            text: 'Aucun paiement réel ne sera effectué. Dans la version finale, cette étape ouvrira le paiement sécurisé de l’App Store, de Google Play ou du site web.',
-          }),
+          h('p', {}, h('strong', { text: productTitle(product) }), ` — ${productDescription(product)}`),
+          h('p', { class: 'muted', text: t('pay.body') }),
         ],
         buttons: [
-          { label: 'Annuler', kind: 'secondary', onClick: answer(false) },
-          { label: `Payer ${product.priceLabel} (test)`, kind: 'gold', onClick: answer(true) },
+          { label: t('common.cancel'), kind: 'secondary', onClick: answer(false) },
+          { label: t('pay.confirm', { price: product.priceLabel }), kind: 'gold', onClick: answer(true) },
         ],
         onClose: () => {
           if (!answered) resolve(false);
