@@ -79,6 +79,11 @@ const MIGRATIONS: Record<number, Migration> = {
     if (typeof state.coins === 'number') state.coins += refund;
     return state;
   },
+  /** v4 → v5 : récompense de connexion quotidienne. */
+  4: (state) => {
+    state.daily = { lastDay: null, streak: 0 };
+    return state;
+  },
 };
 
 export function serialize(state: GameState, now: number): string {
@@ -119,6 +124,9 @@ function validate(state: Record<string, unknown>): boolean {
   if (!numbers.every((key) => typeof state[key] === 'number' && Number.isFinite(state[key]))) return false;
   if (!Array.isArray(state.entities) || !Array.isArray(state.unlockedChunks)) return false;
   if (!isObject(state.quests) || !isObject(state.tutorial) || !isObject(state.stats)) return false;
+  const daily = state.daily;
+  if (!isObject(daily) || (daily.lastDay !== null && typeof daily.lastDay !== 'string')) return false;
+  if (typeof daily.streak !== 'number' || !Number.isFinite(daily.streak)) return false;
   const quests = state.quests;
   if (!Array.isArray(quests.active) || !Array.isArray(quests.completed)) return false;
   // Contenu retiré ou renommé par une mise à jour : on l'écarte plutôt que de bloquer la partie.

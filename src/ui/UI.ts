@@ -3,7 +3,7 @@ import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
 import { findQuestHint, type HintTarget } from '@/core/hints';
 import { DAY_NIGHT_MODES, dayNightAt, type DayNightMode } from '@/core/dayNight';
 import type { BuildingDef, CropDef, FailReason, Reward, TripDef } from '@/core/types';
-import { CHUNK_SIZE, ENERGY_REGEN_SEC, xpForLevel } from '@/data/balance';
+import { CHUNK_SIZE, DAILY_STREAK_DAYS, ENERGY_REGEN_SEC, dailyReward, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
 import type { StoreProduct } from '@/data/products';
@@ -51,12 +51,16 @@ export class UI {
   private placebar = h('div', { class: 'placebar' });
   private banner = h('div', { class: 'banner' });
   private buildButton!: HTMLButtonElement;
+  private socialButton?: HTMLButtonElement;
+  private dailyOffered: string | null = null;
   private editButton!: HTMLButtonElement;
   private mode: Mode = 'play';
   private plantCropId: string | null = null;
   private plantTarget: number | null = null;
   private placement: PlacementInfo | null = null;
   private hint: HintTarget | null = null;
+  /** Outils de test et boutique : réservés au compte testeur (et au développement). */
+  private tester = false;
 
   constructor(
     parent: HTMLElement,
@@ -138,10 +142,26 @@ export class UI {
 
   /** À appeler une fois le monde prêt. */
   start(): void {
+    this.setTester(import.meta.env.DEV);
     // Inscription (pseudo) d'abord, puis l'introduction du tutoriel.
     this.social.start(() => {
       if (!this.ctx.game.state.tutorial.introSeen) this.showIntro();
+      else this.offerDailyReward();
+      // L'app peut rester ouverte en arrière-plan d'un jour à l'autre.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.ctx.game.state.tutorial.introSeen) this.offerDailyReward();
+      });
+      this.options.social.backend
+        .me()
+        .then((me) => this.setTester(me.tester || import.meta.env.DEV))
+        .catch(() => undefined);
     });
+  }
+
+  /** Affiche ou masque la boutique et les outils de test. */
+  setTester(on: boolean): void {
+    this.tester = on;
+    document.body.classList.toggle('is-tester', on);
   }
 
   // ———————————————————————————— Câblage ————————————————————————————
@@ -236,7 +256,7 @@ export class UI {
     this.dock.append(
       this.buildButton,
       this.editButton,
-      button('Voisins', Icons.population, 'dock__btn--social', () => this.social.openNeighbors()),
+      (this.socialButton = button('Voisins', Icons.population, 'dock__btn--social', () => this.social.openNeighbors())),
       button('Boutique', Icons.shop, 'dock__btn--shop', () => this.openShop('cash')),
       button('Réglages', Icons.settings, 'dock__btn--settings', () => this.showSettings()),
     );
@@ -278,6 +298,7 @@ export class UI {
     this.placebar.classList.toggle('is-open', placing);
     this.editButton.classList.toggle('is-active', this.mode === 'edit');
     this.buildButton.classList.toggle('is-hint', this.hint?.kind === 'shop' && !this.buildMenu.isOpen);
+    this.socialButton?.classList.toggle('is-hint', this.hint?.kind === 'social' && !this.social.panel.isOpen);
     this.renderPlacebar();
     this.renderBanner();
   }
@@ -372,16 +393,18 @@ export class UI {
         this.showEnergyEmpty();
         return;
       case 'notEnoughCoins':
-        this.toasts.show(failMessage(reason, missing), 'error', {
-          label: 'Boutique',
-          onClick: () => this.openShop('coins'),
-        });
+        this.toasts.show(
+          failMessage(reason, missing),
+          'error',
+          this.tester ? { label: 'Boutique', onClick: () => this.openShop('coins') } : undefined,
+        );
         return;
       case 'notEnoughCash':
-        this.toasts.show(failMessage(reason, missing), 'error', {
-          label: 'Obtenir',
-          onClick: () => this.openShop('cash'),
-        });
+        this.toasts.show(
+          failMessage(reason, missing),
+          'error',
+          this.tester ? { label: 'Obtenir', onClick: () => this.openShop('cash') } : undefined,
+        );
         return;
       default:
         this.toasts.show(failMessage(reason, missing), 'error');
@@ -467,6 +490,7 @@ export class UI {
   }
 
   private openShop(tab: ShopTab): void {
+    if (!this.tester) return;
     this.closeTransient();
     this.shop.open(tab);
   }
@@ -507,6 +531,47 @@ export class UI {
         );
       }),
     );
+  }
+
+  /** Fenêtre « Cadeau du jour », une fois par jour (date locale du joueur). */
+  private offerDailyReward(): void {
+    const { game } = this.ctx;
+    const today = localDay(new Date());
+    const status = game.dailyStatus(today);
+    if (!status.available || this.dailyOffered === today) return;
+    this.dailyOffered = today;
+    const days = Array.from({ length: DAILY_STREAK_DAYS }, (_, i) => i + 1).map((day) => {
+      const reward = dailyReward(day, game.state.level);
+      const state = day < status.day ? ' is-done' : day === status.day ? ' is-today' : '';
+      return h(
+        'div',
+        { class: `daily__day${state}` },
+        h('span', { class: 'daily__label', text: `Jour ${day}` }),
+        icon(reward.cash ? Icons.cash : Icons.coin),
+        h('span', { class: 'daily__amount', text: reward.cash ? `+${reward.cash}` : formatNumber(reward.coins) }),
+      );
+    });
+    this.modals.show({
+      title: 'Cadeau du jour',
+      kicker: status.day > 1 ? `Série : ${status.day} jours d’affilée` : 'Revenez chaque jour !',
+      avatar: true,
+      body: [
+        h('p', {
+          text: 'Connectez-vous chaque jour pour faire grimper la série : le 7e jour, des billets vous attendent. Un jour manqué, et la série repart à zéro.',
+        }),
+        h('div', { class: 'daily' }, ...days),
+        this.rewardChips(status.reward),
+      ],
+      buttons: [
+        {
+          label: 'Récupérer',
+          onClick: () => {
+            const result = game.claimDailyReward(today);
+            if (result.ok) this.toasts.show(`Cadeau du jour ${result.day} récupéré !`, 'success');
+          },
+        },
+      ],
+    });
   }
 
   private showIntro(): void {
@@ -576,6 +641,8 @@ export class UI {
       this.ctx.bus.emit('ui:focusEntity', { entityId: hint.entityId });
     } else if (hint.kind === 'shop') {
       this.buildMenu.open({ defId: hint.defId, category: hint.category });
+    } else if (hint.kind === 'social') {
+      this.social.openNeighbors(hint.tab);
     } else {
       this.ctx.bus.emit('ui:focusTile', { x: (hint.cx + 0.5) * CHUNK_SIZE, y: (hint.cy + 0.5) * CHUNK_SIZE });
       this.toasts.show('Touchez le panneau « À vendre » pour agrandir la ville.', 'info');
@@ -698,48 +765,49 @@ export class UI {
   private showSettings(): void {
     const { game } = this.ctx;
     this.closeTransient();
-    const devButtons = DEV_TOOLS
-      ? [
-          h('div', { class: 'modal__section-title', text: 'Outils de test (prototype)' }),
-          h(
-            'div',
-            { class: 'dev-tools' },
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: '+1 000 pièces',
-              onClick: () => game.devGrant({ coins: 1000 }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: '+20 cash',
-              onClick: () => game.devGrant({ cash: 20 }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: 'Énergie au max',
-              onClick: () => game.devGrant({ energy: Math.max(0, game.derived().energyMax - game.state.energy) }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: '+50 marchandises',
-              onClick: () => game.devGrant({ goods: 50 }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: 'Niveau suivant',
-              onClick: () => game.devGrant({ xp: Math.max(0, xpForLevel(game.state.level + 1) - game.state.xp) }),
-            }),
-            h('button', {
-              class: 'btn btn--small btn--secondary',
-              text: 'Avancer de 10 min',
-              onClick: () => {
-                game.devSkipTime(10 * 60 * 1000);
-                this.toasts.show('10 minutes ont passé…', 'info');
-              },
-            }),
-          ),
-        ]
-      : [];
+    const devButtons =
+      DEV_TOOLS && this.tester
+        ? [
+            h('div', { class: 'modal__section-title', text: 'Outils de test (prototype)' }),
+            h(
+              'div',
+              { class: 'dev-tools' },
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: '+1 000 pièces',
+                onClick: () => game.devGrant({ coins: 1000 }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: '+20 cash',
+                onClick: () => game.devGrant({ cash: 20 }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: 'Énergie au max',
+                onClick: () => game.devGrant({ energy: Math.max(0, game.derived().energyMax - game.state.energy) }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: '+50 marchandises',
+                onClick: () => game.devGrant({ goods: 50 }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: 'Niveau suivant',
+                onClick: () => game.devGrant({ xp: Math.max(0, xpForLevel(game.state.level + 1) - game.state.xp) }),
+              }),
+              h('button', {
+                class: 'btn btn--small btn--secondary',
+                text: 'Avancer de 10 min',
+                onClick: () => {
+                  game.devSkipTime(10 * 60 * 1000);
+                  this.toasts.show('10 minutes ont passé…', 'info');
+                },
+              }),
+            ),
+          ]
+        : [];
     this.modals.show({
       title: 'Réglages',
       body: [
@@ -883,4 +951,10 @@ export class UI {
       });
     });
   }
+}
+
+/** Date locale au format AAAA-MM-JJ (le jour change à minuit pour le joueur). */
+function localDay(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

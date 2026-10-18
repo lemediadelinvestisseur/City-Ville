@@ -7,7 +7,9 @@ import type { BuildingCategory, Entity, PrimaryAction, QuestProgress } from './t
 export type HintTarget =
   | { kind: 'entity'; entityId: number }
   | { kind: 'shop'; defId?: string; category?: BuildingCategory }
-  | { kind: 'expand'; cx: number; cy: number };
+  | { kind: 'expand'; cx: number; cy: number }
+  /** Panneau social (voisins ou marché). */
+  | { kind: 'social'; tab: 'neighbors' | 'market' };
 
 interface Filter {
   defId?: string;
@@ -95,6 +97,12 @@ export function findQuestHint(game: Game, progress: QuestProgress): HintTarget |
         const chunk = firstPurchasableChunk(game);
         return chunk ? { kind: 'expand', ...chunk } : null;
       }
+      case 'helpNeighbor':
+      case 'visitNeighbor':
+        return { kind: 'social', tab: 'neighbors' };
+      case 'marketSell':
+      case 'marketBuy':
+        return { kind: 'social', tab: 'market' };
       default:
         return null;
     }

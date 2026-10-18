@@ -216,10 +216,46 @@ function render(data: Dashboard, key: string, demo: boolean): void {
     });
     return b;
   };
+  /** Bascule « testeur » : outils de test et boutique visibles dans le jeu pour ce compte. */
+  const testerButton = (id: string, tester: boolean) =>
+    action(
+      tester ? 'Testeur ✓' : 'Rendre testeur',
+      () =>
+        client?.mutation(api.admin.setTester, { key, playerId: id as Id<'players'>, tester: !tester }) ??
+        Promise.resolve(),
+    );
+  const searchInput = el('input', 'login__input');
+  searchInput.placeholder = 'Pseudo…';
+  const searchResults = el('div');
+  searchInput.addEventListener('input', () => {
+    const text = searchInput.value;
+    if (!client || text.trim().length < 2) {
+      searchResults.replaceChildren();
+      return;
+    }
+    void client.query(api.admin.findPlayers, { key, text }).then((players) => {
+      searchResults.replaceChildren(
+        table(
+          ['Pseudo', 'Niveau', 'Testeur'],
+          players.map((p) => [p.pseudo, String(p.level), testerButton(p.id, p.tester)]),
+        ),
+      );
+    });
+  });
+  const search = card(
+    'Trouver un joueur',
+    el(
+      'p',
+      'muted',
+      'Le compte « testeur » voit la boutique (paiements simulés) et les outils de test. Active-le sur ton propre compte uniquement.',
+    ),
+    searchInput,
+    searchResults,
+  );
   const recent = card(
     'Derniers joueurs connectés',
     table(
-      ['Pseudo', 'Niveau', 'Habitants', 'Inscrit', 'Vu', 'Jours actifs', ''],
+      ['Pseudo', 'Niveau', 'Habitants', 'Inscrit', 'Vu', 'Jours actifs', 'Testeur', ''],
       data.recentPlayers.map((p) => [
         el('span', p.suspicious ? 'flag' : '', `${p.pseudo}${p.suspicious ? ' ⚠' : ''}${p.banned ? ' (banni)' : ''}`),
         String(p.level),
@@ -227,6 +263,7 @@ function render(data: Dashboard, key: string, demo: boolean): void {
         ago(p.createdAt),
         ago(p.lastSeenAt),
         String(p.activeDays),
+        testerButton(p.id, p.tester),
         action(
           p.banned ? 'Débannir' : 'Bannir',
           () =>
@@ -280,6 +317,7 @@ function render(data: Dashboard, key: string, demo: boolean): void {
     cohorts,
     el('div', 'grid', levels, pace),
     el('div', 'grid', funnel, platforms),
+    search,
     recent,
     reports,
   );

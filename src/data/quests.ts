@@ -124,6 +124,46 @@ export const QUESTS: readonly QuestDef[] = [
     reward: { coins: 500, xp: 25, cash: 5 },
   },
   {
+    id: 'neighbors',
+    title: 'Bon voisinage',
+    intro:
+      'Une ville ne grandit jamais seule ! Ouvrez « Voisins », visitez la ville d’un autre maire et donnez-lui un coup de main : chaque aide vous rapporte des pièces.',
+    icon: 'lea',
+    requires: { level: 4 },
+    tasks: [
+      { type: 'visitNeighbor', count: 1 },
+      { type: 'helpNeighbor', count: 2 },
+    ],
+    labels: ['Visiter un voisin', 'Aider 2 voisins'],
+    reward: { coins: 300, xp: 20, cash: 1 },
+  },
+  {
+    id: 'market',
+    title: 'Jour de marché',
+    intro:
+      'Le marché est ouvert ! Vos récoltes en trop peuvent être vendues aux autres maires. Ouvrez « Voisins » puis l’onglet « Marché » et mettez un lot en vente.',
+    icon: 'goods',
+    requires: { level: 5 },
+    tasks: [{ type: 'marketSell', count: 1 }],
+    labels: ['Mettre un lot en vente'],
+    reward: { coins: 400, xp: 25 },
+  },
+  {
+    id: 'trader',
+    title: 'Négociant',
+    intro:
+      'Vos commerces ont faim de marchandises ? Achetez un lot à un autre maire au marché, et continuez de vendre vos surplus.',
+    icon: 'goods',
+    requires: { quests: ['market'], level: 8 },
+    tasks: [
+      { type: 'marketBuy', count: 1 },
+      { type: 'marketSell', count: 3 },
+    ],
+    labels: ['Acheter un lot au marché', 'Mettre 3 lots en vente'],
+    reward: { coins: 900, xp: 40, cash: 2 },
+  },
+
+  {
     id: 'population',
     title: 'Une ville qui compte',
     intro: 'Atteignons 150 habitants ! Pensez aux bâtiments publics pour repousser la limite.',

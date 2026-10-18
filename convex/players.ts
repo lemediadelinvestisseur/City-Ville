@@ -65,7 +65,7 @@ export const me = query({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
     const player = await requirePlayer(ctx, token);
-    return { ...publicProfile(player), banned: player.banned === true };
+    return { ...publicProfile(player), banned: player.banned === true, tester: player.tester === true };
   },
 });
 

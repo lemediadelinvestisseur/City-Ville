@@ -51,7 +51,8 @@ signing » et choisis ton équipe (Team). Branche ton iPhone, choisis-le en haut
 - **Suppression du compte** depuis l'app : Réglages › Compte › « Supprimer mon compte » ✅
 - **Contenu entre joueurs** (pseudos, villes) : signaler et bloquer un joueur ✅, modération dans l'admin ✅
 - **Achats** : uniquement par les achats intégrés d'Apple pour le cash (RevenueCat) — à brancher
-- **Politique de confidentialité** : une page web à fournir (données : pseudo, sauvegarde, statistiques de jeu)
+- **Politique de confidentialité** : servie par Convex sur `…convex.site/confidentialite`, liée depuis Réglages ›
+  Compte ✅ (adresse de contact à renseigner dans `convex/privacy.ts`)
 - **Classification d'âge** et captures d'écran (6,9 pouces et 6,5 pouces) dans App Store Connect
 - Le nom de l'app ne doit pas reprendre une marque existante (« CityVille » appartient à Zynga)
 

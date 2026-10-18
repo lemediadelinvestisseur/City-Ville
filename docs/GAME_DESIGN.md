@@ -208,6 +208,16 @@ université, centre commercial, gratte-ciel, aéroport…).
 Tant que le joueur est au niveau 4 ou moins, une flèche montre quoi toucher et le bouton « Construire »
 clignote quand il faut acheter quelque chose.
 
+Objectifs sociaux : « Bon voisinage » (niveau 4 : visiter un voisin, en aider deux), « Jour de marché »
+(niveau 5 : mettre un lot en vente) et « Négociant » (niveau 8 : acheter un lot, en vendre trois). Leur aide
+fait clignoter le bouton « Voisins » et ouvre le bon onglet.
+
+## Cadeau du jour
+
+À la première ouverture de chaque journée (date locale), une fenêtre propose le cadeau du jour : une série de
+7 jours dont les pièces augmentent (100 + 40 × niveau, +50 % par jour de série), avec 3 billets le 7e jour.
+Un jour manqué fait repartir la série au jour 1 ; une date antérieure à la dernière réclamation est refusée.
+
 ## Ville de départ
 
 Mairie, grange, 4 champs de fraises mûres, 2 maisonnettes avec loyer prêt, deux routes en croix, quelques

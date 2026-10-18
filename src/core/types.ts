@@ -175,6 +175,8 @@ export interface GameState {
   oneTimePurchases: string[];
   stats: Record<string, number>;
   tutorial: { introSeen: boolean };
+  /** Récompense quotidienne : dernier jour réclamé (AAAA-MM-JJ, heure locale) et série en cours. */
+  daily: { lastDay: string | null; streak: number };
 }
 
 export type FailReason =
@@ -230,6 +232,7 @@ export type QuestTask =
   | { type: 'plant' | 'harvest'; count: number; cropId?: string }
   | { type: 'sendBoat' | 'unloadBoat'; count: number }
   | { type: 'expand'; count: number }
+  | { type: 'helpNeighbor' | 'visitNeighbor' | 'marketSell' | 'marketBuy'; count: number }
   | { type: 'population' | 'level'; target: number };
 
 export interface QuestDef {
@@ -258,4 +261,8 @@ export type GameplayEvent =
   | { type: 'sendBoat'; tripId: string }
   | { type: 'unloadBoat'; tripId: string }
   | { type: 'expand' }
-  | { type: 'helpNeighbor' };
+  | { type: 'helpNeighbor' }
+  | { type: 'visitNeighbor' }
+  | { type: 'marketSell' }
+  | { type: 'marketBuy' }
+  | { type: 'dailyReward' };

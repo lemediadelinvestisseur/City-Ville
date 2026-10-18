@@ -109,10 +109,10 @@ export class SocialUi {
     this.edgePill.classList.toggle('is-visible', near && !this.visiting && !this.panel.isOpen);
   }
 
-  openNeighbors(): void {
+  openNeighbors(tab: 'neighbors' | 'market' = 'neighbors'): void {
     this.deps.closeTransient();
     this.edgePill.classList.remove('is-visible');
-    this.panel.open('neighbors');
+    this.panel.open(tab);
   }
 
   private async help(profile: Profile): Promise<void> {
@@ -136,6 +136,7 @@ export class SocialUi {
       this.panel.close();
       this.visiting = visit;
       social.openVisit(visit);
+      this.deps.ctx.game.visitedNeighbor();
       this.visitBar.show(visit);
       document.body.classList.add('is-visiting');
       this.edgePill.classList.remove('is-visible');
@@ -265,6 +266,16 @@ export class SocialUi {
     buttons.push(
       h('button', { class: 'btn btn--danger', text: 'Supprimer mon compte', onClick: () => this.confirmDelete() }),
     );
+    const privacy = privacyUrl();
+    if (privacy) {
+      buttons.push(
+        h('a', {
+          class: 'settings__link',
+          text: 'Politique de confidentialité',
+          attrs: { href: privacy, target: '_blank', rel: 'noopener' },
+        }),
+      );
+    }
     return h(
       'div',
       { class: 'settings__account' },
@@ -364,4 +375,10 @@ export class SocialUi {
       220,
     );
   }
+}
+
+/** Page de confidentialité servie par Convex (…convex.cloud → …convex.site/confidentialite). */
+function privacyUrl(): string | null {
+  const url = import.meta.env.VITE_CONVEX_URL as string | undefined;
+  return url ? url.replace(/\.convex\.cloud\/?$/, '.convex.site') + '/confidentialite' : null;
 }

@@ -5,7 +5,7 @@ import { STARTING_TOWN, type StartingPlacement } from '@/data/startingTown';
 import { chunkKey } from './grid';
 import type { Entity, GameState } from './types';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /** Initialise l'état propre à la catégorie d'une construction terminée. */
 export function initBuiltState(entity: Entity, now: number): void {
@@ -69,5 +69,6 @@ export function createNewGame(now: number, cityName = 'Ma ville'): GameState {
     oneTimePurchases: [],
     stats: {},
     tutorial: { introSeen: false },
+    daily: { lastDay: null, streak: 0 },
   };
 }
