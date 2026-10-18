@@ -10,6 +10,7 @@ import { createPhaserGame } from './render/createPhaserGame';
 import { bindSounds } from './app/sounds';
 import { MockPaymentProvider } from './services/payments/MockPaymentProvider';
 import { SoundFx } from './services/sound';
+import { Preferences } from './services/preferences';
 import { safeStorage } from './services/storage';
 import { UI } from './ui/UI';
 
@@ -58,7 +59,8 @@ function boot(): void {
   let ui: UI | null = null;
   const payments = new MockPaymentProvider((product) => ui?.confirmTestPurchase(product) ?? Promise.resolve(false));
   const sound = new SoundFx(storage);
-  const ctx: AppContext = { game, bus, art, payments, sound };
+  const prefs = new Preferences(storage);
+  const ctx: AppContext = { game, bus, art, payments, sound, prefs };
 
   // ——— Sauvegarde automatique ———
   let resetting = false;

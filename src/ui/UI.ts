@@ -1,6 +1,7 @@
 import type { AppContext, PlacementInfo } from '@/app/context';
 import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
 import { findQuestHint, type HintTarget } from '@/core/hints';
+import { DAY_NIGHT_MODES, dayNightAt, type DayNightMode } from '@/core/dayNight';
 import type { BuildingDef, CropDef, FailReason, Reward, TripDef } from '@/core/types';
 import { CHUNK_SIZE, ENERGY_REGEN_SEC, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
@@ -719,6 +720,7 @@ export class UI {
           'div',
           { class: 'settings' },
           this.soundToggle(),
+          this.dayNightToggle(),
           h('button', {
             class: 'btn btn--secondary',
             text: 'Revoir l’introduction',
@@ -748,6 +750,45 @@ export class UI {
       },
     });
     return toggle;
+  }
+
+  private dayNightToggle(): HTMLElement {
+    const { prefs, bus } = this.ctx;
+    const names: Record<DayNightMode, string> = {
+      cycle: 'Jour / nuit : cycle de 30 min',
+      real: 'Jour / nuit : heure réelle',
+      off: 'Jour / nuit : toujours le jour',
+    };
+    const status = h('span', { class: 'muted settings__hint' });
+    const describe = () => {
+      const date = new Date();
+      const state = dayNightAt(Date.now(), prefs.dayNight, date.getHours() + date.getMinutes() / 60);
+      if (prefs.dayNight === 'off') status.textContent = '';
+      else {
+        const wait = formatDuration((state.nextChangeAt - Date.now()) / 1000);
+        status.textContent =
+          state.phase === 'day'
+            ? `Il fait jour — la nuit tombe dans ${wait}.`
+            : state.phase === 'night'
+              ? `Il fait nuit — le jour se lève dans ${wait}.`
+              : state.phase === 'dusk'
+                ? 'Le soleil se couche…'
+                : 'Le soleil se lève…';
+      }
+    };
+    const toggle = h('button', {
+      class: 'btn btn--secondary',
+      text: names[prefs.dayNight],
+      onClick: () => {
+        const next = DAY_NIGHT_MODES[(DAY_NIGHT_MODES.indexOf(prefs.dayNight) + 1) % DAY_NIGHT_MODES.length] ?? 'cycle';
+        prefs.setDayNight(next);
+        bus.emit('ui:dayNightMode', next);
+        toggle.textContent = names[next];
+        describe();
+      },
+    });
+    describe();
+    return h('div', { class: 'settings__row' }, toggle, status);
   }
 
   private replayIntro(): void {

@@ -1373,6 +1373,21 @@ button:focus-visible {
   gap: 10px;
 }
 
+.settings__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings__row > .btn {
+  width: 100%;
+}
+
+.settings__hint {
+  font-size: 12px;
+  text-align: center;
+}
+
 .dev-tools {
   display: grid;
   grid-template-columns: 1fr 1fr;

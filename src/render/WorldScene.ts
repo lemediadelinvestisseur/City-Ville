@@ -12,6 +12,7 @@ import { CameraController } from './CameraController';
 import { HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } from './iso';
 import { DEPTH_FX, Effects } from './Effects';
 import { formatClock } from '@/ui/format';
+import { NightLayer } from './NightLayer';
 import { WalkerSystem } from './WalkerSystem';
 
 const DEPTH_GROUND = 0;
@@ -66,6 +67,7 @@ export class WorldScene extends Phaser.Scene {
   private overlay!: Phaser.GameObjects.Graphics;
   private signs = new Map<string, Phaser.GameObjects.Image>();
   private walkers!: WalkerSystem;
+  private night!: NightLayer;
   private clouds: Phaser.GameObjects.Image[] = [];
   private arrow!: Phaser.GameObjects.Image;
   private hintKey = '';
@@ -111,6 +113,7 @@ export class WorldScene extends Phaser.Scene {
     this.limits = this.add.graphics().setDepth(DEPTH_LIMITS);
     this.overlay = this.add.graphics().setDepth(DEPTH_GHOST - 1);
     this.walkers = new WalkerSystem(this);
+    this.night = new NightLayer(this, DEPTH_OVERLAY - 10, this.ctx.prefs.dayNight);
     for (const entity of this.game_.state.entities) this.addView(entity);
     this.refreshRoads();
     this.refreshLimits();
@@ -533,6 +536,7 @@ export class WorldScene extends Phaser.Scene {
 
   /** Rafraîchit les états qui dépendent du temps (cultures, loyers…) et l'aide visuelle. */
   private refreshDynamic(): void {
+    this.night.refresh(Date.now(), this.game_.state.entities, (e) => this.game_.isTileUnlocked(e.x, e.y));
     for (const view of this.views.values()) {
       if (view.timer || (view.entity.construction && !view.entity.built) || view.entity.port?.tripId)
         this.syncTimer(view);
@@ -661,6 +665,12 @@ export class WorldScene extends Phaser.Scene {
     );
     on(bus.on('ui:focusEntity', ({ entityId }) => this.focusEntity(entityId)));
     on(bus.on('ui:focusTile', ({ x, y }) => this.focusWorld(tileToWorld(x, y))));
+    on(
+      bus.on('ui:dayNightMode', (mode) => {
+        this.night.setMode(mode);
+        this.refreshDynamic();
+      }),
+    );
     on(
       bus.on('ui:modalOpen', (open) => {
         this.modalOpen = open;
