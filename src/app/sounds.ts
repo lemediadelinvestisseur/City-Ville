@@ -39,6 +39,7 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
   game.events.on('levelUp', () => sound.play('levelUp'));
   game.events.on('questCompleted', () => sound.play('quest'));
   bus.on('world:fail', () => sound.play('error'));
+  bus.on('fx:pickup', ({ reward }) => sound.play(reward.coins ? 'coin' : 'click'));
   uiRoot.addEventListener('click', (event) => {
     if (event.target instanceof Element && event.target.closest('button')) sound.play('click');
   });

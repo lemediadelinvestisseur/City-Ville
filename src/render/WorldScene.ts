@@ -12,6 +12,7 @@ import { CameraController } from './CameraController';
 import { HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } from './iso';
 import { DEPTH_FX, Effects } from './Effects';
 import { formatClock } from '@/ui/format';
+import { DropSystem } from './Drops';
 import { NightLayer } from './NightLayer';
 import { WalkerSystem } from './WalkerSystem';
 
@@ -68,6 +69,7 @@ export class WorldScene extends Phaser.Scene {
   private signs = new Map<string, Phaser.GameObjects.Image>();
   private walkers!: WalkerSystem;
   private night!: NightLayer;
+  private drops!: DropSystem;
   private clouds: Phaser.GameObjects.Image[] = [];
   private arrow!: Phaser.GameObjects.Image;
   private hintKey = '';
@@ -120,6 +122,10 @@ export class WorldScene extends Phaser.Scene {
     this.limits = this.add.graphics().setDepth(DEPTH_LIMITS);
     this.overlay = this.add.graphics().setDepth(DEPTH_GHOST - 1);
     this.walkers = new WalkerSystem(this);
+    this.drops = new DropSystem(this, (wx, wy, reward) => {
+      const screen = this.camCtl.worldToScreen(wx, wy);
+      this.ctx.bus.emit('fx:pickup', { screen: this.toCss(screen.x, screen.y), reward });
+    });
     this.night = new NightLayer(this, DEPTH_OVERLAY - 10, this.ctx.prefs.dayNight);
     for (const entity of this.game_.state.entities) this.addView(entity);
     this.refreshRoads();
@@ -164,6 +170,7 @@ export class WorldScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     if (this.camCtl.update(delta)) this.ctx.bus.emit('world:cameraMoved', undefined);
+    this.drops.update(time);
     if (time > this.edgeCheckAt) {
       this.edgeCheckAt = time + 300;
       this.checkEdge();
@@ -794,7 +801,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
-    // Survol à la souris : rien à faire (le placement se fait au clic, comme au toucher).
+    // Survol à la souris : ramasse les pièces au sol (le placement, lui, se fait au clic).
+    if (!pointer.isDown && !pointer.wasTouch && this.drops.count > 0 && !this.placement) {
+      const world = this.camCtl.screenToWorld(pointer.x, pointer.y);
+      this.drops.collectNear(world.x, world.y, 34 * this.overlayScale);
+    }
     if (!pointer.isDown || !this.pointers.has(pointer.id)) return;
     this.pointers.set(pointer.id, { x: pointer.x, y: pointer.y });
     const slop = TAP_SLOP_CSS * this.dpr;
@@ -935,6 +946,10 @@ export class WorldScene extends Phaser.Scene {
       if (entity && this.game_.isTileUnlocked(entity.x, entity.y)) this.select(entity.id);
       else this.select(null);
       return;
+    }
+    if (this.drops.count > 0) {
+      const world = this.camCtl.screenToWorld(x, y);
+      if (this.drops.collectNear(world.x, world.y, 80 * this.overlayScale)) return;
     }
     const entity = this.pick(x, y, false);
     if (entity && this.game_.isTileUnlocked(entity.x, entity.y)) {
@@ -1268,7 +1283,7 @@ export class WorldScene extends Phaser.Scene {
     const a = this.anchor(view);
     this.fx.puffs(a.x, a.y, a.w, a.d, 8);
     this.fx.stars(a.x, a.top + 30);
-    this.fx.popText(a.x, a.top + 20, 'Terminé !', '#ffffff', 0, this.overlayScale);
+    this.fx.popText(a.x, a.top - 40 * this.overlayScale, 'Terminé !', '#ffffff', 0, this.overlayScale);
   }
 
   private onReward(entityId: number | null, reward: Reward): void {
@@ -1278,14 +1293,21 @@ export class WorldScene extends Phaser.Scene {
     const a = this.anchor(view);
     const s = this.overlayScale;
     const lines: Array<[string, string]> = [];
-    if (reward.coins) {
-      lines.push([`+${reward.coins}`, '#ffd54f']);
-      this.fx.coinBurst(a.x, a.top + 40, Math.min(8, 2 + Math.floor(reward.coins / 40)));
-    }
+    if (reward.coins) lines.push([`+${reward.coins}`, '#ffd54f']);
     if (reward.goods) lines.push([`+${reward.goods}`, '#ffb74d']);
     if (reward.xp) lines.push([`+${reward.xp} XP`, '#81d4fa']);
     lines.forEach(([text, color], i) => this.fx.popText(a.x, a.top + 20 + i * 38 * s, text, color, i * 120, s));
+    // Pièces et XP tombent au sol (à ramasser) ; le reste s'envole directement.
+    const ground: Reward = { coins: reward.coins, xp: reward.xp };
+    if (ground.coins || ground.xp) {
+      this.ctx.bus.emit('world:drops', ground);
+      // Les pièces retombent devant le bâtiment (sous son coin avant), bien visibles.
+      const front = a.y + ((a.w + a.d) / 2) * (TILE_H / 2);
+      const spread = Math.max(a.w, a.d) * HALF_W * 0.9;
+      this.drops.spawn(a.x, a.top + 40 * s, front + 10 * s, spread, ground, s);
+    }
+    const rest: Reward = { goods: reward.goods, cash: reward.cash, energy: reward.energy };
     const screen = this.entityScreenPoint(entityId);
-    if (screen) this.ctx.bus.emit('fx:reward', { screen, reward });
+    if (screen && (rest.goods || rest.cash || rest.energy)) this.ctx.bus.emit('fx:reward', { screen, reward: rest });
   }
 }

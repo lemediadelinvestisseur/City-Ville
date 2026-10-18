@@ -64,6 +64,11 @@ export interface GameEvents {
   gameplay: GameplayEvent;
 }
 
+/** Prime en pièces versée à l'inauguration d'un bâtiment. */
+export function inaugurationBonus(def: BuildingDef): number {
+  return Math.round((def.cost.coins ?? 0) * 0.05);
+}
+
 export interface Derived {
   population: number;
   /** Population en comptant les habitations en chantier. */
@@ -559,7 +564,8 @@ export class Game {
     this.derivedCache = null;
     this.events.emit('entityUpdated', entity);
     this.events.emit('constructionComplete', entity);
-    this.give({ xp: def.xp }, entity.id);
+    // Inauguration : l'XP du bâtiment et une petite prime en pièces (5 % du prix).
+    this.give({ xp: def.xp, coins: inaugurationBonus(def) }, entity.id);
     this.track({ type: 'build', defId: entity.defId, category: def.category });
   }
 

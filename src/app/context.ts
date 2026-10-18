@@ -39,6 +39,10 @@ export interface AppEvents {
   /** La caméra s'approche du bord de la ville (invitation à voir les voisins). */
   'world:edge': boolean;
   'fx:reward': { screen: ScreenPoint; reward: Reward };
+  /** Récompenses tombées au sol : les compteurs attendent leur ramassage. */
+  'world:drops': Reward;
+  /** Une récompense au sol vient d'être ramassée. */
+  'fx:pickup': { screen: ScreenPoint; reward: Reward };
   // Interface → monde
   'ui:startPlacement': { defId: string };
   'ui:startMove': { entityId: number };
