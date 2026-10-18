@@ -5,25 +5,26 @@ import { CHUNKS_X, CHUNKS_Y, chunkOf, roadMask } from '@/core/grid';
 import type { Entity, FailReason, Reward } from '@/core/types';
 import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
-import { isShallow, isWater, terrainAt } from '@/data/terrain';
-import { ArtKey, CLOUD_VARIANTS, GRASS_VARIANTS, SAND_VARIANTS, WATER_VARIANTS } from './art/library';
+import { isWater } from '@/data/terrain';
+import { ArtKey, CLOUD_VARIANTS } from './art/library';
+import { LOCKED_TINT, MapLayer } from './MapLayer';
 import type { BadgeKind } from './art/sprites';
 import { CameraController } from './CameraController';
 import { HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } from './iso';
 import { DEPTH_FX, Effects } from './Effects';
 import { formatClock } from '@/ui/format';
+import { DropSystem } from './Drops';
+import { MovingVan } from './MovingVan';
 import { NightLayer } from './NightLayer';
 import { WalkerSystem } from './WalkerSystem';
 import { t } from '@/i18n';
 
-const DEPTH_GROUND = 0;
 const DEPTH_ROAD = 2;
 const DEPTH_LIMITS = 4;
 const DEPTH_OVERLAY = 1_000_000;
 const DEPTH_GHOST = 2_000_000;
 const DEPTH_CLOUDS = 4_000_000;
 
-const LOCKED_TINT = 0xa9bb92;
 const TAP_SLOP_CSS = 10;
 
 interface View {
@@ -39,6 +40,8 @@ interface View {
   barKey: string;
   /** Compte à rebours affiché en permanence (chantier, bateau en mer). */
   timer: Phaser.GameObjects.Text | null;
+  /** Ouvrier qui travaille sur le chantier. */
+  crew: { worker: Phaser.GameObjects.Image; hammer: Phaser.GameObjects.Image } | null;
   /** Bateau amarré (ou parti en mer) d'un port. */
   boat: Phaser.GameObjects.Image | null;
   boatHome: { x: number; y: number } | null;
@@ -61,14 +64,16 @@ export class WorldScene extends Phaser.Scene {
   private camCtl!: CameraController;
   private fx!: Effects;
   private views = new Map<number, View>();
-  private ground: Phaser.GameObjects.Image[] = [];
-  /** Quelques cases d'eau scintillent doucement. */
-  private waterTiles: Phaser.GameObjects.Image[] = [];
+  /** Sol et décor de la carte, construits à l'approche de la caméra. */
+  private map!: MapLayer;
+  private mapCheckAt = 0;
   private limits!: Phaser.GameObjects.Graphics;
   private overlay!: Phaser.GameObjects.Graphics;
   private signs = new Map<string, Phaser.GameObjects.Image>();
   private walkers!: WalkerSystem;
   private night!: NightLayer;
+  private drops!: DropSystem;
+  private van!: MovingVan;
   private clouds: Phaser.GameObjects.Image[] = [];
   private arrow!: Phaser.GameObjects.Image;
   private hintKey = '';
@@ -97,6 +102,9 @@ export class WorldScene extends Phaser.Scene {
   private readonly readOnly: boolean;
   private nearEdge = false;
   private edgeCheckAt = 0;
+  /** Prochains rafraîchissements périodiques (horloge réelle, indépendante de la fluidité). */
+  private refreshAt = 0;
+  private hammerAt = 0;
 
   constructor(
     private readonly ctx: AppContext,
@@ -117,10 +125,18 @@ export class WorldScene extends Phaser.Scene {
     }
     this.cameras.main.setBackgroundColor('#2f9fc7');
     this.fx = new Effects(this);
-    this.buildGround();
+    this.map = new MapLayer(this, this.ctx.art, {
+      isChunkUnlocked: (cx, cy) => this.game_.isChunkUnlocked(cx, cy),
+      isRoad: (x, y) => this.game_.isRoad(x, y),
+    });
     this.limits = this.add.graphics().setDepth(DEPTH_LIMITS);
     this.overlay = this.add.graphics().setDepth(DEPTH_GHOST - 1);
     this.walkers = new WalkerSystem(this);
+    this.drops = new DropSystem(this, (wx, wy, reward) => {
+      const screen = this.camCtl.worldToScreen(wx, wy);
+      this.ctx.bus.emit('fx:pickup', { screen: this.toCss(screen.x, screen.y), reward });
+    });
+    this.van = new MovingVan(this, this.ctx.art, (x, y) => this.game_.isRoad(x, y));
     this.night = new NightLayer(this, DEPTH_OVERLAY - 10, this.ctx.prefs.dayNight);
     for (const entity of this.game_.state.entities) this.addView(entity);
     this.refreshRoads();
@@ -149,12 +165,12 @@ export class WorldScene extends Phaser.Scene {
     );
     const start = tileToWorld(16.5, 18.5);
     this.camCtl.centerOn(start.x, start.y);
+    this.map.update(this.cameras.main);
     this.updateOverlayScale();
 
     this.setupInput();
     this.subscribe();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
-    this.time.addEvent({ delay: 500, loop: true, callback: () => this.refreshDynamic() });
     this.refreshDynamic();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubscribers.forEach((u) => u());
@@ -165,6 +181,16 @@ export class WorldScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     if (this.camCtl.update(delta)) this.ctx.bus.emit('world:cameraMoved', undefined);
+    this.drops.update(time);
+    // Cadencé sur l'horloge réelle : reste juste même si l'affichage rame.
+    if (time >= this.refreshAt) {
+      this.refreshAt = time + 500;
+      this.refreshDynamic();
+    }
+    if (time >= this.hammerAt) {
+      this.hammerAt = time + 1400;
+      this.hammerTick();
+    }
     if (time > this.edgeCheckAt) {
       this.edgeCheckAt = time + 300;
       this.checkEdge();
@@ -176,8 +202,11 @@ export class WorldScene extends Phaser.Scene {
       if (view.boat?.visible && view.boatHome)
         view.boat.y = view.boatHome.y + Math.sin(time / 600 + view.entity.id) * 2;
     }
-    const glint = 0.9 + Math.sin(time / 900) * 0.08;
-    for (const tile of this.waterTiles) tile.setAlpha(tile.getData('phase') ? glint : 1);
+    this.map.animate(time);
+    if (time >= this.mapCheckAt) {
+      this.mapCheckAt = time + 200;
+      this.map.update(this.cameras.main);
+    }
     if (this.arrow.visible && this.hintEntityId !== null) {
       const view = this.views.get(this.hintEntityId);
       if (view) this.arrow.y = this.topOf(view) - 72 * this.overlayScale + Math.sin(time / 180) * 10;
@@ -189,42 +218,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   // ———————————————————————————— Terrain ————————————————————————————
-
-  private buildGround(): void {
-    for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
-        const hash = x * 7 + y * 13 + ((x * y) % 5);
-        const terrain = terrainAt(x, y);
-        const key =
-          terrain === 'water'
-            ? ArtKey.water(hash % WATER_VARIANTS, isShallow(x, y))
-            : terrain === 'sand'
-              ? ArtKey.sand(hash % SAND_VARIANTS)
-              : ArtKey.grass(hash % GRASS_VARIANTS);
-        const piece = this.ctx.art.get(key);
-        const pos = tileToWorld(x, y);
-        const tile = this.add.image(pos.x, pos.y, key).setOrigin(piece.originX, piece.originY).setDepth(DEPTH_GROUND);
-        if (terrain === 'water') {
-          if (hash % 4 === 0) {
-            tile.setData('phase', true);
-            this.waterTiles.push(tile);
-          }
-        } else if (!this.game_.isTileUnlocked(x, y)) tile.setTint(LOCKED_TINT);
-        this.ground.push(tile);
-      }
-    }
-  }
-
-  private refreshGroundTint(): void {
-    for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
-        const tile = this.ground[y * MAP_W + x];
-        if (!tile || isWater(x, y)) continue;
-        if (this.game_.isTileUnlocked(x, y)) tile.clearTint();
-        else tile.setTint(LOCKED_TINT);
-      }
-    }
-  }
 
   /** Limites de la ville (pointillés) et panneaux « À vendre ». */
   private refreshLimits(): void {
@@ -295,7 +288,9 @@ export class WorldScene extends Phaser.Scene {
 
   private textureFor(entity: Entity): string {
     const def = getBuildingDef(entity.defId);
-    if (def.id === 'road') return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y), entity.x, entity.y));
+    if (def.id === 'road') {
+      return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y) || this.map.isWildRoad(x, y), entity.x, entity.y));
+    }
     if (!entity.built) return ArtKey.construction(Math.min(4, Math.max(def.size.w, def.size.d)));
     return ArtKey.building(def.id);
   }
@@ -346,6 +341,7 @@ export class WorldScene extends Phaser.Scene {
       bar: null,
       barKey: '',
       timer: null,
+      crew: null,
       boat: null,
       boatHome: null,
     };
@@ -361,6 +357,8 @@ export class WorldScene extends Phaser.Scene {
     view.badge?.destroy();
     view.bar?.destroy();
     view.timer?.destroy();
+    view.crew?.worker.destroy();
+    view.crew?.hammer.destroy();
     view.boat?.destroy();
     this.views.delete(id);
     if (this.selectedId === id) this.select(null);
@@ -426,6 +424,80 @@ export class WorldScene extends Phaser.Scene {
     }
     this.syncBoat(view);
     this.syncTimer(view);
+    this.syncCrew(view);
+  }
+
+  /** Un ouvrier au marteau sur chaque chantier en cours. */
+  private syncCrew(view: View): void {
+    const { entity } = view;
+    const working =
+      !entity.built &&
+      !!entity.construction &&
+      this.game_.now() < entity.construction.endsAt &&
+      this.game_.isTileUnlocked(entity.x, entity.y);
+    if (!working) {
+      view.crew?.worker.destroy();
+      view.crew?.hammer.destroy();
+      view.crew = null;
+      return;
+    }
+    const def = getBuildingDef(entity.defId);
+    if (!view.crew) {
+      const w = this.ctx.art.get(ArtKey.worker);
+      const hm = this.ctx.art.get(ArtKey.hammerTool);
+      view.crew = {
+        worker: this.add.image(0, 0, ArtKey.worker).setOrigin(w.originX, w.originY).setScale(2.2),
+        hammer: this.add.image(0, 0, ArtKey.hammerTool).setOrigin(hm.originX, hm.originY).setScale(2.2),
+      };
+    }
+    const pos = tileToWorld(entity.x + def.size.w * 0.12, entity.y + def.size.d * 0.95);
+    const depth = view.main.depth + 0.02;
+    view.crew.worker.setPosition(pos.x, pos.y).setDepth(depth);
+    view.crew.hammer.setPosition(pos.x + 12, pos.y - 52).setDepth(depth + 0.001);
+  }
+
+  /** Coups de marteau réguliers sur les chantiers ; seul le plus proche du centre s'entend. */
+  private hammerTick(): void {
+    const cam = this.cameras.main;
+    const view = cam.worldView;
+    let loudest: { d: number } | null = null;
+    for (const v of this.views.values()) {
+      if (!v.crew) continue;
+      const { hammer } = v.crew;
+      this.tweens.add({
+        targets: hammer,
+        angle: { from: -75, to: 15 },
+        duration: 150,
+        delay: (v.entity.id % 5) * 90,
+        yoyo: true,
+        ease: 'Quad.easeIn',
+        onYoyo: () => this.fx.puffs(hammer.x - 6, hammer.y + 24, 0.4, 0.4, 1),
+      });
+      if (view.contains(hammer.x, hammer.y)) {
+        const d = Phaser.Math.Distance.Between(hammer.x, hammer.y, view.centerX, view.centerY);
+        if (!loudest || d < loudest.d) loudest = { d };
+      }
+    }
+    if (loudest && !this.readOnly) this.ctx.bus.emit('fx:hammer', undefined);
+  }
+
+  /** Ouverture du chantier : trois coups de marteau (synchronisés avec le bruitage). */
+  private openSiteFx(view: View): void {
+    const a = this.anchor(view);
+    [0, 260, 520].forEach((delay, i) => {
+      this.time.delayedCall(delay, () => {
+        this.fx.puffs(a.x, a.y, a.w, a.d, 2 + i);
+        this.fx.shake(0.001);
+      });
+    });
+  }
+
+  /** Inauguration : le bâtiment s'élève depuis ses fondations. */
+  private riseFx(view: View): void {
+    const { main } = view;
+    const target = main.scaleY;
+    main.setScale(main.scaleX, target * 0.15);
+    this.tweens.add({ targets: main, scaleY: target, duration: 700, ease: 'Back.easeOut' });
   }
 
   /** Fin de l'attente à afficher en direct, ou null. */
@@ -578,6 +650,7 @@ export class WorldScene extends Phaser.Scene {
         if (key !== view.textureKey) this.syncView(view);
       }
     }
+    this.map.refreshRoads();
     this.walkers.setRoads(roads.filter((r) => this.game_.isTileUnlocked(r.x, r.y)));
     this.walkers.setTarget(Math.min(28, Math.round(this.game_.derived().population / 7)));
   }
@@ -647,8 +720,9 @@ export class WorldScene extends Phaser.Scene {
         this.addView(entity);
         if (entity.defId === 'road' || entity.defId === 'bridge') this.refreshRoads();
         const view = this.views.get(entity.id);
-        if (view) this.popIn(view);
-        if (view && !entity.built) this.hammerFx(view);
+        // Les arbres et routes offerts avec une zone apparaissent sans effet.
+        if (view && !entity.starter) this.popIn(view);
+        if (view && !entity.built) this.openSiteFx(view);
       }),
     );
     on(
@@ -674,14 +748,31 @@ export class WorldScene extends Phaser.Scene {
     on(
       game.events.on('constructionComplete', (entity) => {
         const view = this.views.get(entity.id);
-        if (view) this.celebrate(view);
+        if (view) {
+          this.riseFx(view);
+          this.celebrate(view);
+        }
         this.refreshRoads();
+        const def = getBuildingDef(entity.defId);
+        if (def.category === 'house' && view) {
+          // Les nouveaux habitants arrivent en camion de déménagement.
+          this.van.play(
+            { x: entity.x, y: entity.y, w: def.size.w, d: def.size.d },
+            t('world.movingIn'),
+            this.overlayScale,
+            () => {
+              const a = this.anchor(view);
+              this.fx.popText(a.x, a.top, t('world.residents', { n: def.population }), '#c5e1a5', 0, this.overlayScale);
+              this.fx.bounce([view.main]);
+            },
+          );
+        }
       }),
     );
     on(game.events.on('reward', ({ entityId, reward }) => this.onReward(entityId, reward)));
     on(
-      game.events.on('expanded', () => {
-        this.refreshGroundTint();
+      game.events.on('expanded', ({ cx, cy }) => {
+        this.map.unlock(cx, cy);
         this.refreshLimits();
         for (const view of this.views.values()) this.syncView(view);
         this.refreshRoads();
@@ -795,7 +886,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
-    // Survol à la souris : rien à faire (le placement se fait au clic, comme au toucher).
+    // Survol à la souris : ramasse les pièces au sol (le placement, lui, se fait au clic).
+    if (!pointer.isDown && !pointer.wasTouch && this.drops.count > 0 && !this.placement) {
+      const world = this.camCtl.screenToWorld(pointer.x, pointer.y);
+      this.drops.collectNear(world.x, world.y, 34 * this.overlayScale);
+    }
     if (!pointer.isDown || !this.pointers.has(pointer.id)) return;
     this.pointers.set(pointer.id, { x: pointer.x, y: pointer.y });
     const slop = TAP_SLOP_CSS * this.dpr;
@@ -936,6 +1031,10 @@ export class WorldScene extends Phaser.Scene {
       if (entity && this.game_.isTileUnlocked(entity.x, entity.y)) this.select(entity.id);
       else this.select(null);
       return;
+    }
+    if (this.drops.count > 0) {
+      const world = this.camCtl.screenToWorld(x, y);
+      if (this.drops.collectNear(world.x, world.y, 80 * this.overlayScale)) return;
     }
     const entity = this.pick(x, y, false);
     if (entity && this.game_.isTileUnlocked(entity.x, entity.y)) {
@@ -1254,12 +1353,6 @@ export class WorldScene extends Phaser.Scene {
     this.fx.puffs(a.x, a.y, a.w, a.d, 5);
   }
 
-  private hammerFx(view: View): void {
-    const a = this.anchor(view);
-    this.fx.puffs(a.x, a.y, a.w, a.d, 3);
-    this.fx.shake();
-  }
-
   private supplyFx(view: View): void {
     const a = this.anchor(view);
     this.fx.crates(a.x, a.y);
@@ -1269,7 +1362,7 @@ export class WorldScene extends Phaser.Scene {
     const a = this.anchor(view);
     this.fx.puffs(a.x, a.y, a.w, a.d, 8);
     this.fx.stars(a.x, a.top + 30);
-    this.fx.popText(a.x, a.top + 20, t('world.done'), '#ffffff', 0, this.overlayScale);
+    this.fx.popText(a.x, a.top - 40 * this.overlayScale, t('world.done'), '#ffffff', 0, this.overlayScale);
   }
 
   private onReward(entityId: number | null, reward: Reward): void {
@@ -1279,14 +1372,21 @@ export class WorldScene extends Phaser.Scene {
     const a = this.anchor(view);
     const s = this.overlayScale;
     const lines: Array<[string, string]> = [];
-    if (reward.coins) {
-      lines.push([`+${reward.coins}`, '#ffd54f']);
-      this.fx.coinBurst(a.x, a.top + 40, Math.min(8, 2 + Math.floor(reward.coins / 40)));
-    }
+    if (reward.coins) lines.push([`+${reward.coins}`, '#ffd54f']);
     if (reward.goods) lines.push([`+${reward.goods}`, '#ffb74d']);
     if (reward.xp) lines.push([`+${reward.xp} XP`, '#81d4fa']);
     lines.forEach(([text, color], i) => this.fx.popText(a.x, a.top + 20 + i * 38 * s, text, color, i * 120, s));
+    // Pièces et XP tombent au sol (à ramasser) ; le reste s'envole directement.
+    const ground: Reward = { coins: reward.coins, xp: reward.xp };
+    if (ground.coins || ground.xp) {
+      this.ctx.bus.emit('world:drops', ground);
+      // Les pièces retombent devant le bâtiment (sous son coin avant), bien visibles.
+      const front = a.y + ((a.w + a.d) / 2) * (TILE_H / 2);
+      const spread = Math.max(a.w, a.d) * HALF_W * 0.9;
+      this.drops.spawn(a.x, a.top + 40 * s, front + 10 * s, spread, ground, s);
+    }
+    const rest: Reward = { goods: reward.goods, cash: reward.cash, energy: reward.energy };
     const screen = this.entityScreenPoint(entityId);
-    if (screen) this.ctx.bus.emit('fx:reward', { screen, reward });
+    if (screen && (rest.goods || rest.cash || rest.energy)) this.ctx.bus.emit('fx:reward', { screen, reward: rest });
   }
 }

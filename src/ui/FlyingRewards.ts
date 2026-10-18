@@ -12,7 +12,8 @@ export class FlyingRewards {
 
   constructor(private readonly hud: Hud) {}
 
-  launch(from: ScreenPoint, reward: Reward): void {
+  /** `onArrive` est appelé quand les premières icônes atteignent les compteurs. */
+  launch(from: ScreenPoint, reward: Reward, onArrive?: () => void): void {
     const entries: Array<[HudTarget, string, number]> = [];
     if (reward.coins) entries.push(['coins', Icons.coin, Math.min(6, 2 + Math.floor(reward.coins / 60))]);
     if (reward.goods) entries.push(['goods', Icons.goods, 3]);
@@ -24,6 +25,7 @@ export class FlyingRewards {
       if (!el) return;
       if (reducedMotion()) {
         this.hud.bump(target);
+        if (group === 0) onArrive?.();
         return;
       }
       const rect = el.getBoundingClientRect();
@@ -48,7 +50,10 @@ export class FlyingRewards {
         );
         animation.onfinish = () => {
           node.remove();
-          if (i === 0) this.hud.bump(target);
+          if (i === 0) {
+            this.hud.bump(target);
+            if (group === 0) onArrive?.();
+          }
         };
       }
     });

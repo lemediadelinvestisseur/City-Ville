@@ -127,3 +127,28 @@ export function bridgeArt(): ArtPiece {
   }
   return finish();
 }
+
+/** Camion de déménagement, orienté le long de l'axe x ou y de la carte. */
+export function movingTruckArt(axis: 'x' | 'y'): ArtPiece {
+  const { painter: p, finish } = isoCanvas(1, 1, 46);
+  // (a, b) : position le long du trajet et en travers, convertie en (x, y).
+  const at = (a: number, b: number): [number, number] => (axis === 'x' ? [a, b] : [b, a]);
+  const box = (a0: number, a1: number, b0: number, b1: number, z0: number, z1: number, color: string) => {
+    const [x0, y0] = at(a0, b0);
+    const [x1, y1] = at(a1, b1);
+    p.box(Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1), z0, z1, boxColors(color));
+  };
+  p.groundEllipse(0.5, 0.5, 0, 0.42, 'rgba(0,0,0,0.22)');
+  for (const a of [0.24, 0.5, 0.78]) {
+    for (const b of [0.3, 0.7]) {
+      const [x, y] = at(a, b);
+      p.dot(x, y, 4, 4.5, '#263238');
+    }
+  }
+  // Remorque (caisse orange à bande blanche) puis cabine.
+  box(0.12, 0.64, 0.3, 0.7, 4, 34, '#ef6c00');
+  box(0.12, 0.64, 0.3, 0.7, 20, 24, '#fff3e0');
+  box(0.64, 0.9, 0.32, 0.68, 4, 24, '#fafafa');
+  box(0.82, 0.9, 0.36, 0.64, 13, 22, '#81d4fa');
+  return finish();
+}

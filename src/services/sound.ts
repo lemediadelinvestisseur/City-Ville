@@ -1,7 +1,19 @@
 import type { KeyValueStorage } from '@/core/save';
 
 export type SoundName =
-  'click' | 'coin' | 'harvest' | 'plant' | 'hammer' | 'supply' | 'place' | 'complete' | 'quest' | 'levelUp' | 'error';
+  | 'click'
+  | 'coin'
+  | 'harvest'
+  | 'plant'
+  | 'hammer'
+  | 'hammerSoft'
+  | 'construction'
+  | 'supply'
+  | 'place'
+  | 'complete'
+  | 'quest'
+  | 'levelUp'
+  | 'error';
 
 const MUTE_KEY = 'city-ville:muted';
 
@@ -113,6 +125,19 @@ export class SoundFx {
       case 'hammer':
         this.burst(0, 0.06, 0.4, 1800);
         this.tone(150, 0, 0.09, 'triangle', 0.25, 90);
+        break;
+      case 'hammerSoft':
+        // Coup de marteau lointain, pendant les travaux.
+        this.burst(0, 0.04, 0.12, 2200);
+        this.tone(170, 0, 0.06, 'triangle', 0.08, 110);
+        break;
+      case 'construction':
+        // Ouverture du chantier : trois coups de marteau et un coup de scie.
+        for (const at of [0, 0.26, 0.52]) {
+          this.burst(at, 0.06, 0.38, 1800);
+          this.tone(150, at, 0.09, 'triangle', 0.24, 90);
+        }
+        this.burst(0.8, 0.22, 0.08, 4200);
         break;
       case 'supply':
         this.burst(0, 0.18, 0.18, 900);

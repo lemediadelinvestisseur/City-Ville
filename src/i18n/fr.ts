@@ -101,6 +101,7 @@ export const FR = {
   'fail.onWater': 'Impossible de construire sur l’eau.',
   'fail.needsWater': 'Cette construction doit toucher l’eau.',
   'fail.bridgeSpan': 'Le pont doit enjamber le bras de mer, d’une rive à l’autre.',
+  'fail.onMountain': 'Impossible de construire sur la montagne.',
   'fail.needsBridge': 'Construisez d’abord un pont pour rejoindre la rive est.',
   'fail.invalid': 'Action impossible.',
 
@@ -415,6 +416,8 @@ export const FR = {
   'world.expandHere': 'Agrandir ici',
 
   // ——— Chat ———
+  'world.movingIn': 'Emménagement',
+  'world.residents': '+{n} habitants',
   'chat.title': 'Chat',
   'chat.world': 'Monde',
   'chat.rules': 'Restez courtois. Ne partagez jamais d’informations personnelles (adresse, téléphone, mots de passe).',

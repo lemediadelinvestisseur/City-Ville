@@ -16,6 +16,8 @@ export class Hud {
   private levelNum = h('span', { class: 'level__num' });
   private energyTimer = h('span', { class: 'pill__sub' });
   private lastEnergy: number | null = null;
+  /** Récompenses tombées au sol, pas encore ramassées (déjà créditées par le jeu). */
+  private pending = { coins: 0, xp: 0 };
 
   constructor(
     private readonly game: Game,
@@ -74,14 +76,29 @@ export class Hud {
     el.classList.add('bump');
   }
 
+  /** Les compteurs ne montent qu'au ramassage des récompenses au sol. */
+  hold(reward: { coins?: number; xp?: number }): void {
+    this.pending.coins += reward.coins ?? 0;
+    this.pending.xp += reward.xp ?? 0;
+    this.refresh();
+  }
+
+  release(reward: { coins?: number; xp?: number }): void {
+    this.pending.coins = Math.max(0, this.pending.coins - (reward.coins ?? 0));
+    this.pending.xp = Math.max(0, this.pending.xp - (reward.xp ?? 0));
+    this.refresh();
+  }
+
   refresh(): void {
     const { state } = this.game;
     const derived = this.game.derived();
-    const xp = this.game.xpProgress();
+    const progress = this.game.xpProgress();
+    const shown = Math.max(0, progress.current - this.pending.xp);
+    const xp = { ...progress, current: shown, ratio: progress.needed ? shown / progress.needed : 1 };
     this.levelNum.textContent = String(state.level);
     this.xpFill.style.width = `${Math.round(xp.ratio * 100)}%`;
     this.xpText.textContent = xp.needed ? `${formatNumber(xp.current)} / ${formatNumber(xp.needed)}` : t('hud.max');
-    this.set('coins', formatNumber(state.coins));
+    this.set('coins', formatNumber(Math.max(0, state.coins - this.pending.coins)));
     this.set('cash', formatNumber(state.cash));
     this.set('energy', `${state.energy}/${derived.energyMax}`);
     if (this.lastEnergy !== null && state.energy < this.lastEnergy) this.bump('energy');

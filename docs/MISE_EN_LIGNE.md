@@ -1,47 +1,63 @@
 # Mettre le jeu en ligne (Convex)
 
 Le serveur du jeu est écrit et testé (`convex/`) : comptes avec pseudo, sauvegarde en ligne, voisins,
-classement, marché, chat, annonces, rôles (administrateur et modérateurs), mesures d'audience et interface admin. Tant qu'il n'est pas branché, le jeu tourne en
+classement, marché, chat, annonces, rôles (administrateur et modérateurs), mesures d'audience et interface
+admin. Tant qu'il n'est pas branché, le jeu tourne en
 **mode démo** (voisins et offres fictifs, rien n'est envoyé).
 
-## 1. Créer le projet Convex (une fois, sur ton Mac)
+## 1. Créer le projet Convex (dans le navigateur, une fois)
 
-1. Crée un compte sur [convex.dev](https://convex.dev) (connexion avec GitHub, gratuit pour démarrer).
-2. Dans le Terminal, à la racine du projet :
-   ```bash
-   npm install
-   npx convex dev
-   ```
-   La commande ouvre le navigateur pour te connecter, propose de créer un projet (nomme-le `city-ville`),
-   envoie le code du dossier `convex/` et écrit l'adresse du serveur dans `.env.local`
-   (`VITE_CONVEX_URL=…` et `CONVEX_DEPLOYMENT=…`). Laisse-la tourner pendant que tu développes : chaque
-   modification de `convex/` est envoyée automatiquement.
-3. Lance le jeu (`npm run dev`), choisis ta langue puis **ton pseudo** : ton compte est créé.
-4. Toujours dans le Terminal, fais de ce compte **l'administrateur** (remplace `MonPseudo`) :
-   ```bash
-   npx convex run roles:setOwner '{"pseudo":"MonPseudo"}'
-   ```
-   C'est la seule façon de devenir administrateur : la commande exige l'accès à ton projet Convex, personne
-   d'autre ne peut la lancer. Il n'y a **jamais qu'un seul** administrateur : relancer la commande avec un
-   autre pseudo retire le rôle au précédent (`npx convex run roles:clearOwner` le retire à tout le monde).
-5. L'interface admin est sur `/admin.html`. Dans le navigateur où tu joues avec ce compte, elle s'ouvre
+1. Sur [dashboard.convex.dev](https://dashboard.convex.dev) : _Log in with GitHub_, puis **Create Project**
+   (`city-ville`).
+2. En haut, choisis le déploiement **Production**, puis **Settings** :
+   - **General › Deploy Keys › Create Deploy Key** : copie la clé (elle n'est affichée qu'une fois).
+   - Note la **Cloud URL** (`https://….convex.cloud`) : elle va dans `.env.production` (déjà fait pour
+     `combative-wombat-666`).
+3. Sur GitHub : dépôt › **Settings › Secrets and variables › Actions › New repository secret**,
+   nom `CONVEX_DEPLOY_KEY`, valeur = la clé copiée. Ne la colle jamais dans un chat ni dans le code.
+
+## 2. Envoi automatique du serveur
+
+À chaque fusion sur `main`, la CI vérifie le projet puis envoie le dossier `convex/` sur la production
+(tâche « Déploiement Convex » dans l'onglet **Actions** de GitHub). Pour relancer l'envoi à la main :
+Actions › CI › **Run workflow** sur `main`. Dans le tableau de bord Convex, l'onglet **Functions** liste alors
+`players`, `saves`, `market`…
+
+Le jeu compilé (`npm run build`, donc `npm run ios:sync`) se connecte à l'adresse de `.env.production`.
+`npm run dev` reste en **mode démo** tant qu'aucun déploiement de développement n'est configuré.
+
+## 3. Devenir l'administrateur (une fois)
+
+L'interface admin et les données sont réservées à **un seul compte**, le tien. Il n'y a pas de mot de passe
+à choisir : c'est ton compte de joueur qui reçoit le rôle d'administrateur.
+
+1. Ouvre le jeu (version en ligne), choisis ta langue puis **ton pseudo** : ton compte est créé.
+2. Donne-lui le rôle, au choix :
+   - **Dans le navigateur** : [dashboard.convex.dev](https://dashboard.convex.dev) › projet › déploiement
+     **Production** › **Functions** › `roles` › `setOwner` › **Run function**, avec les arguments
+     `{ "pseudo": "TonPseudo" }`.
+   - **Ou dans le Terminal** : `npx convex run --prod roles:setOwner '{"pseudo":"TonPseudo"}'`.
+
+   Seul quelqu'un qui a accès à ton projet Convex peut le faire : le jeu et l'interface admin ne peuvent pas
+   appeler cette fonction. Il n'y a **jamais qu'un seul** administrateur : relancer `setOwner` avec un autre
+   pseudo retire le rôle au précédent (`roles:clearOwner` le retire à tout le monde).
+
+3. L'interface admin est sur `/admin.html`. Dans le navigateur où tu joues avec ce compte, elle s'ouvre
    directement (bouton « Ouvrir l'interface admin » dans Réglages › Compte). Ailleurs (autre ordinateur, ou si
    tu joues sur iPhone) : dans le jeu, Réglages › Compte › « Code de transfert », puis saisis ce code sur la
    page admin. Un compte qui n'est pas administrateur est refusé, même avec un code valide.
 
-> Si une session Claude doit déployer pour toi, ajoute plutôt une **clé de déploiement** (Convex › Settings ›
-> Deploy keys) comme secret `CONVEX_DEPLOY_KEY` dans les réglages de l'environnement — jamais dans le chat.
+L'ancienne variable `ADMIN_KEY` ne sert plus : tu peux la supprimer des **Environment Variables** de Convex.
 
-## 2. Production
+## 4. Développer avec un serveur de test (facultatif, sur ton Mac)
 
 ```bash
-npx convex deploy          # envoie le serveur sur le déploiement de production
-# Une fois ton compte créé sur le jeu de production :
-npx convex run --prod roles:setOwner '{"pseudo":"MonPseudo"}'
+npx convex dev
 ```
 
-Puis construis le jeu avec l'adresse de production (`VITE_CONVEX_URL=https://….convex.cloud npm run build`).
-L'adresse de production est visible dans le tableau de bord Convex.
+`npx convex dev` crée un déploiement de développement, écrit son adresse dans `.env.local` (utilisée par
+`npm run dev`) et envoie chaque modification de `convex/` pendant que tu développes, sans toucher à la
+production. Pour l'interface admin de ce serveur de test : `npx convex run roles:setOwner '{"pseudo":"…"}'`.
 
 ## Ce que fait le serveur
 
@@ -60,11 +76,11 @@ L'adresse de production est visible dans le tableau de bord Convex.
 
 ## Rôles
 
-| Rôle           | Comment l'obtenir                                   | Ce qu'il permet                                                   |
-| -------------- | --------------------------------------------------- | ----------------------------------------------------------------- |
-| Joueur         | Par défaut                                          | Jouer, chatter (dès le niveau 2), signaler, bloquer               |
-| Modérateur     | Nommé par l'administrateur (admin › Équipe)         | Dans le jeu : supprimer un message du chat, rendre un joueur muet |
-| Administrateur | `npx convex run roles:setOwner` (un seul à la fois) | Interface admin et toutes les données, annonces, bannissements    |
+| Rôle           | Comment l'obtenir                                    | Ce qu'il permet                                                   |
+| -------------- | ---------------------------------------------------- | ----------------------------------------------------------------- |
+| Joueur         | Par défaut                                           | Jouer, chatter (dès le niveau 2), signaler, bloquer               |
+| Modérateur     | Nommé par l'administrateur (admin › Équipe)          | Dans le jeu : supprimer un message du chat, rendre un joueur muet |
+| Administrateur | `roles:setOwner` (voir plus haut, un seul à la fois) | Interface admin et toutes les données, annonces, bannissements    |
 
 Chaque fonction de `admin.ts` et `roles.ts` vérifie le rôle côté serveur : l'interface admin n'est qu'un
 affichage, les données ne sortent jamais pour un autre compte. Un compte banni perd ses droits.
