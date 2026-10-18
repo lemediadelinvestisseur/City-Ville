@@ -1,5 +1,5 @@
 import type { ScreenPoint } from '@/app/context';
-import type { Game } from '@/core/game';
+import type { Game, UpgradeInfo } from '@/core/game';
 import type { Entity } from '@/core/types';
 import { getBuildingDef } from '@/data/buildings';
 import { getCropDef, getTripDef } from '@/data/crops';
@@ -11,6 +11,12 @@ export interface BubbleCallbacks {
   speedUp: (entityId: number) => void;
   move: (entityId: number) => void;
   sell: (entityId: number) => void;
+  upgrade: (entityId: number) => void;
+}
+
+/** « Maisonnette ★★ ». */
+export function starredName(name: string, stars = 0): string {
+  return stars > 0 ? `${name} ${'★'.repeat(stars)}` : name;
 }
 
 interface Timing {
@@ -97,7 +103,9 @@ export class Bubble {
     const action = this.game.primaryAction(entity).type;
     const cost = this.game.speedUpCost(entity);
     const content = entity.farm?.cropId ?? entity.port?.tripId ?? '';
-    return `info:${entity.id}:${action}:${cost}:${this.game.decorationBonus(entity)}:${content}`;
+    const up = this.game.upgradeInfo(entity);
+    const upKey = `${up.status}:${'stars' in up ? up.stars : ''}:${up.status === 'available' ? up.reason : ''}`;
+    return `info:${entity.id}:${action}:${cost}:${this.game.decorationBonus(entity)}:${content}:${upKey}`;
   }
 
   private timing(entity: Entity): Timing {
@@ -108,6 +116,11 @@ export class Bubble {
     if (action.type === 'waitBuild') {
       const remaining = (action.readyAt - now) / 1000;
       return { remaining, progress: 1 - remaining / Math.max(1, def.buildSec), served: null };
+    }
+    if (action.type === 'waitUpgrade' && entity.upgrade) {
+      const remaining = (action.readyAt - now) / 1000;
+      const total = (entity.upgrade.endsAt - entity.upgrade.startedAt) / 1000;
+      return { remaining, progress: 1 - remaining / Math.max(1, total), served: null };
     }
     if (action.type === 'waitBoat' && entity.port?.tripId) {
       const remaining = (action.readyAt - now) / 1000;
@@ -179,7 +192,16 @@ export class Bubble {
     const action = game.primaryAction(entity);
     const timing = this.timing(entity);
     const lines: Array<HTMLElement | string> = [];
-    let title = def.name;
+    let title = starredName(def.name, entity.stars);
+    const upgrade = game.upgradeInfo(entity);
+    if (upgrade.status === 'working') {
+      title = `Amélioration : ${starredName(def.name, upgrade.stars + 1)}`;
+      lines.push(
+        action.type === 'finishUpgrade'
+          ? 'Les travaux sont finis : touchez le bâtiment pour découvrir son amélioration !'
+          : 'Les ouvriers agrandissent le bâtiment.',
+      );
+    }
 
     if (!entity.built) {
       title = `Chantier : ${def.name}`;
@@ -206,7 +228,7 @@ export class Bubble {
         case 'house': {
           const rent = game.rentFor(entity);
           lines.push(h('span', {}, 'Loyer : ', icon(Icons.coin), ` ${formatNumber(rent.coins)}`));
-          lines.push(`${def.population} habitants`);
+          lines.push(`${game.housePopulation(entity)} habitants`);
           break;
         }
         case 'business': {
@@ -229,10 +251,10 @@ export class Bubble {
           break;
         }
         case 'community':
-          lines.push(`+${def.popCap} habitants max`);
+          lines.push(`+${Math.round(def.popCap * game.upgradeFactor(entity))} habitants max`);
           break;
         case 'storage':
-          lines.push(`+${def.goodsCap} de stockage`);
+          lines.push(`+${Math.round(def.goodsCap * game.upgradeFactor(entity))} de stockage`);
           break;
         case 'decoration':
           lines.push(`+${def.bonus.percent} % de revenus aux bâtiments proches (rayon ${def.bonus.radius})`);
@@ -245,7 +267,11 @@ export class Bubble {
 
     this.el.append(h('div', { class: 'bubble__title', text: title }));
     for (const line of lines) this.el.append(h('div', { class: 'bubble__line' }, line));
-    if (timing.remaining === null) return;
+    const upgradeBlock = this.upgradeBlock(entity, upgrade);
+    if (timing.remaining === null) {
+      if (upgradeBlock) this.el.append(upgradeBlock);
+      return;
+    }
 
     this.refs.fill = h('div', { class: 'progress__fill' });
     this.refs.timer = h('span');
@@ -275,5 +301,40 @@ export class Bubble {
         ),
       );
     }
+    if (upgradeBlock) this.el.append(upgradeBlock);
+  }
+
+  /** Bouton « Améliorer » (ou ce qui manque pour l'étoile suivante). */
+  private upgradeBlock(entity: Entity, info: UpgradeInfo): HTMLElement | null {
+    if (info.status === 'none' || info.status === 'working') return null;
+    if (info.status === 'max') {
+      return h('div', { class: 'bubble__line bubble__upgrade-max', text: 'Amélioration maximale ★★★' });
+    }
+    const next = '★'.repeat(info.stars + 1);
+    if (info.reason === 'levelLocked') {
+      return h(
+        'div',
+        { class: 'bubble__line bubble__upgrade-locked' },
+        icon(Icons.lock),
+        ` ${next} au niveau ${info.level}`,
+      );
+    }
+    const short = info.reason === 'notEnoughCoins' || info.reason === 'notEnoughGoods';
+    return h(
+      'div',
+      { class: 'bubble__actions' },
+      h(
+        'button',
+        {
+          class: `btn btn--primary btn--small bubble__upgrade${short ? ' is-short' : ''}`,
+          onClick: () => this.callbacks.upgrade(entity.id),
+        },
+        `Améliorer ${next} · `,
+        icon(Icons.coin),
+        ` ${formatNumber(info.cost.coins)} `,
+        icon(Icons.goods),
+        ` ${formatNumber(info.cost.goods)}`,
+      ),
+    );
   }
 }

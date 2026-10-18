@@ -135,6 +135,10 @@ export interface Entity {
   construction?: { startedAt: number; endsAt: number };
   /** Présente dès le début de la partie (ville de départ, forêt). */
   starter?: boolean;
+  /** Améliorations obtenues (0 à 3 étoiles). */
+  stars?: number;
+  /** Amélioration en cours vers l'étoile suivante : début et fin (horodatages). */
+  upgrade?: { startedAt: number; endsAt: number };
   house?: { readyAt: number };
   /** `readyAt` nul : le commerce attend des marchandises. */
   business?: { readyAt: number | null; suppliedAt: number | null };
@@ -192,6 +196,8 @@ export type FailReason =
   | 'locked'
   | 'notReady'
   | 'storageFull'
+  | 'limitReached'
+  | 'maxStars'
   | 'invalid'
   | 'notSellable'
   | 'alreadyOwned'
@@ -208,6 +214,8 @@ export type Result<T = object> = ({ ok: true } & T) | { ok: false; reason: FailR
 export type PrimaryAction =
   | { type: 'waitBuild'; readyAt: number }
   | { type: 'finishBuild' }
+  | { type: 'waitUpgrade'; readyAt: number }
+  | { type: 'finishUpgrade' }
   | { type: 'collectRent' }
   | { type: 'waitRent'; readyAt: number }
   | { type: 'plant' }
@@ -232,6 +240,7 @@ export type QuestTask =
   | { type: 'plant' | 'harvest'; count: number; cropId?: string }
   | { type: 'sendBoat' | 'unloadBoat'; count: number }
   | { type: 'expand'; count: number }
+  | ({ type: 'upgrade'; count: number } & DefFilter)
   | { type: 'helpNeighbor' | 'visitNeighbor' | 'marketSell' | 'marketBuy'; count: number }
   | { type: 'population' | 'level'; target: number };
 
@@ -261,6 +270,7 @@ export type GameplayEvent =
   | { type: 'sendBoat'; tripId: string }
   | { type: 'unloadBoat'; tripId: string }
   | { type: 'expand' }
+  | { type: 'upgrade'; defId: string; category: BuildingCategory; stars: number }
   | { type: 'helpNeighbor' }
   | { type: 'visitNeighbor' }
   | { type: 'marketSell' }

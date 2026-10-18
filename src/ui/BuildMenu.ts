@@ -122,10 +122,21 @@ export class BuildMenu {
     if (reason === 'levelLocked') lockText = `Niveau ${def.requires?.level}`;
     else if (reason === 'populationLocked') lockText = `${def.requires?.population} habitants`;
     else if (reason === 'populationCap') lockText = 'Population max';
+    else if (reason === 'limitReached') lockText = 'Maximum atteint';
+    // Compteur « 2/5 » pour les bâtiments limités (masqué tant qu'ils sont verrouillés).
+    const limit = this.game.buildLimitFor(def);
+    const counter =
+      limit !== null && !locked
+        ? h('span', {
+            class: `card__count${reason === 'limitReached' ? ' is-full' : ''}`,
+            title: 'Exemplaires construits / maximum à votre niveau',
+            text: `${this.game.countOf(def.id)}/${limit}`,
+          })
+        : null;
     const card = h(
       'button',
       {
-        class: `card${locked ? ' is-locked' : ''}${reason === 'populationCap' ? ' is-capped' : ''}${def.id === this.hintDefId ? ' is-hint' : ''}`,
+        class: `card${locked ? ' is-locked' : ''}${reason === 'populationCap' || reason === 'limitReached' ? ' is-capped' : ''}${def.id === this.hintDefId ? ' is-hint' : ''}`,
         attrs: { 'aria-label': def.name },
         onClick: () => {
           if (check.ok) {
@@ -137,6 +148,7 @@ export class BuildMenu {
         },
       },
       def.cost.cash ? h('span', { class: 'card__ribbon', text: 'Premium' }) : null,
+      counter,
       h(
         'span',
         { class: 'card__img' },

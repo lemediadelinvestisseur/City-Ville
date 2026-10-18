@@ -162,6 +162,28 @@ export const QUESTS: readonly QuestDef[] = [
     labels: ['Acheter un lot au marché', 'Mettre 3 lots en vente'],
     reward: { coins: 900, xp: 40, cash: 2 },
   },
+  {
+    id: 'renovation',
+    title: 'Rénovation',
+    intro:
+      'Plutôt que de construire toujours plus, embellissez ce que vous avez ! Touchez une maison puis « Améliorer » : plus d’habitants et de loyers, sans prendre de place.',
+    icon: 'cottage',
+    requires: { level: 6 },
+    tasks: [{ type: 'upgrade', count: 1, category: 'house' }],
+    labels: ['Améliorer une maison'],
+    reward: { coins: 600, xp: 30, cash: 1 },
+  },
+  {
+    id: 'stars',
+    title: 'Quartier étoilé',
+    intro:
+      'Les deuxièmes étoiles sont débloquées ! Améliorez vos commerces et vos services : chaque étoile augmente leurs recettes ou leur capacité.',
+    icon: 'level',
+    requires: { quests: ['renovation'], level: 12 },
+    tasks: [{ type: 'upgrade', count: 3 }],
+    labels: ['Améliorer 3 bâtiments'],
+    reward: { coins: 3000, xp: 80, cash: 2 },
+  },
 
   {
     id: 'population',

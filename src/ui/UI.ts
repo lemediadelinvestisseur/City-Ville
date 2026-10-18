@@ -98,6 +98,7 @@ export class UI {
         ctx.bus.emit('ui:startMove', { entityId: id });
       },
       sell: (id) => this.confirmSell(id),
+      upgrade: (id) => this.upgrade(id),
     });
     this.shop = new Shop(
       game,
@@ -458,6 +459,16 @@ export class UI {
     const result = this.ctx.game.speedUp(entityId);
     if (result.ok) this.bubble.close();
     else this.onFail(result.reason, result.missing);
+  }
+
+  private upgrade(entityId: number): void {
+    const result = this.ctx.game.startUpgrade(entityId);
+    if (!result.ok) {
+      this.onFail(result.reason, result.missing);
+      return;
+    }
+    this.bubble.close();
+    this.toasts.show('Travaux d’amélioration lancés !', 'success');
   }
 
   private confirmSell(entityId: number): void {

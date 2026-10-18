@@ -47,6 +47,10 @@ export function failMessage(reason: FailReason, missing?: number): string {
       return 'Impossible de construire sur la montagne.';
     case 'needsBridge':
       return 'Construisez d’abord un pont pour rejoindre la rive est.';
+    case 'limitReached':
+      return 'Nombre maximal atteint pour ce bâtiment : montez de niveau ou améliorez ceux que vous avez.';
+    case 'maxStars':
+      return 'Ce bâtiment est déjà amélioré au maximum.';
     case 'invalid':
       return 'Action impossible.';
   }

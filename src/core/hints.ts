@@ -97,6 +97,14 @@ export function findQuestHint(game: Game, progress: QuestProgress): HintTarget |
         const chunk = firstPurchasableChunk(game);
         return chunk ? { kind: 'expand', ...chunk } : null;
       }
+      case 'upgrade': {
+        const ready = game.state.entities.find((e) => {
+          if (!game.isTileUnlocked(e.x, e.y) || !matches(e, task)) return false;
+          const info = game.upgradeInfo(e);
+          return info.status === 'available' && info.reason === null;
+        });
+        return entity(ready);
+      }
       case 'helpNeighbor':
       case 'visitNeighbor':
         return { kind: 'social', tab: 'neighbors' };
