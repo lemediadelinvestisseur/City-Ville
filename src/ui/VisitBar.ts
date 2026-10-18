@@ -1,0 +1,110 @@
+import { backendErrorMessage, type Visit } from '@/services/online/Backend';
+import { clear, h, icon } from './dom';
+import { formatNumber } from './format';
+import { Icons } from './icons';
+import { avatar } from './NeighborsPanel';
+
+export interface VisitCallbacks {
+  help: () => Promise<void>;
+  addNeighbor: () => Promise<void>;
+  report: () => void;
+  block: () => void;
+  leave: () => void;
+  toast: (text: string, kind: 'info' | 'success' | 'error') => void;
+}
+
+/** Bandeau affiché pendant la visite de la ville d'un autre joueur. */
+export class VisitBar {
+  readonly el = h('div', { class: 'visit-bar' });
+  private top = h('div', { class: 'visit-bar__top' });
+  private bottom = h('div', { class: 'visit-bar__bottom' });
+
+  constructor(private readonly callbacks: VisitCallbacks) {
+    this.el.append(this.top, this.bottom);
+  }
+
+  show(visit: Visit): void {
+    const { profile } = visit;
+    clear(this.top);
+    clear(this.bottom);
+    const actionButton = (label: string, kind: string, run: () => Promise<void>, done: string) => {
+      const button = h('button', {
+        class: `btn btn--small ${kind}`,
+        text: label,
+        onClick: () => {
+          button.setAttribute('disabled', '');
+          run()
+            .then(() => {
+              button.textContent = done;
+              button.className = 'btn btn--small btn--secondary';
+            })
+            .catch((e: unknown) => {
+              button.removeAttribute('disabled');
+              this.callbacks.toast(backendErrorMessage(e), 'error');
+            });
+        },
+      });
+      return button;
+    };
+    const help = visit.isNeighbor
+      ? visit.helpedToday
+        ? h('button', { class: 'btn btn--small btn--secondary', text: 'Aidé ✓', attrs: { disabled: '' } })
+        : actionButton('Aider', 'btn--gold', this.callbacks.help, 'Aidé ✓')
+      : actionButton('Ajouter', 'btn--gold', this.callbacks.addNeighbor, 'Voisin ✓');
+    const more = h('details', { class: 'visit-bar__more' });
+    more.append(
+      h('summary', { class: 'btn btn--small btn--secondary', text: '•••', attrs: { 'aria-label': 'Plus d’options' } }),
+      h(
+        'div',
+        { class: 'visit-bar__menu' },
+        h('button', {
+          class: 'btn btn--small btn--secondary',
+          text: 'Signaler',
+          onClick: () => {
+            more.open = false;
+            this.callbacks.report();
+          },
+        }),
+        h('button', {
+          class: 'btn btn--small btn--danger',
+          text: 'Bloquer',
+          onClick: () => {
+            more.open = false;
+            this.callbacks.block();
+          },
+        }),
+      ),
+    );
+    this.top.append(
+      avatar(profile.pseudo, 44),
+      h(
+        'div',
+        { class: 'visit-bar__info' },
+        h('span', { class: 'visit-bar__name', text: profile.cityName }),
+        h(
+          'span',
+          { class: 'visit-bar__stats' },
+          `${profile.pseudo} · `,
+          icon(Icons.xp),
+          ` Niv. ${profile.level} · `,
+          icon(Icons.population),
+          ` ${formatNumber(profile.population)}`,
+        ),
+      ),
+      help,
+      more,
+    );
+    this.bottom.append(
+      h('button', {
+        class: 'btn btn--primary visit-bar__back',
+        text: '← Retour à ma ville',
+        onClick: this.callbacks.leave,
+      }),
+    );
+    this.el.classList.add('is-open');
+  }
+
+  hide(): void {
+    this.el.classList.remove('is-open');
+  }
+}

@@ -36,6 +36,8 @@ export interface AppEvents {
   'world:placement': PlacementInfo | null;
   'world:editSelect': { entityId: number; screen: ScreenPoint } | null;
   'world:hint': HintTarget | null;
+  /** La caméra s'approche du bord de la ville (invitation à voir les voisins). */
+  'world:edge': boolean;
   'fx:reward': { screen: ScreenPoint; reward: Reward };
   // Interface → monde
   'ui:startPlacement': { defId: string };

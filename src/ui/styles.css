@@ -1736,3 +1736,397 @@ button:focus-visible {
     padding: 10px 16px;
   }
 }
+
+/* ——— Social : barre d'actions à 5 boutons ——— */
+.dock__btn--social .dock__icon {
+  background: linear-gradient(#f48fb1, #c2185b);
+  box-shadow:
+    0 3px 0 #880e4f,
+    0 6px 12px rgba(0, 0, 0, 0.25);
+}
+
+@media (max-width: 420px) {
+  .dock__btn {
+    width: 60px;
+  }
+}
+
+/* ——— Formulaires (pseudo, transfert) ——— */
+.modal--form .modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.field__label {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--ink-soft);
+}
+
+.field__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.field__input:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.field__input--code {
+  text-align: center;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.field__help {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.field__help.is-bad,
+.form-error {
+  color: var(--red);
+}
+
+.field__help.is-ok {
+  color: var(--green);
+  font-weight: 800;
+}
+
+.form-error {
+  min-height: 1em;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.form-error:empty {
+  display: none;
+}
+
+.btn--wide {
+  width: 100%;
+}
+
+.link-btn {
+  padding: 6px;
+  border: none;
+  background: none;
+  color: var(--blue);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.transfer-code {
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--blue-light);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-align: center;
+  user-select: all;
+}
+
+.settings__account {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings__who {
+  margin: 0;
+  text-align: center;
+}
+
+/* ——— Voisins ——— */
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 900;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+
+.neighbors__body {
+  max-height: min(56vh, 520px);
+  overflow-y: auto;
+  padding: 0 14px 6px;
+  overscroll-behavior: contain;
+}
+
+.people {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.neighbors__tip,
+.neighbors__empty,
+.neighbors__loading {
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 2px 0 var(--line);
+}
+
+.person.is-me {
+  background: var(--blue-light);
+}
+
+.person__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.person__name {
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person__city {
+  font-size: 12px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person__stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.person__stats svg {
+  width: 13px;
+  height: 13px;
+}
+
+.person__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rank {
+  flex: none;
+  width: 28px;
+  font-weight: 900;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.rank--1 {
+  color: #d4a000;
+}
+
+.rank--2 {
+  color: #8a9aa6;
+}
+
+.rank--3 {
+  color: #b9733a;
+}
+
+.segmented {
+  display: flex;
+  align-self: center;
+  margin-bottom: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.segmented__btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.segmented__btn.is-active {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* « Voir mes voisins » quand la caméra quitte la ville. */
+.edge-pill {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 108px);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(#f48fb1, #c2185b);
+  color: #fff;
+  font: inherit;
+  font-weight: 900;
+  box-shadow: var(--shadow);
+  transform: translate(-50%, 20px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.25s ease,
+    opacity 0.25s ease;
+}
+
+.edge-pill.is-visible {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.edge-pill svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* ——— Visite d'une autre ville ——— */
+.visit-bar {
+  display: none;
+}
+
+.visit-bar.is-open {
+  display: block;
+}
+
+.visit-bar__top {
+  pointer-events: auto;
+  position: absolute;
+  top: calc(var(--safe-top) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 20px));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 20px;
+  background: var(--pill-bg);
+  box-shadow: var(--shadow);
+}
+
+.visit-bar__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.visit-bar__name {
+  font-weight: 900;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visit-bar__stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.visit-bar__stats svg {
+  width: 12px;
+  height: 12px;
+}
+
+.visit-bar__more {
+  position: relative;
+}
+
+.visit-bar__more summary {
+  list-style: none;
+}
+
+.visit-bar__more summary::-webkit-details-marker {
+  display: none;
+}
+
+.visit-bar__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.visit-bar__bottom {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 16px);
+  transform: translateX(-50%);
+}
+
+.visit-bar__back {
+  padding-left: 22px;
+  padding-right: 22px;
+  font-size: 16px;
+}
+
+body.is-visiting .hud,
+body.is-visiting .quests,
+body.is-visiting .banner,
+body.is-visiting .bubble,
+body.is-visiting .placebar {
+  display: none;
+}

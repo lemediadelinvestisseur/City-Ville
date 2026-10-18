@@ -22,6 +22,7 @@ import { failMessage } from './messages';
 import { Modals } from './Modals';
 import { QuestTracker, questIcon } from './QuestTracker';
 import { Shop, type ShopTab } from './Shop';
+import { SocialUi, type SocialOptions } from './SocialUi';
 import { Toasts } from './Toasts';
 import { TripPicker } from './TripPicker';
 
@@ -29,6 +30,7 @@ type Mode = 'play' | 'edit';
 
 export interface UiOptions {
   onReset: () => void;
+  social: SocialOptions;
 }
 
 /** Interface HTML superposée au jeu : relie le moteur, le monde et les composants. */
@@ -44,6 +46,7 @@ export class UI {
   private bubble: Bubble;
   private shop: Shop;
   private flying: FlyingRewards;
+  readonly social: SocialUi;
   private dock = h('nav', { class: 'dock', attrs: { 'aria-label': 'Actions' } });
   private placebar = h('div', { class: 'placebar' });
   private banner = h('div', { class: 'banner' });
@@ -99,6 +102,14 @@ export class UI {
       () => undefined,
     );
     this.flying = new FlyingRewards(this.hud);
+    this.social = new SocialUi({
+      ctx,
+      modals: this.modals,
+      toasts: this.toasts,
+      social: options.social,
+      onLayoutChange: () => this.refreshDock(),
+      closeTransient: () => this.closeTransient(),
+    });
 
     this.buildDock();
     this.root.append(
@@ -112,6 +123,9 @@ export class UI {
       this.buildMenu.el,
       this.cropPicker.el,
       this.tripPicker.el,
+      this.social.panel.el,
+      this.social.edgePill,
+      this.social.visitBar.el,
       this.flying.el,
       this.shop.el,
       this.modals.el,
@@ -124,7 +138,10 @@ export class UI {
 
   /** À appeler une fois le monde prêt. */
   start(): void {
-    if (!this.ctx.game.state.tutorial.introSeen) this.showIntro();
+    // Inscription (pseudo) d'abord, puis l'introduction du tutoriel.
+    this.social.start(() => {
+      if (!this.ctx.game.state.tutorial.introSeen) this.showIntro();
+    });
   }
 
   // ———————————————————————————— Câblage ————————————————————————————
@@ -170,6 +187,7 @@ export class UI {
       if (selection) this.bubble.showEdit(selection.entityId, selection.screen);
       else this.bubble.close();
     });
+    bus.on('world:edge', (near) => this.social.setEdge(near));
     bus.on('world:lockedTap', ({ cx, cy }) => this.offerExpansion(cx, cy));
     bus.on('world:emptyTap', () => this.closeTransient());
     bus.on('world:cameraMoved', () => this.bubble.close());
@@ -196,6 +214,7 @@ export class UI {
     this.buildMenu.close();
     this.cropPicker.close();
     this.tripPicker.close();
+    this.social.panel.close();
   }
 
   // ———————————————————————————— Barre d'actions ————————————————————————————
@@ -215,6 +234,7 @@ export class UI {
     this.dock.append(
       this.buildButton,
       this.editButton,
+      button('Voisins', Icons.population, 'dock__btn--social', () => this.social.openNeighbors()),
       button('Boutique', Icons.shop, 'dock__btn--shop', () => this.openShop('cash')),
       button('Réglages', Icons.settings, 'dock__btn--settings', () => this.showSettings()),
     );
@@ -246,7 +266,12 @@ export class UI {
     const placing = this.placement !== null;
     this.dock.classList.toggle(
       'is-hidden',
-      placing || this.buildMenu.isOpen || this.cropPicker.isOpen || this.tripPicker.isOpen,
+      placing ||
+        this.buildMenu.isOpen ||
+        this.cropPicker.isOpen ||
+        this.tripPicker.isOpen ||
+        this.social.panel.isOpen ||
+        this.social.isVisiting,
     );
     this.placebar.classList.toggle('is-open', placing);
     this.editButton.classList.toggle('is-active', this.mode === 'edit');
@@ -721,6 +746,7 @@ export class UI {
           { class: 'settings' },
           this.soundToggle(),
           this.dayNightToggle(),
+          this.social.accountSection(),
           h('button', {
             class: 'btn btn--secondary',
             text: 'Revoir l’introduction',

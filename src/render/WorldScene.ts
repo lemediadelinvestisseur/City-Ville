@@ -92,11 +92,18 @@ export class WorldScene extends Phaser.Scene {
   private overlayScale = 1;
   private modalOpen = false;
 
+  /** Visite de la ville d'un autre joueur : aucune action possible. */
+  private readonly readOnly: boolean;
+  private nearEdge = false;
+  private edgeCheckAt = 0;
+
   constructor(
     private readonly ctx: AppContext,
     private readonly dpr: number,
+    options: { key?: string; readOnly?: boolean } = {},
   ) {
-    super({ key: 'world' });
+    super({ key: options.key ?? 'world' });
+    this.readOnly = options.readOnly ?? false;
   }
 
   private get game_() {
@@ -148,12 +155,19 @@ export class WorldScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.time.addEvent({ delay: 500, loop: true, callback: () => this.refreshDynamic() });
     this.refreshDynamic();
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubscribers.forEach((u) => u()));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.unsubscribers.forEach((u) => u());
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    });
     this.ctx.bus.emit('world:ready', undefined);
   }
 
   override update(time: number, delta: number): void {
     if (this.camCtl.update(delta)) this.ctx.bus.emit('world:cameraMoved', undefined);
+    if (time > this.edgeCheckAt) {
+      this.edgeCheckAt = time + 300;
+      this.checkEdge();
+    }
     this.walkers.update(delta, time);
     const bob = Math.sin(time / 260) * 5;
     for (const view of this.views.values()) {
@@ -567,8 +581,36 @@ export class WorldScene extends Phaser.Scene {
     this.walkers.setTarget(Math.min(28, Math.round(this.game_.derived().population / 7)));
   }
 
+  /** Signale quand la caméra quitte la ville (bord des zones débloquées). */
+  private checkEdge(): void {
+    if (this.readOnly) return;
+    const cam = this.cameras.main;
+    const center = worldToTile(cam.midPoint.x, cam.midPoint.y);
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let cy = 0; cy < CHUNKS_Y; cy++) {
+      for (let cx = 0; cx < CHUNKS_X; cx++) {
+        if (!this.game_.isChunkUnlocked(cx, cy)) continue;
+        minX = Math.min(minX, cx * CHUNK_SIZE);
+        minY = Math.min(minY, cy * CHUNK_SIZE);
+        maxX = Math.max(maxX, (cx + 1) * CHUNK_SIZE);
+        maxY = Math.max(maxY, (cy + 1) * CHUNK_SIZE);
+      }
+    }
+    const margin = 4;
+    const near =
+      center.x < minX - margin || center.y < minY - margin || center.x > maxX + margin || center.y > maxY + margin;
+    if (near !== this.nearEdge) {
+      this.nearEdge = near;
+      this.ctx.bus.emit('world:edge', near);
+    }
+  }
+
   private refreshHint(): void {
-    const hint: HintTarget | null = this.game_.state.level <= 4 && this.mode === 'play' ? findHint(this.game_) : null;
+    const hint: HintTarget | null =
+      !this.readOnly && this.game_.state.level <= 4 && this.mode === 'play' ? findHint(this.game_) : null;
     const key = JSON.stringify(hint);
     if (key !== this.hintKey) {
       this.hintKey = key;
@@ -871,6 +913,13 @@ export class WorldScene extends Phaser.Scene {
 
   private handleTap(pointer: Phaser.Input.Pointer): void {
     const { x, y } = pointer;
+    if (this.readOnly) {
+      // En visite, toucher un bâtiment le fait juste rebondir.
+      const picked = this.pick(x, y, false);
+      const view = picked ? this.views.get(picked.id) : undefined;
+      if (view) this.bounce(view);
+      return;
+    }
     if (this.placement) {
       const p = this.placement;
       const def = getBuildingDef(p.defId);

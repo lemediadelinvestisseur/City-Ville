@@ -867,6 +867,15 @@ export class Game {
     }
   }
 
+  /** Renomme la ville (1 à 30 caractères). */
+  setCityName(name: string): Result<object> {
+    const clean = name.normalize('NFC').trim().replace(/\s+/g, ' ');
+    if (clean.length < 1 || clean.length > 30) return fail('invalid');
+    this.state.cityName = clean;
+    this.changed();
+    return { ok: true };
+  }
+
   // ———————————————————————————— Voisins ————————————————————————————
 
   /**
