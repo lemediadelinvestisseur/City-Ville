@@ -59,6 +59,14 @@ npx convex dev
 `npm run dev`) et envoie chaque modification de `convex/` pendant que tu développes, sans toucher à la
 production. Pour l'interface admin de ce serveur de test : `npx convex run roles:setOwner '{"pseudo":"…"}'`.
 
+**Boutique et outils de test** : ils ne s'affichent que pour le compte administrateur (celui désigné par
+`roles:setOwner`), c'est-à-dire toi. Les autres joueurs ne les voient pas. En développement (`npm run dev`) et
+dans la démo hors ligne, tout reste visible.
+
+**Politique de confidentialité** : servie par Convex sur `https://<déploiement>.convex.site/confidentialite`
+(en production : https://combative-wombat-666.eu-west-1.convex.site/confidentialite). C'est l'adresse à donner
+à App Store Connect. L'adresse de contact se règle dans `convex/privacy.ts` (`PRIVACY_CONTACT`).
+
 ## Ce que fait le serveur
 
 | Module           | Rôle                                                                                         |

@@ -199,6 +199,7 @@ export class MarketView {
         this.backend
           .marketCreate(q, p)
           .then(() => {
+            this.game.marketListed();
             this.toast(t('market.listed'), 'success');
             this.rerender();
           })

@@ -474,6 +474,28 @@ const translation: Translation = {
     'demo.reply1': 'Ciao! Buon divertimento 🙂',
     'demo.reply2': 'Buona idea!',
     'demo.reply3': 'Ahah, anch’io!',
+    'fail.limitReached': 'Hai raggiunto il massimo per questo edificio: sali di livello o migliora quelli che hai.',
+    'fail.maxStars': 'Questo edificio è già migliorato al massimo.',
+    'build.lockLimit': 'Massimo raggiunto',
+    'build.countTitle': 'Costruiti / massimo al tuo livello',
+    'bubble.upgradeTitle': 'Miglioramento: {name}',
+    'bubble.upgradeDone': 'I lavori sono finiti: tocca l’edificio per scoprire il miglioramento!',
+    'bubble.upgradeWorking': 'Gli operai stanno ampliando l’edificio.',
+    'bubble.upgradeMax': 'Miglioramento massimo ★★★',
+    'bubble.upgradeLocked': '{stars} al livello {level}',
+    'bubble.upgrade': 'Migliora {stars} · {coinIcon} {coins} {goodsIcon} {goods}',
+    'world.upgraded': '{stars} Migliorato!',
+    'upgrade.started': 'Lavori di miglioramento avviati!',
+    'account.privacy': 'Informativa sulla privacy',
+    'login.title': 'Regalo del giorno',
+    'login.comeBack': 'Torna ogni giorno!',
+    'login.intro':
+      'Accedi ogni giorno per far crescere la serie: il 7º giorno ti aspettano delle banconote. Se salti un giorno, la serie ricomincia.',
+    'login.day': 'Giorno {n}',
+    'login.claim': 'Ritira',
+    'login.claimed': 'Regalo del giorno {n} ritirato!',
+    'login.streak#one': 'Serie: {n} giorno',
+    'login.streak#other': 'Serie: {n} giorni di fila',
   },
   content: {
     buildings: {
@@ -722,6 +744,36 @@ const translation: Translation = {
         title: 'La città dei tuoi sogni',
         intro: 'Ultima sfida: uno stadio per celebrare tutta la strada percorsa, Sindaco!',
         labels: ['Inaugura lo stadio'],
+      },
+      neighbors: {
+        title: 'Buon vicinato',
+        intro:
+          'Una città non cresce mai da sola! Apri «Vicini», visita la città di un altro sindaco e dagli una mano: ogni aiuto ti fa guadagnare monete.',
+        labels: ['Visitare un vicino', 'Aiutare 2 vicini'],
+      },
+      market: {
+        title: 'Giorno di mercato',
+        intro:
+          'Il mercato è aperto! Puoi vendere i raccolti in eccesso agli altri sindaci. Apri «Vicini», poi la scheda «Mercato», e metti in vendita un lotto.',
+        labels: ['Mettere in vendita un lotto'],
+      },
+      trader: {
+        title: 'Commerciante',
+        intro:
+          'I tuoi negozi hanno fame di merci? Compra un lotto da un altro sindaco al mercato e continua a vendere le tue eccedenze.',
+        labels: ['Comprare un lotto al mercato', 'Mettere in vendita 3 lotti'],
+      },
+      renovation: {
+        title: 'Ristrutturazione',
+        intro:
+          'Invece di costruire sempre di più, migliora ciò che hai! Tocca una casa e poi «Migliora»: più abitanti e più affitto, senza occupare altro spazio.',
+        labels: ['Migliorare una casa'],
+      },
+      stars: {
+        title: 'Quartiere stellato',
+        intro:
+          'Le seconde stelle sono sbloccate! Migliora i tuoi negozi e servizi: ogni stella aumenta i loro incassi o la loro capacità.',
+        labels: ['Migliorare 3 edifici'],
       },
     },
     products: {

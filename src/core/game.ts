@@ -8,8 +8,15 @@ import {
   MAX_DECORATION_BONUS,
   MAX_LEVEL,
   SELL_REFUND_RATIO,
+  UPGRADE,
+  UPGRADE_GAIN,
+  buildLimit,
+  upgradeCost,
+  type UpgradableCategory,
   energyMaxForLevel,
   expansionPrice,
+  loginReward,
+  LOGIN_STREAK_DAYS,
   helpGivenReward,
   helpReceivedReward,
   levelUpReward,
@@ -65,6 +72,8 @@ export interface GameEvents {
   questProgress: { questId: string };
   questCompleted: { questId: string; reward: Reward };
   expanded: { cx: number; cy: number };
+  upgradeStarted: Entity;
+  upgradeComplete: Entity;
   gameplay: GameplayEvent;
   /** Des attentes viennent de se terminer (cultures mûres, chantiers finis…). */
   ready: { items: ReadyItem[] };
@@ -98,6 +107,42 @@ export interface DailyInfo {
 export function inaugurationBonus(def: BuildingDef): number {
   return Math.round((def.cost.coins ?? 0) * 0.05);
 }
+
+/** État de la récompense quotidienne pour un jour donné. */
+export interface LoginRewardStatus {
+  /** La récompense du jour peut être réclamée. */
+  available: boolean;
+  /** Jour de la série (1 à 7) réclamable aujourd'hui, ou déjà réclamé. */
+  day: number;
+  reward: Reward;
+}
+
+/** Jour précédent (AAAA-MM-JJ), calculé en UTC pour ignorer les changements d'heure. */
+export function previousDay(day: string): string {
+  const date = new Date(`${day}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** État de l'amélioration d'une construction. */
+export type UpgradeInfo =
+  /** Ce bâtiment ne s'améliore pas (route, décoration, champ…). */
+  | { status: 'none' }
+  | { status: 'max'; stars: number }
+  | { status: 'working'; stars: number; endsAt: number }
+  | {
+      status: 'available';
+      stars: number;
+      cost: { coins: number; goods: number };
+      level: number;
+      durationSec: number;
+      reason: FailReason | null;
+      missing?: number;
+    };
+
+const isUpgradable = (category: string): category is UpgradableCategory => category in UPGRADE_GAIN;
 
 export interface Derived {
   population: number;
@@ -175,12 +220,13 @@ export class Game {
     for (const entity of this.state.entities) {
       const def = getBuildingDef(entity.defId);
       if (def.category === 'house') {
-        populationProjected += def.population;
-        if (entity.built) population += def.population;
+        // Une amélioration en cours compte déjà dans la population prévue.
+        populationProjected += this.housePopulation(entity, entity.upgrade ? 1 : 0);
+        if (entity.built) population += this.housePopulation(entity);
       } else if (entity.built && def.category === 'community') {
-        popCap += def.popCap;
+        popCap += Math.round(def.popCap * this.upgradeFactor(entity));
       } else if (entity.built && def.category === 'storage') {
-        goodsCap += def.goodsCap;
+        goodsCap += Math.round(def.goodsCap * this.upgradeFactor(entity));
       }
     }
     this.derivedCache = {
@@ -305,6 +351,8 @@ export class Game {
   checkPurchase(def: BuildingDef): Result<object> {
     const requirement = this.checkRequirements(def.requires);
     if (requirement) return fail(requirement);
+    const limit = this.buildLimitFor(def);
+    if (limit !== null && this.countOf(def.id) >= limit) return fail('limitReached');
     if (def.category === 'house') {
       const { populationProjected, popCap } = this.derived();
       if (populationProjected + def.population > popCap) return fail('populationCap');
@@ -335,13 +383,13 @@ export class Game {
   rentFor(entity: Entity): { coins: number; xp: number } {
     const def = getBuildingDef(entity.defId);
     if (def.category !== 'house') return { coins: 0, xp: 0 };
-    return { coins: this.withBonus(entity, def.rent.coins), xp: def.rent.xp };
+    return { coins: this.withBonus(entity, def.rent.coins * this.upgradeFactor(entity)), xp: def.rent.xp };
   }
 
   payoutFor(entity: Entity): { coins: number; xp: number } {
     const def = getBuildingDef(entity.defId);
     if (def.category !== 'business') return { coins: 0, xp: 0 };
-    return { coins: this.withBonus(entity, def.payout.coins), xp: def.payout.xp };
+    return { coins: this.withBonus(entity, def.payout.coins * this.upgradeFactor(entity)), xp: def.payout.xp };
   }
 
   /** Clients servis (affichage) pour un commerce en activité. */
@@ -360,6 +408,10 @@ export class Game {
     if (!entity.built) {
       const endsAt = entity.construction?.endsAt ?? now;
       return now >= endsAt ? { type: 'finishBuild' } : { type: 'waitBuild', readyAt: endsAt };
+    }
+    if (entity.upgrade) {
+      const { endsAt } = entity.upgrade;
+      return now >= endsAt ? { type: 'finishUpgrade' } : { type: 'waitUpgrade', readyAt: endsAt };
     }
     if (entity.house) {
       return now >= entity.house.readyAt
@@ -389,6 +441,7 @@ export class Game {
     const action = this.primaryAction(entity);
     switch (action.type) {
       case 'waitBuild':
+      case 'waitUpgrade':
       case 'waitRent':
       case 'waitCrop':
       case 'waitCustomers':
@@ -689,7 +742,7 @@ export class Game {
     if (this.state.coins < trip.cost) return fail('notEnoughCoins', trip.cost - this.state.coins);
     this.spend({ coins: trip.cost });
     const now = this.now();
-    entity.port = { tripId, startedAt: now, readyAt: now + trip.durationSec * 1000 };
+    entity.port = { tripId, startedAt: now, readyAt: now + this.tripDurationSec(entity, trip.durationSec) * 1000 };
     this.events.emit('entityUpdated', entity);
     this.track({ type: 'sendBoat', tripId });
     this.changed();
@@ -755,6 +808,8 @@ export class Game {
     const now = this.now();
     if (!entity.built) {
       this.completeConstruction(entity);
+    } else if (entity.upgrade) {
+      this.completeUpgrade(entity);
     } else {
       if (entity.house) entity.house.readyAt = now;
       if (entity.farm && entity.farm.cropId !== null) entity.farm.readyAt = now;
@@ -897,7 +952,8 @@ export class Game {
     if (task.type !== event.type) return false;
     switch (event.type) {
       case 'place':
-      case 'build': {
+      case 'build':
+      case 'upgrade': {
         const filter = task as { defId?: string; category?: string };
         if (filter.defId && filter.defId !== event.defId) return false;
         if (filter.category && filter.category !== event.category) return false;
@@ -918,6 +974,10 @@ export class Game {
       case 'unloadBoat':
         return true;
       case 'expand':
+      case 'helpNeighbor':
+      case 'visitNeighbor':
+      case 'marketSell':
+      case 'marketBuy':
         return true;
     }
   }
@@ -1023,6 +1083,136 @@ export class Game {
     return { ok: true };
   }
 
+  // ———————————————————————————— Améliorations et limites ————————————————————————————
+
+  /** Nombre de constructions d'un type (chantiers et bâtiments de départ compris). */
+  countOf(defId: string): number {
+    let n = 0;
+    for (const entity of this.state.entities) if (entity.defId === defId) n++;
+    return n;
+  }
+
+  /** Nombre maximal d'exemplaires de ce bâtiment au niveau actuel (null : illimité). */
+  buildLimitFor(def: BuildingDef): number | null {
+    return buildLimit(def.category, this.state.level);
+  }
+
+  /** Multiplicateur d'effet dû aux étoiles (1 sans amélioration). */
+  upgradeFactor(entity: Entity, extraStars = 0): number {
+    const { category } = getBuildingDef(entity.defId);
+    if (!isUpgradable(category) || category === 'port') return 1;
+    return 1 + ((entity.stars ?? 0) + extraStars) * UPGRADE_GAIN[category];
+  }
+
+  /** Habitants d'une maison, étoiles comprises. */
+  housePopulation(entity: Entity, extraStars = 0): number {
+    const def = getBuildingDef(entity.defId);
+    if (def.category !== 'house') return 0;
+    return Math.round(def.population * this.upgradeFactor(entity, extraStars));
+  }
+
+  /** Durée d'une expédition depuis ce port (plus courte avec les étoiles). */
+  tripDurationSec(entity: Entity, baseSec: number): number {
+    return Math.round(baseSec * (1 - (entity.stars ?? 0) * UPGRADE_GAIN.port));
+  }
+
+  upgradeInfo(entity: Entity): UpgradeInfo {
+    const def = getBuildingDef(entity.defId);
+    const price = def.cost.coins ?? 0;
+    if (!isUpgradable(def.category) || price <= 0 || !entity.built) return { status: 'none' };
+    const stars = entity.stars ?? 0;
+    if (entity.upgrade) return { status: 'working', stars, endsAt: entity.upgrade.endsAt };
+    if (stars >= UPGRADE.maxStars) return { status: 'max', stars };
+    const cost = upgradeCost(price, stars);
+    const level = UPGRADE.levels[stars] ?? MAX_LEVEL;
+    const durationSec = Math.max(
+      UPGRADE.minDurationSec,
+      Math.round(def.buildSec * (UPGRADE.durationRatio[stars] ?? 1)),
+    );
+    let reason: FailReason | null = null;
+    let missing: number | undefined;
+    if (this.state.level < level) reason = 'levelLocked';
+    else if (def.category === 'house') {
+      const { populationProjected, popCap } = this.derived();
+      const extra = this.housePopulation(entity, 1) - this.housePopulation(entity);
+      if (populationProjected + extra > popCap) reason = 'populationCap';
+    }
+    if (!reason && this.state.coins < cost.coins) {
+      reason = 'notEnoughCoins';
+      missing = cost.coins - this.state.coins;
+    } else if (!reason && this.state.goods < cost.goods) {
+      reason = 'notEnoughGoods';
+      missing = cost.goods - this.state.goods;
+    }
+    return { status: 'available', stars, cost, level, durationSec, reason, ...(missing ? { missing } : {}) };
+  }
+
+  /** Lance le chantier d'amélioration vers l'étoile suivante. */
+  startUpgrade(id: number): Result<object> {
+    const entity = this.byId.get(id);
+    if (!entity) return fail('invalid');
+    const info = this.upgradeInfo(entity);
+    if (info.status === 'max') return fail('maxStars');
+    if (info.status !== 'available') return fail('invalid');
+    if (info.reason) return fail(info.reason, info.missing);
+    this.spend(info.cost);
+    const now = this.now();
+    entity.upgrade = { startedAt: now, endsAt: now + info.durationSec * 1000 };
+    this.derivedCache = null;
+    this.events.emit('entityUpdated', entity);
+    this.events.emit('upgradeStarted', entity);
+    this.changed();
+    return { ok: true };
+  }
+
+  /** Termine une amélioration dont le minuteur est écoulé. */
+  finishUpgrade(id: number): Result<object> {
+    const entity = this.byId.get(id);
+    if (!entity?.upgrade) return fail('invalid');
+    if (this.now() < entity.upgrade.endsAt) return fail('notReady');
+    this.completeUpgrade(entity);
+    this.changed();
+    return { ok: true };
+  }
+
+  private completeUpgrade(entity: Entity): void {
+    const def = getBuildingDef(entity.defId);
+    delete entity.upgrade;
+    entity.stars = Math.min(UPGRADE.maxStars, (entity.stars ?? 0) + 1);
+    this.derivedCache = null;
+    this.events.emit('entityUpdated', entity);
+    this.events.emit('upgradeComplete', entity);
+    // Comme une inauguration : de l'XP et une petite prime à ramasser.
+    this.give({ xp: Math.max(5, Math.round(def.xp * 0.5)), coins: inaugurationBonus(def) }, entity.id);
+    this.track({ type: 'upgrade', defId: def.id, category: def.category, stars: entity.stars });
+  }
+
+  // ———————————————————————————— Récompense de connexion ————————————————————————————
+
+  /** `today` : date locale du joueur (AAAA-MM-JJ), fournie par l'interface. */
+  loginRewardStatus(today: string): LoginRewardStatus {
+    const { lastDay, streak } = this.state.loginStreak;
+    if (lastDay === today) {
+      return { available: false, day: streak, reward: loginReward(streak, this.state.level) };
+    }
+    const day = lastDay !== null && lastDay === previousDay(today) ? (streak % LOGIN_STREAK_DAYS) + 1 : 1;
+    return { available: true, day, reward: loginReward(day, this.state.level) };
+  }
+
+  claimLoginReward(today: string): Result<{ day: number; reward: Reward }> {
+    if (!DAY_PATTERN.test(today)) return fail('invalid');
+    // Une date antérieure à la dernière réclamation (horloge reculée) est refusée.
+    const { lastDay } = this.state.loginStreak;
+    if (lastDay !== null && today < lastDay) return fail('notReady');
+    const status = this.loginRewardStatus(today);
+    if (!status.available) return fail('notReady');
+    this.state.loginStreak = { lastDay: today, streak: status.day };
+    this.give(status.reward, null);
+    this.track({ type: 'loginReward' });
+    this.changed();
+    return { ok: true, day: status.day, reward: status.reward };
+  }
+
   // ———————————————————————————— Voisins ————————————————————————————
 
   /**
@@ -1035,6 +1225,12 @@ export class Game {
     this.track({ type: 'helpNeighbor' });
     this.changed();
     return reward;
+  }
+
+  /** Visite de la ville d'un autre joueur (objectifs). */
+  visitedNeighbor(): void {
+    this.track({ type: 'visitNeighbor' });
+    this.changed();
   }
 
   /** Crédite les coups de main reçus pendant l'absence du joueur. */
@@ -1057,6 +1253,12 @@ export class Game {
     this.state.goods -= qty;
     this.changed();
     return { ok: true };
+  }
+
+  /** Lot accepté par le serveur (les marchandises ont été mises de côté par `marketReserve`). */
+  marketListed(): void {
+    this.track({ type: 'marketSell' });
+    this.changed();
   }
 
   /** Rend des marchandises (lot retiré ou expiré), même au-delà de la capacité. */
@@ -1082,6 +1284,7 @@ export class Game {
     this.spend({ coins: total });
     this.state.goods += qty;
     this.events.emit('reward', { entityId: null, reward: { goods: qty } });
+    this.track({ type: 'marketBuy' });
     this.changed();
     return { ok: true };
   }
@@ -1106,6 +1309,10 @@ export class Game {
       if (entity.construction) {
         entity.construction.startedAt -= ms;
         entity.construction.endsAt -= ms;
+      }
+      if (entity.upgrade) {
+        entity.upgrade.startedAt -= ms;
+        entity.upgrade.endsAt -= ms;
       }
       if (entity.port && entity.port.tripId !== null) {
         entity.port.readyAt -= ms;

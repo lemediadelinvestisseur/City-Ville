@@ -59,8 +59,8 @@ export const CONTENT_LEVEL = 30;
  * chaque niveau coûte 12 % de plus.
  */
 const XP_TABLE: readonly number[] = [
-  0, 0, 15, 55, 120, 210, 400, 570, 760, 1100, 1350, 1850, 2500, 3100, 3800, 4700, 5450, 6250, 7050, 7900, 8800, 9700,
-  10650, 11650, 12700, 13750, 14850, 16000, 17150, 18350, 19600,
+  0, 0, 15, 55, 120, 210, 400, 570, 760, 1000, 1250, 1850, 2550, 3450, 4650, 6150, 7850, 9500, 11200, 12850, 14850,
+  16950, 19650, 22250, 24900, 27700, 30600, 33700, 36950, 40750, 45150,
 ];
 
 export function xpForLevel(level: number): number {
@@ -90,6 +90,81 @@ export function helpGivenReward(level: number): { coins: number; xp: number } {
 /** Récompense par coup de main reçu d'un voisin. */
 export function helpReceivedReward(level: number): { coins: number; xp: number } {
   return { coins: 30 + level * 15, xp: 1 };
+}
+
+/**
+ * Améliorations ★ des bâtiments. Chaque étoile coûte une fraction du prix
+ * d'achat : à gain égal, améliorer revient un peu moins cher que racheter le
+ * même bâtiment (sans prendre de place ni compter dans la limite).
+ */
+export const UPGRADE = {
+  maxStars: 3,
+  /** Niveau du joueur requis pour la 1re, 2e et 3e étoile. */
+  levels: [6, 12, 20],
+  /** Part du prix d'achat (en pièces) pour la 1re, 2e et 3e étoile. */
+  costRatio: [0.2, 0.3, 0.4],
+  /** Durée du chantier : part de la durée de construction (au moins une minute). */
+  durationRatio: [0.4, 0.6, 0.8],
+  minDurationSec: 60,
+} as const;
+
+/** Gain par étoile, selon la catégorie (+25 % = 0.25). */
+export const UPGRADE_GAIN = {
+  /** Habitants et loyer. */
+  house: 0.25,
+  /** Recette d'un commerce. */
+  business: 0.3,
+  /** Plafond de population d'un service. */
+  community: 0.2,
+  /** Capacité d'un entrepôt. */
+  storage: 0.3,
+  /** Réduction de la durée des expéditions de pêche. */
+  port: 0.15,
+} as const;
+
+export type UpgradableCategory = keyof typeof UPGRADE_GAIN;
+
+/** Coût de la prochaine étoile (`stars` : étoiles déjà obtenues). */
+export function upgradeCost(price: number, stars: number): { coins: number; goods: number } {
+  const ratio = UPGRADE.costRatio[stars] ?? 0;
+  const coins = Math.round((price * ratio) / 10) * 10;
+  return { coins, goods: Math.min(300, Math.max(5, Math.round(coins / 100))) };
+}
+
+/**
+ * Nombre maximal d'exemplaires d'un même bâtiment, selon le niveau du joueur
+ * (null : illimité). Pousse à diversifier sa ville et à améliorer ses bâtiments.
+ */
+export function buildLimit(category: string, level: number): number | null {
+  switch (category) {
+    case 'house':
+      return 4 + Math.floor(level / 3);
+    case 'business':
+      return 2 + Math.floor(level / 8);
+    case 'community':
+      return 1 + Math.floor(level / 10);
+    case 'storage':
+      return 1 + Math.floor(level / 6);
+    case 'port':
+      return 1 + Math.floor(level / 10);
+    case 'farm':
+      return 8 + level;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Récompense de connexion quotidienne : une série de 7 jours qui repart au
+ * jour 1 si l'on manque une journée. Les pièces suivent le niveau.
+ */
+export const LOGIN_STREAK_DAYS = 7;
+
+export function loginReward(day: number, level: number): { coins: number; xp: number; cash?: number } {
+  const d = Math.min(Math.max(1, day), LOGIN_STREAK_DAYS);
+  const coins = Math.round(((100 + level * 40) * (1 + (d - 1) * 0.5)) / 10) * 10;
+  const xp = 5 + d * 5;
+  return d === LOGIN_STREAK_DAYS ? { coins, xp, cash: 3 } : { coins, xp };
 }
 
 /** Bonus maximal cumulé des décorations (%). */

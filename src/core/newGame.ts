@@ -5,7 +5,7 @@ import { STARTING_TOWN, type StartingPlacement } from '@/data/startingTown';
 import { chunkKey } from './grid';
 import type { DailyState, Entity, GameState } from './types';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export function emptyDaily(): DailyState {
   return { day: '', tasks: [], bonus: {}, bonusClaimed: false };
@@ -74,5 +74,6 @@ export function createNewGame(now: number, cityName = 'Ma ville'): GameState {
     stats: {},
     tutorial: { introSeen: false },
     daily: emptyDaily(),
+    loginStreak: { lastDay: null, streak: 0 },
   };
 }

@@ -208,6 +208,39 @@ université, centre commercial, gratte-ciel, aéroport…).
 Tant que le joueur est au niveau 4 ou moins, une flèche montre quoi toucher et le bouton « Construire »
 clignote quand il faut acheter quelque chose.
 
+Objectifs sociaux : « Bon voisinage » (niveau 4 : visiter un voisin, en aider deux), « Jour de marché »
+(niveau 5 : mettre un lot en vente) et « Négociant » (niveau 8 : acheter un lot, en vendre trois). Leur aide
+fait clignoter le bouton « Voisins » et ouvre le bon onglet.
+
+## Améliorations ★ et limites par type
+
+Chaque maison, commerce, service, entrepôt et port peut recevoir jusqu'à 3 étoiles (★ au niveau 6, ★★ au 12,
+★★★ au 20). Une étoile se paie en pièces et en marchandises, puis lance un chantier à minuteur (ouvrier, marteau,
+pièces à ramasser à la fin) :
+
+| Catégorie | Gain par étoile                |
+| --------- | ------------------------------ |
+| Maisons   | +25 % d'habitants et de loyer  |
+| Commerces | +30 % de recette               |
+| Services  | +20 % de plafond de population |
+| Entrepôts | +30 % de capacité              |
+| Ports     | −15 % de durée des expéditions |
+
+Coût d'une étoile : 20 %, 30 % puis 40 % du prix d'achat (et 1 marchandise par 100 pièces, minimum 5). La 1re
+étoile est plus rentable que racheter le bâtiment, la 3e un peu moins : améliorer n'est jamais un piège, mais ne
+remplace pas totalement la construction.
+
+Le nombre d'exemplaires d'un même bâtiment est limité selon le niveau : maisons 4 + niveau/3, commerces
+2 + niveau/8, services 1 + niveau/10, entrepôts 1 + niveau/6, ports 1 + niveau/10, champs 8 + niveau (routes et
+décorations illimitées). Le menu de construction affiche « construits / maximum ». Les objectifs « Rénovation »
+(niveau 6) et « Quartier étoilé » (niveau 12) introduisent les améliorations.
+
+## Cadeau du jour
+
+À la première ouverture de chaque journée (date locale), une fenêtre propose le cadeau du jour : une série de
+7 jours dont les pièces augmentent (100 + 40 × niveau, +50 % par jour de série), avec 3 billets le 7e jour.
+Un jour manqué fait repartir la série au jour 1 ; une date antérieure à la dernière réclamation est refusée.
+
 ## Ville de départ
 
 Mairie, grange, 4 champs de fraises mûres, 2 maisonnettes avec loyer prêt, deux routes en croix, quelques

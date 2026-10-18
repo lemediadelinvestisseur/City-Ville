@@ -2806,3 +2806,87 @@ body.is-visiting .side {
 .daily .btn--small {
   flex: none;
 }
+
+/* Boutique et boutons « + » : réservés au compte administrateur tant que les vrais paiements ne sont pas branchés. */
+body:not(.is-tester) .dock__btn--shop,
+body:not(.is-tester) .pill__plus {
+  display: none;
+}
+
+.settings__link {
+  display: block;
+  margin-top: 10px;
+  text-align: center;
+  color: var(--muted, #5b6b56);
+  font-size: 0.9rem;
+}
+
+/* Cadeau de connexion : série de 7 jours. */
+.login-reward {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 12px 0;
+}
+.login-reward__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border-radius: 10px;
+  background: rgba(11, 42, 74, 0.08);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.login-reward__day .icon {
+  width: 22px;
+  height: 22px;
+}
+.login-reward__day.is-done {
+  opacity: 0.45;
+}
+.login-reward__day.is-today {
+  background: #ffe082;
+  box-shadow: 0 0 0 2px #f9a825 inset;
+}
+.login-reward__day:last-child {
+  grid-column: span 2;
+}
+.login-reward__label {
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+/* Compteur « construits / maximum » sur les cartes du menu de construction. */
+.card__count {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(11, 42, 74, 0.75);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.card__count.is-full {
+  background: #c62828;
+}
+
+/* Amélioration ★ dans la bulle d'information. */
+.bubble__upgrade .icon {
+  width: 16px;
+  height: 16px;
+}
+.bubble__upgrade.is-short {
+  opacity: 0.7;
+}
+.bubble__upgrade-max {
+  color: #b8860b;
+  font-weight: 800;
+}
+.bubble__upgrade-locked {
+  opacity: 0.75;
+}

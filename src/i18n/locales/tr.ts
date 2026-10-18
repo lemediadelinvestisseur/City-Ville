@@ -471,6 +471,28 @@ const translation: Translation = {
     'demo.reply1': 'Selam! İyi oyunlar 🙂',
     'demo.reply2': 'İyi fikir!',
     'demo.reply3': 'Haha, bende de aynısı!',
+    'fail.limitReached': 'Bu bina için en yüksek sayıya ulaştın: seviye atla ya da sahip olduklarını geliştir.',
+    'fail.maxStars': 'Bu bina zaten en üst seviyede geliştirildi.',
+    'build.lockLimit': 'Sınıra ulaşıldı',
+    'build.countTitle': 'İnşa edilen / seviyendeki en fazla',
+    'bubble.upgradeTitle': 'Geliştirme: {name}',
+    'bubble.upgradeDone': 'Çalışmalar bitti: geliştirmeyi görmek için binaya dokun!',
+    'bubble.upgradeWorking': 'İşçiler binayı büyütüyor.',
+    'bubble.upgradeMax': 'En üst geliştirme ★★★',
+    'bubble.upgradeLocked': '{stars} seviye {level} ile',
+    'bubble.upgrade': 'Geliştir {stars} · {coinIcon} {coins} {goodsIcon} {goods}',
+    'world.upgraded': '{stars} Geliştirildi!',
+    'upgrade.started': 'Geliştirme çalışmaları başladı!',
+    'account.privacy': 'Gizlilik politikası',
+    'login.title': 'Günün hediyesi',
+    'login.comeBack': 'Her gün geri gel!',
+    'login.intro':
+      'Serini büyütmek için her gün giriş yap: 7. gün seni banknotlar bekliyor. Bir gün kaçırırsan seri baştan başlar.',
+    'login.day': 'Gün {n}',
+    'login.claim': 'Al',
+    'login.claimed': '{n}. günün hediyesi alındı!',
+    'login.streak#one': 'Seri: {n} gün',
+    'login.streak#other': 'Seri: art arda {n} gün',
   },
   content: {
     buildings: {
@@ -716,6 +738,36 @@ const translation: Translation = {
         title: 'Hayallerinin şehri',
         intro: 'Son büyük hedef: kat ettiğin tüm yolu kutlamak için bir stadyum, Başkan!',
         labels: ['Stadyumun açılışını yap'],
+      },
+      neighbors: {
+        title: 'İyi komşuluk',
+        intro:
+          'Bir şehir asla tek başına büyümez! “Komşular”ı aç, başka bir belediye başkanının şehrini ziyaret et ve ona yardım et: her yardım sana jeton kazandırır.',
+        labels: ['Bir komşuyu ziyaret et', '2 komşuya yardım et'],
+      },
+      market: {
+        title: 'Pazar günü',
+        intro:
+          'Pazar açıldı! Fazla ürünlerini diğer belediye başkanlarına satabilirsin. “Komşular”ı, sonra “Pazar” sekmesini aç ve bir parti satışa çıkar.',
+        labels: ['Bir partiyi satışa çıkar'],
+      },
+      trader: {
+        title: 'Tüccar',
+        intro:
+          'İşletmelerin mala mı ihtiyaç duyuyor? Pazarda başka bir başkandan bir parti satın al ve fazlalarını satmaya devam et.',
+        labels: ['Pazardan bir parti satın al', '3 partiyi satışa çıkar'],
+      },
+      renovation: {
+        title: 'Yenileme',
+        intro:
+          'Hep daha fazlasını inşa etmek yerine elindekini güzelleştir! Bir eve dokun, sonra “Geliştir”: yer kaplamadan daha fazla sakin ve kira.',
+        labels: ['Bir evi geliştir'],
+      },
+      stars: {
+        title: 'Yıldızlı mahalle',
+        intro:
+          'İkinci yıldızların kilidi açıldı! İşletmelerini ve hizmetlerini geliştir: her yıldız gelirlerini ya da kapasitelerini artırır.',
+        labels: ['3 binayı geliştir'],
       },
     },
     products: {

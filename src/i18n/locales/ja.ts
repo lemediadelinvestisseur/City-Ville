@@ -470,6 +470,28 @@ const translation: Translation = {
     'demo.reply1': 'こんにちは！ゲーム楽しんでくださいね🙂',
     'demo.reply2': 'いいアイデアですね！',
     'demo.reply3': 'あはは、こっちも同じです！',
+    'fail.limitReached': 'この建物は上限数に達しました。レベルを上げるか、今ある建物をアップグレードしましょう。',
+    'fail.maxStars': 'この建物はすでに最大までアップグレード済みです。',
+    'build.lockLimit': '上限に到達',
+    'build.countTitle': '建設数 / 現在のレベルでの上限',
+    'bubble.upgradeTitle': 'アップグレード中：{name}',
+    'bubble.upgradeDone': '工事が完了しました。建物をタップしてアップグレードを確認しましょう！',
+    'bubble.upgradeWorking': '作業員が建物を拡張しています。',
+    'bubble.upgradeMax': '最大アップグレード ★★★',
+    'bubble.upgradeLocked': '{stars} はレベル{level}から',
+    'bubble.upgrade': 'アップグレード {stars} · {coinIcon} {coins} {goodsIcon} {goods}',
+    'world.upgraded': '{stars} アップグレード完了！',
+    'upgrade.started': 'アップグレード工事を開始しました！',
+    'account.privacy': 'プライバシーポリシー',
+    'login.title': '今日のプレゼント',
+    'login.comeBack': '毎日遊びに来てね！',
+    'login.intro':
+      '毎日ログインして連続記録を伸ばしましょう。7日目にはお札がもらえます。1日でも休むと記録はリセットされます。',
+    'login.day': '{n}日目',
+    'login.claim': '受け取る',
+    'login.claimed': '{n}日目のプレゼントを受け取りました！',
+    'login.streak#one': '連続{n}日',
+    'login.streak#other': '連続{n}日',
   },
   content: {
     buildings: {
@@ -702,6 +724,35 @@ const translation: Translation = {
         title: '夢の街',
         intro: '最後のチャレンジ：これまでの道のりを祝うスタジアムを建てましょう、市長！',
         labels: ['スタジアムをオープンする'],
+      },
+      neighbors: {
+        title: 'よいご近所',
+        intro:
+          '街はひとりでは育ちません！「ご近所」を開いて、ほかの市長の街を訪ね、お手伝いしましょう。手伝うたびにコインがもらえます。',
+        labels: ['ご近所を訪ねる', 'ご近所を2回手伝う'],
+      },
+      market: {
+        title: 'マーケットの日',
+        intro:
+          'マーケットが開きました！余った作物はほかの市長に売れます。「ご近所」から「マーケット」タブを開き、ロットを出品しましょう。',
+        labels: ['ロットを出品する'],
+      },
+      trader: {
+        title: '商人',
+        intro: 'お店の商品が足りませんか？マーケットでほかの市長からロットを買い、余った分は売り続けましょう。',
+        labels: ['マーケットでロットを買う', 'ロットを3つ出品する'],
+      },
+      renovation: {
+        title: 'リフォーム',
+        intro:
+          'どんどん建てるより、今ある建物を良くしましょう！家をタップして「アップグレード」：場所を取らずに住民も家賃も増えます。',
+        labels: ['家をアップグレードする'],
+      },
+      stars: {
+        title: '星の街並み',
+        intro:
+          '2つ目の星が解放されました！お店や公共施設をアップグレードしましょう。星ひとつごとに売上や収容量が増えます。',
+        labels: ['建物を3回アップグレードする'],
       },
     },
     products: {

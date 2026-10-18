@@ -132,10 +132,21 @@ export class BuildMenu {
     if (reason === 'levelLocked') lockText = t('common.level', { level: def.requires?.level ?? 1 });
     else if (reason === 'populationLocked') lockText = t('build.lockPopulation', { n: def.requires?.population ?? 0 });
     else if (reason === 'populationCap') lockText = t('build.lockCap');
+    else if (reason === 'limitReached') lockText = t('build.lockLimit');
+    // Compteur « 2/5 » pour les bâtiments limités (masqué tant qu'ils sont verrouillés).
+    const limit = this.game.buildLimitFor(def);
+    const counter =
+      limit !== null && !locked
+        ? h('span', {
+            class: `card__count${reason === 'limitReached' ? ' is-full' : ''}`,
+            title: t('build.countTitle'),
+            text: `${this.game.countOf(def.id)}/${limit}`,
+          })
+        : null;
     const card = h(
       'button',
       {
-        class: `card${locked ? ' is-locked' : ''}${reason === 'populationCap' ? ' is-capped' : ''}${def.id === this.hintDefId ? ' is-hint' : ''}`,
+        class: `card${locked ? ' is-locked' : ''}${reason === 'populationCap' || reason === 'limitReached' ? ' is-capped' : ''}${def.id === this.hintDefId ? ' is-hint' : ''}`,
         attrs: { 'aria-label': buildingName(def) },
         onClick: () => {
           if (check.ok) {
@@ -147,6 +158,7 @@ export class BuildMenu {
         },
       },
       def.cost.cash ? h('span', { class: 'card__ribbon', text: t('build.premium') }) : null,
+      counter,
       h(
         'span',
         { class: 'card__img' },

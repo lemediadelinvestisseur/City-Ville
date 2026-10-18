@@ -472,6 +472,29 @@ const translation: Translation = {
     'demo.reply1': 'Hi! Viel Spaß beim Spielen 🙂',
     'demo.reply2': 'Gute Idee!',
     'demo.reply3': 'Haha, bei mir genauso!',
+    'fail.limitReached':
+      'Du hast das Maximum für dieses Gebäude erreicht: Steige im Level auf oder verbessere deine vorhandenen.',
+    'fail.maxStars': 'Dieses Gebäude ist bereits voll ausgebaut.',
+    'build.lockLimit': 'Maximum erreicht',
+    'build.countTitle': 'Gebaut / Maximum auf deinem Level',
+    'bubble.upgradeTitle': 'Ausbau: {name}',
+    'bubble.upgradeDone': 'Die Arbeiten sind fertig: Tippe auf das Gebäude, um den Ausbau zu sehen!',
+    'bubble.upgradeWorking': 'Die Arbeiter vergrößern das Gebäude.',
+    'bubble.upgradeMax': 'Voll ausgebaut ★★★',
+    'bubble.upgradeLocked': '{stars} ab Level {level}',
+    'bubble.upgrade': 'Ausbauen {stars} · {coinIcon} {coins} {goodsIcon} {goods}',
+    'world.upgraded': '{stars} Ausgebaut!',
+    'upgrade.started': 'Ausbauarbeiten gestartet!',
+    'account.privacy': 'Datenschutzerklärung',
+    'login.title': 'Tagesgeschenk',
+    'login.comeBack': 'Komm jeden Tag wieder!',
+    'login.intro':
+      'Melde dich jeden Tag an, um deine Serie zu verlängern: Am 7. Tag warten Scheine auf dich. Verpasst du einen Tag, beginnt die Serie von vorn.',
+    'login.day': 'Tag {n}',
+    'login.claim': 'Abholen',
+    'login.claimed': 'Geschenk von Tag {n} abgeholt!',
+    'login.streak#one': 'Serie: {n} Tag',
+    'login.streak#other': 'Serie: {n} Tage am Stück',
   },
   content: {
     buildings: {
@@ -715,6 +738,36 @@ const translation: Translation = {
         title: 'Die Stadt deiner Träume',
         intro: 'Letzte Herausforderung: ein Stadion, um den ganzen zurückgelegten Weg zu feiern, Bürgermeister!',
         labels: ['Stadion einweihen'],
+      },
+      neighbors: {
+        title: 'Gute Nachbarschaft',
+        intro:
+          'Eine Stadt wächst nie allein! Öffne „Nachbarn“, besuche die Stadt eines anderen Bürgermeisters und hilf ihm: Jede Hilfe bringt dir Münzen.',
+        labels: ['Einen Nachbarn besuchen', '2 Nachbarn helfen'],
+      },
+      market: {
+        title: 'Markttag',
+        intro:
+          'Der Markt ist geöffnet! Deine überschüssige Ernte kannst du an andere Bürgermeister verkaufen. Öffne „Nachbarn“, dann den Reiter „Markt“, und biete eine Partie an.',
+        labels: ['Eine Partie zum Verkauf anbieten'],
+      },
+      trader: {
+        title: 'Händler',
+        intro:
+          'Deine Geschäfte brauchen Waren? Kaufe auf dem Markt eine Partie von einem anderen Bürgermeister und verkaufe weiter deine Überschüsse.',
+        labels: ['Eine Partie auf dem Markt kaufen', '3 Partien zum Verkauf anbieten'],
+      },
+      renovation: {
+        title: 'Renovierung',
+        intro:
+          'Statt immer mehr zu bauen, verschönere, was du hast! Tippe auf ein Haus und dann auf „Ausbauen“: mehr Einwohner und mehr Miete, ohne zusätzlichen Platz.',
+        labels: ['Ein Haus ausbauen'],
+      },
+      stars: {
+        title: 'Sterneviertel',
+        intro:
+          'Die zweiten Sterne sind freigeschaltet! Baue deine Geschäfte und Dienste aus: Jeder Stern steigert ihre Einnahmen oder ihre Kapazität.',
+        labels: ['3 Gebäude ausbauen'],
       },
     },
     products: {

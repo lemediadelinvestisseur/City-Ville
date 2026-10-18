@@ -471,6 +471,28 @@ const translation: Translation = {
     'demo.reply1': 'Hey! Have fun 🙂',
     'demo.reply2': 'Good idea!',
     'demo.reply3': 'Haha, same here!',
+    'fail.limitReached': 'You’ve built the maximum for this building: level up or upgrade the ones you have.',
+    'fail.maxStars': 'This building is already fully upgraded.',
+    'build.lockLimit': 'Limit reached',
+    'build.countTitle': 'Built / maximum at your level',
+    'bubble.upgradeTitle': 'Upgrade: {name}',
+    'bubble.upgradeDone': 'The work is done: tap the building to see its upgrade!',
+    'bubble.upgradeWorking': 'The workers are expanding the building.',
+    'bubble.upgradeMax': 'Fully upgraded ★★★',
+    'bubble.upgradeLocked': '{stars} at level {level}',
+    'bubble.upgrade': 'Upgrade {stars} · {coinIcon} {coins} {goodsIcon} {goods}',
+    'world.upgraded': '{stars} Upgraded!',
+    'upgrade.started': 'Upgrade work started!',
+    'account.privacy': 'Privacy policy',
+    'login.title': 'Daily gift',
+    'login.comeBack': 'Come back every day!',
+    'login.intro':
+      'Log in every day to grow your streak: on day 7, cash awaits. Miss a day and the streak starts over.',
+    'login.day': 'Day {n}',
+    'login.claim': 'Claim',
+    'login.claimed': 'Day {n} gift claimed!',
+    'login.streak#one': 'Streak: {n} day',
+    'login.streak#other': 'Streak: {n} days in a row',
   },
   content: {
     buildings: {
@@ -712,6 +734,36 @@ const translation: Translation = {
         title: 'The City of Your Dreams',
         intro: 'Final challenge: a stadium to celebrate how far you’ve come, Mayor!',
         labels: ['Open the stadium'],
+      },
+      neighbors: {
+        title: 'Good Neighbors',
+        intro:
+          'A city never grows alone! Open “Neighbors”, visit another mayor’s city and lend them a hand: every bit of help earns you coins.',
+        labels: ['Visit a neighbor', 'Help 2 neighbors'],
+      },
+      market: {
+        title: 'Market Day',
+        intro:
+          'The market is open! Your extra crops can be sold to other mayors. Open “Neighbors”, then the “Market” tab, and put a lot up for sale.',
+        labels: ['Put a lot up for sale'],
+      },
+      trader: {
+        title: 'Trader',
+        intro:
+          'Are your businesses hungry for goods? Buy a lot from another mayor at the market, and keep selling your surplus.',
+        labels: ['Buy a lot at the market', 'Put 3 lots up for sale'],
+      },
+      renovation: {
+        title: 'Renovation',
+        intro:
+          'Instead of always building more, improve what you have! Tap a house, then “Upgrade”: more residents and more rent, with no extra space.',
+        labels: ['Upgrade a house'],
+      },
+      stars: {
+        title: 'Star District',
+        intro:
+          'Second stars are unlocked! Upgrade your businesses and services: every star boosts their revenue or capacity.',
+        labels: ['Upgrade 3 buildings'],
       },
     },
     products: {

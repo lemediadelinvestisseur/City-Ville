@@ -14,7 +14,7 @@ import { coastX, isWater, terrainAt } from '@/data/terrain';
 import { sceneryOf } from '@/data/scenery';
 import { Game, type Clock } from './game';
 import { findHint, findQuestHint } from './hints';
-import { createNewGame } from './newGame';
+import { SAVE_VERSION, createNewGame } from './newGame';
 import { deserialize, serialize } from './save';
 import type { Entity } from './types';
 
@@ -103,7 +103,8 @@ describe('placement', () => {
 
   it('bloque les habitations au-delà du plafond de population', () => {
     const { game } = setup();
-    game.devGrant({ coins: 10_000 });
+    // Niveau 6 : jusqu'à 6 maisonnettes (2 de départ + 4), la limite ne gêne pas.
+    game.devGrant({ coins: 10_000, xp: 400 });
     // 30 habitants + 3 maisonnettes (45) = 75 ≤ 80, la 4e dépasse.
     for (let i = 0; i < 3; i++) {
       const spot = freeSpot(game, 'cottage');
@@ -568,8 +569,9 @@ describe('sauvegarde', () => {
     // Une route posée sur ce qui est désormais la mer disparaît.
     file.state.entities.push({ id: 9999, defId: 'road', x: 31, y: 20, built: true });
     const restored = deserialize(JSON.stringify(file))!;
-    expect(restored.version).toBe(5);
+    expect(restored.version).toBe(SAVE_VERSION);
     expect(restored.daily).toEqual({ day: '', tasks: [], bonus: {}, bonusClaimed: false });
+    expect(restored.loginStreak).toEqual({ lastDay: null, streak: 0 });
     const migrated = restored.entities.find((e) => e.id === placed.entity.id)!;
     expect(migrated).not.toHaveProperty('buildProgress');
     expect(migrated.construction?.endsAt).toBe(clock.now() + getBuildingDef('cottage').buildSec * 1000);
@@ -593,5 +595,151 @@ describe('sauvegarde', () => {
     const reloaded = new Game(deserialize(raw)!, clock);
     expect(reloaded.primaryAction(reloaded.getEntity(plot.id)!).type).toBe('harvest');
     expect(reloaded.state.energy).toBe(energyMaxForLevel(reloaded.state.level));
+  });
+});
+
+describe('récompense quotidienne', () => {
+  it('suit une série de 7 jours et repart au jour 1 après un jour manqué', () => {
+    const { game } = setup();
+    expect(game.loginRewardStatus('2026-10-18')).toMatchObject({ available: true, day: 1 });
+    const coins = game.state.coins;
+    const first = game.claimLoginReward('2026-10-18');
+    expect(first.ok).toBe(true);
+    expect(game.state.coins).toBeGreaterThan(coins);
+    expect(game.claimLoginReward('2026-10-18')).toMatchObject({ ok: false, reason: 'notReady' });
+    expect(game.loginRewardStatus('2026-10-18')).toMatchObject({ available: false, day: 1 });
+
+    // Passage de mois et série complète : le 7e jour donne des billets.
+    const days = ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24'];
+    for (const day of days) expect(game.claimLoginReward(day).ok).toBe(true);
+    expect(game.state.loginStreak.streak).toBe(7);
+    expect(game.loginRewardStatus('2026-10-24').reward.cash).toBeGreaterThan(0);
+    expect(game.loginRewardStatus('2026-10-25')).toMatchObject({ available: true, day: 1 });
+    expect(game.claimLoginReward('2026-10-25').ok).toBe(true);
+    expect(game.loginRewardStatus('2026-10-26').day).toBe(2);
+    expect(game.loginRewardStatus('2026-10-28').day).toBe(1);
+    expect(game.loginRewardStatus('2026-11-01')).toMatchObject({ available: true, day: 1 });
+  });
+
+  it('refuse une date antérieure ou mal formée', () => {
+    const { game } = setup();
+    expect(game.claimLoginReward('2026-10-18').ok).toBe(true);
+    expect(game.claimLoginReward('2026-10-17')).toMatchObject({ ok: false, reason: 'notReady' });
+    expect(game.claimLoginReward('hier')).toMatchObject({ ok: false, reason: 'invalid' });
+  });
+
+  it('migre une sauvegarde v5 et conserve la série', () => {
+    const { game, clock } = setup();
+    game.claimLoginReward('2026-03-30');
+    const file = JSON.parse(serialize(game.state, clock.now()));
+    expect(deserialize(JSON.stringify(file))!.loginStreak).toEqual({ lastDay: '2026-03-30', streak: 1 });
+    file.version = 5;
+    delete file.state.loginStreak;
+    expect(deserialize(JSON.stringify(file))!.loginStreak).toEqual({ lastDay: null, streak: 0 });
+  });
+});
+
+describe('objectifs voisins et marché', () => {
+  it('progressent avec les visites, l’aide et le marché', () => {
+    const { game } = setup();
+    game.devGrant({ xp: 2000, goods: 50 });
+    const active = () => game.state.quests.active.map((q) => q.id);
+    expect(active()).toContain('neighbors');
+    expect(active()).toContain('market');
+    expect(
+      findQuestHint(
+        game,
+        game.state.quests.active.find((q) => q.id === 'neighbors')!,
+      ),
+    ).toEqual({
+      kind: 'social',
+      tab: 'neighbors',
+    });
+    game.visitedNeighbor();
+    game.rewardHelpGiven();
+    game.rewardHelpGiven();
+    expect(game.state.quests.completed).toContain('neighbors');
+
+    expect(game.marketReserve(10).ok).toBe(true);
+    game.marketListed();
+    expect(game.state.quests.completed).toContain('market');
+    if (game.state.level >= 8) {
+      expect(active()).toContain('trader');
+      expect(game.marketBuy(10, 20).ok).toBe(true);
+      const trader = game.state.quests.active.find((q) => q.id === 'trader')!;
+      expect(trader.counts[0]).toBe(1);
+    }
+  });
+});
+
+describe('limites et améliorations', () => {
+  it('limite le nombre d’exemplaires d’un bâtiment selon le niveau', () => {
+    const { game } = setup();
+    game.devGrant({ coins: 100_000 });
+    // Niveau 1 : 4 maisonnettes au plus, dont 2 de départ.
+    expect(game.buildLimitFor(getBuildingDef('cottage'))).toBe(4);
+    for (let i = 0; i < 2; i++) {
+      const spot = freeSpot(game, 'cottage');
+      expect(game.place('cottage', spot.x, spot.y).ok).toBe(true);
+    }
+    const spot = freeSpot(game, 'cottage');
+    expect(game.place('cottage', spot.x, spot.y)).toMatchObject({ ok: false, reason: 'limitReached' });
+    // Les routes et décorations restent illimitées.
+    expect(game.buildLimitFor(getBuildingDef('road'))).toBeNull();
+  });
+
+  it('améliore une maison en 3 étoiles : plus d’habitants et de loyer', () => {
+    const { game, clock } = setup();
+    const house = game.state.entities.find((e) => e.defId === 'cottage')!;
+    const def = getBuildingDef('cottage');
+    if (def.category !== 'house') throw new Error();
+    expect(game.upgradeInfo(house)).toMatchObject({ status: 'available', stars: 0, reason: 'levelLocked' });
+    game.devGrant({ xp: 20_000, coins: 50_000, goods: 100 });
+    // Assez de place pour les nouveaux habitants.
+    const school = freeSpot(game, 'hospital');
+    game.place('hospital', school.x, school.y);
+    clock.advance(getBuildingDef('hospital').buildSec);
+    game.finishBuild(game.state.entities.at(-1)!.id);
+
+    const rent = game.rentFor(house).coins;
+    const population = game.derived().population;
+    for (let star = 1; star <= 3; star++) {
+      const info = game.upgradeInfo(house);
+      if (info.status !== 'available') throw new Error(info.status);
+      // Une étoile coûte bien moins cher que racheter le bâtiment.
+      expect(info.cost.coins).toBeLessThan(def.cost.coins! * 0.5);
+      expect(game.startUpgrade(house.id).ok).toBe(true);
+      expect(game.primaryAction(house).type).toBe('waitUpgrade');
+      expect(game.finishUpgrade(house.id)).toMatchObject({ ok: false, reason: 'notReady' });
+      clock.advance(info.durationSec);
+      expect(game.primaryAction(house).type).toBe('finishUpgrade');
+      expect(game.finishUpgrade(house.id).ok).toBe(true);
+      expect(house.stars).toBe(star);
+    }
+    expect(game.upgradeInfo(house)).toEqual({ status: 'max', stars: 3 });
+    expect(game.startUpgrade(house.id)).toMatchObject({ ok: false, reason: 'maxStars' });
+    expect(game.rentFor(house).coins).toBeGreaterThan(rent);
+    expect(game.derived().population).toBe(population - def.population + Math.round(def.population * 1.75));
+  });
+
+  it('les étoiles raccourcissent les expéditions de pêche et agrandissent les entrepôts', () => {
+    const { game } = setup();
+    const barn = game.state.entities.find((e) => e.defId === 'barn')!;
+    const cap = game.derived().goodsCap;
+    barn.stars = 2;
+    const fresh = new Game(game.state);
+    expect(fresh.derived().goodsCap).toBeGreaterThan(cap);
+    expect(fresh.tripDurationSec({ ...barn, defId: 'pier', stars: 2 }, 1000)).toBe(700);
+  });
+
+  it('la sauvegarde conserve les étoiles et le chantier d’amélioration', () => {
+    const { game, clock } = setup();
+    const house = game.state.entities.find((e) => e.defId === 'cottage')!;
+    house.stars = 1;
+    house.upgrade = { startedAt: clock.now(), endsAt: clock.now() + 60_000 };
+    const restored = deserialize(serialize(game.state, clock.now()))!;
+    const copy = restored.entities.find((e) => e.id === house.id)!;
+    expect(copy.stars).toBe(1);
+    expect(copy.upgrade).toEqual(house.upgrade);
   });
 });

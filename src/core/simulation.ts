@@ -82,6 +82,9 @@ function collectAll(game: Game, gapSec: number): number {
       case 'finishBuild':
         ok = game.finishBuild(entity.id).ok;
         break;
+      case 'finishUpgrade':
+        ok = game.finishUpgrade(entity.id).ok;
+        break;
       case 'collectRent':
         ok = game.collectRent(entity.id).ok;
         break;
@@ -174,6 +177,18 @@ function placeSomewhere(game: Game, def: BuildingDef): boolean {
   return false;
 }
 
+/** Améliore le bâtiment le plus rentable possible (le plus cher à l'achat). */
+function tryUpgrade(game: Game, reserve: number): boolean {
+  let best: { id: number; price: number } | null = null;
+  for (const entity of game.state.entities) {
+    const info = game.upgradeInfo(entity);
+    if (info.status !== 'available' || info.reason || info.cost.coins + reserve > game.state.coins) continue;
+    const price = getBuildingDef(entity.defId).cost.coins ?? 0;
+    if (!best || price > best.price) best = { id: entity.id, price };
+  }
+  return best !== null && game.startUpgrade(best.id).ok;
+}
+
 /** Achète la zone disponible la moins chère. */
 function tryExpand(game: Game): boolean {
   let best: { cx: number; cy: number; coins: number } | null = null;
@@ -220,6 +235,10 @@ function invest(game: Game): number {
     if (!def && ports < 1 + Math.floor(level / 12)) def = bestAffordable(game, 'port', reserve);
     if (!def && businesses * 2 < houses) def = bestAffordable(game, 'business', reserve);
     if (!def && houseFits) def = houseNext;
+    if (!def && tryUpgrade(game, reserve)) {
+      bought++;
+      continue;
+    }
     if (!def && decorations < houses) def = bestAffordable(game, 'decoration', reserve);
     if (!def) {
       if (tryExpand(game)) {

@@ -2,17 +2,18 @@ import type { AppContext, PlacementInfo } from '@/app/context';
 import type { InboxStore, InboxTarget } from '@/app/inbox';
 import type { ReminderScheduler } from '@/app/reminders';
 import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
+import { localDay } from '@/core/daily';
 import { findQuestHint, type HintTarget } from '@/core/hints';
 import { DAY_NIGHT_MODES, dayNightAt, type DayNightMode } from '@/core/dayNight';
 import type { KeyValueStorage } from '@/core/save';
 import type { BuildingDef, CropDef, FailReason, Reward, TripDef } from '@/core/types';
-import { CHUNK_SIZE, ENERGY_REGEN_SEC, xpForLevel } from '@/data/balance';
+import { CHUNK_SIZE, ENERGY_REGEN_SEC, LOGIN_STREAK_DAYS, loginReward, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
 import { findCashOffer, type StoreProduct } from '@/data/products';
 import { getQuestDef } from '@/data/quests';
 import { isEastChunk } from '@/data/terrain';
-import { t } from '@/i18n';
+import { formatNumber, t, tn } from '@/i18n';
 import {
   buildingName,
   cropName,
@@ -84,6 +85,8 @@ export class UI {
   private placebar = h('div', { class: 'placebar' });
   private banner = h('div', { class: 'banner' });
   private buildButton!: HTMLButtonElement;
+  private socialButton?: HTMLButtonElement;
+  private loginOffered: string | null = null;
   private editButton!: HTMLButtonElement;
   private mode: Mode = 'play';
   private plantCropId: string | null = null;
@@ -93,6 +96,8 @@ export class UI {
   private announcementSeen: number;
   /** Joueur identifié : les raccourcis (chat, notifications, défis) apparaissent. */
   private started = false;
+  /** Outils de test et boutique : réservés au compte administrateur (et au développement). */
+  private tester = false;
 
   constructor(
     parent: HTMLElement,
@@ -131,6 +136,7 @@ export class UI {
         ctx.bus.emit('ui:startMove', { entityId: id });
       },
       sell: (id) => this.confirmSell(id),
+      upgrade: (id) => this.upgrade(id),
     });
     this.shop = new Shop(
       game,
@@ -211,15 +217,36 @@ export class UI {
 
   /** À appeler une fois le monde prêt. */
   start(): void {
+    this.setTester(import.meta.env.DEV);
     // Inscription (langue, pseudo) d'abord, puis l'introduction du tutoriel.
     this.social.start(() => {
       this.started = true;
       this.refreshDock();
       if (!this.ctx.game.state.tutorial.introSeen) this.showIntro();
-      else this.notices.welcomeBack();
+      else {
+        this.notices.welcomeBack();
+        this.offerLoginReward();
+      }
+      // L'app peut rester ouverte en arrière-plan d'un jour à l'autre.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.ctx.game.state.tutorial.introSeen) this.offerLoginReward();
+      });
       this.chat.watch();
       this.options.reminders.start();
+      // La boutique et les outils de test ne sont visibles que du compte administrateur (le propriétaire).
+      // La démo hors ligne tourne sur l'appareil du propriétaire : tout y est visible.
+      const backend = this.options.social.backend;
+      backend
+        .me()
+        .then((me) => this.setTester(me.role === 'admin' || backend.kind === 'local' || import.meta.env.DEV))
+        .catch(() => undefined);
     });
+  }
+
+  /** Affiche ou masque la boutique et les outils de test. */
+  setTester(on: boolean): void {
+    this.tester = on;
+    document.body.classList.toggle('is-tester', on);
   }
 
   // ———————————————————————————— Câblage ————————————————————————————
@@ -322,7 +349,9 @@ export class UI {
     this.dock.append(
       this.buildButton,
       this.editButton,
-      button(t('dock.neighbors'), Icons.population, 'dock__btn--social', () => this.social.openNeighbors()),
+      (this.socialButton = button(t('dock.neighbors'), Icons.population, 'dock__btn--social', () =>
+        this.social.openNeighbors(),
+      )),
       button(t('dock.shop'), Icons.shop, 'dock__btn--shop', () => this.openShop('cash')),
       button(t('dock.settings'), Icons.settings, 'dock__btn--settings', () => this.showSettings()),
     );
@@ -369,6 +398,7 @@ export class UI {
     this.placebar.classList.toggle('is-open', placing);
     this.editButton.classList.toggle('is-active', this.mode === 'edit');
     this.buildButton.classList.toggle('is-hint', this.hint?.kind === 'shop' && !this.buildMenu.isOpen);
+    this.socialButton?.classList.toggle('is-hint', this.hint?.kind === 'social' && !this.social.panel.isOpen);
     this.renderPlacebar();
     this.renderBanner();
   }
@@ -499,16 +529,18 @@ export class UI {
         this.showEnergyEmpty();
         return;
       case 'notEnoughCoins':
-        this.toasts.show(failMessage(reason, missing), 'error', {
-          label: t('dock.shop'),
-          onClick: () => this.openShop('coins'),
-        });
+        this.toasts.show(
+          failMessage(reason, missing),
+          'error',
+          this.tester ? { label: t('dock.shop'), onClick: () => this.openShop('coins') } : undefined,
+        );
         return;
       case 'notEnoughCash':
-        this.toasts.show(failMessage(reason, missing), 'error', {
-          label: t('toast.getCash'),
-          onClick: () => this.openShop('cash'),
-        });
+        this.toasts.show(
+          failMessage(reason, missing),
+          'error',
+          this.tester ? { label: t('toast.getCash'), onClick: () => this.openShop('cash') } : undefined,
+        );
         return;
       default:
         this.toasts.show(failMessage(reason, missing), 'error');
@@ -566,6 +598,16 @@ export class UI {
     else this.onFail(result.reason, result.missing);
   }
 
+  private upgrade(entityId: number): void {
+    const result = this.ctx.game.startUpgrade(entityId);
+    if (!result.ok) {
+      this.onFail(result.reason, result.missing);
+      return;
+    }
+    this.bubble.close();
+    this.toasts.show(t('upgrade.started'), 'success');
+  }
+
   private confirmSell(entityId: number): void {
     const { game } = this.ctx;
     const entity = game.getEntity(entityId);
@@ -591,6 +633,7 @@ export class UI {
   }
 
   private openShop(tab: ShopTab): void {
+    if (!this.tester) return;
     this.closeTransient();
     this.shop.open(tab);
   }
@@ -618,6 +661,45 @@ export class UI {
         );
       }),
     );
+  }
+
+  /** Fenêtre « Cadeau du jour », une fois par jour (date locale du joueur). */
+  private offerLoginReward(): void {
+    const { game } = this.ctx;
+    const today = localDay(Date.now());
+    const status = game.loginRewardStatus(today);
+    if (!status.available || this.loginOffered === today) return;
+    this.loginOffered = today;
+    const days = Array.from({ length: LOGIN_STREAK_DAYS }, (_, i) => i + 1).map((day) => {
+      const reward = loginReward(day, game.state.level);
+      const state = day < status.day ? ' is-done' : day === status.day ? ' is-today' : '';
+      return h(
+        'div',
+        { class: `login-reward__day${state}` },
+        h('span', { class: 'login-reward__label', text: t('login.day', { n: day }) }),
+        icon(reward.cash ? Icons.cash : Icons.coin),
+        h('span', { text: reward.cash ? `+${formatNumber(reward.cash)}` : formatNumber(reward.coins) }),
+      );
+    });
+    this.modals.show({
+      title: t('login.title'),
+      kicker: status.day > 1 ? tn('login.streak', status.day) : t('login.comeBack'),
+      avatar: true,
+      body: [
+        h('p', { text: t('login.intro') }),
+        h('div', { class: 'login-reward' }, ...days),
+        rewardChips(status.reward),
+      ],
+      buttons: [
+        {
+          label: t('login.claim'),
+          onClick: () => {
+            const result = game.claimLoginReward(today);
+            if (result.ok) this.toasts.show(t('login.claimed', { n: result.day }), 'success');
+          },
+        },
+      ],
+    });
   }
 
   private showIntro(): void {
@@ -677,6 +759,8 @@ export class UI {
       this.ctx.bus.emit('ui:focusEntity', { entityId: hint.entityId });
     } else if (hint.kind === 'shop') {
       this.buildMenu.open({ defId: hint.defId, category: hint.category });
+    } else if (hint.kind === 'social') {
+      this.social.openNeighbors(hint.tab);
     } else {
       this.ctx.bus.emit('ui:focusTile', { x: (hint.cx + 0.5) * CHUNK_SIZE, y: (hint.cy + 0.5) * CHUNK_SIZE });
       this.toasts.show(t('hint.expand'), 'info');
@@ -840,29 +924,30 @@ export class UI {
     this.closeTransient();
     const devButton = (text: string, onClick: () => void) =>
       h('button', { class: 'btn btn--small btn--secondary', text, onClick });
-    const devButtons = DEV_TOOLS
-      ? [
-          h('div', { class: 'modal__section-title', text: t('settings.dev') }),
-          h(
-            'div',
-            { class: 'dev-tools' },
-            devButton(t('dev.coins', { n: 1000 }), () => game.devGrant({ coins: 1000 })),
-            devButton(t('dev.cash', { n: 20 }), () => game.devGrant({ cash: 20 })),
-            devButton(t('dev.energy'), () =>
-              game.devGrant({ energy: Math.max(0, game.derived().energyMax - game.state.energy) }),
+    const devButtons =
+      DEV_TOOLS && this.tester
+        ? [
+            h('div', { class: 'modal__section-title', text: t('settings.dev') }),
+            h(
+              'div',
+              { class: 'dev-tools' },
+              devButton(t('dev.coins', { n: 1000 }), () => game.devGrant({ coins: 1000 })),
+              devButton(t('dev.cash', { n: 20 }), () => game.devGrant({ cash: 20 })),
+              devButton(t('dev.energy'), () =>
+                game.devGrant({ energy: Math.max(0, game.derived().energyMax - game.state.energy) }),
+              ),
+              devButton(t('dev.goods', { n: 50 }), () => game.devGrant({ goods: 50 })),
+              devButton(t('dev.level'), () =>
+                game.devGrant({ xp: Math.max(0, xpForLevel(game.state.level + 1) - game.state.xp) }),
+              ),
+              devButton(t('dev.skip', { n: 10 }), () => {
+                game.devSkipTime(10 * 60 * 1000);
+                this.toasts.show(t('dev.skipped', { n: 10 }), 'info');
+              }),
+              devButton(t('dev.notify'), () => void this.options.reminders.test(t('notif.test'))),
             ),
-            devButton(t('dev.goods', { n: 50 }), () => game.devGrant({ goods: 50 })),
-            devButton(t('dev.level'), () =>
-              game.devGrant({ xp: Math.max(0, xpForLevel(game.state.level + 1) - game.state.xp) }),
-            ),
-            devButton(t('dev.skip', { n: 10 }), () => {
-              game.devSkipTime(10 * 60 * 1000);
-              this.toasts.show(t('dev.skipped', { n: 10 }), 'info');
-            }),
-            devButton(t('dev.notify'), () => void this.options.reminders.test(t('notif.test'))),
-          ),
-        ]
-      : [];
+          ]
+        : [];
     this.modals.show({
       title: t('settings.title'),
       body: [

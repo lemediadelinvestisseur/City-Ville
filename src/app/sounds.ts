@@ -36,6 +36,8 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
     }
   });
   game.events.on('constructionComplete', () => sound.play('complete'));
+  game.events.on('upgradeStarted', () => sound.play('construction'));
+  game.events.on('upgradeComplete', () => sound.play('complete'));
   game.events.on('levelUp', () => sound.play('levelUp'));
   game.events.on('questCompleted', () => sound.play('quest'));
   bus.on('world:fail', () => sound.play('error'));

@@ -466,6 +466,28 @@ const translation: Translation = {
     'demo.reply1': '안녕하세요! 즐겜하세요 🙂',
     'demo.reply2': '좋은 생각이에요!',
     'demo.reply3': 'ㅋㅋ 저도요!',
+    'fail.limitReached': '이 건물은 최대 개수에 도달했어요. 레벨을 올리거나 가진 건물을 업그레이드하세요.',
+    'fail.maxStars': '이 건물은 이미 최대로 업그레이드됐어요.',
+    'build.lockLimit': '최대 도달',
+    'build.countTitle': '건설 수 / 현재 레벨 최대',
+    'bubble.upgradeTitle': '업그레이드: {name}',
+    'bubble.upgradeDone': '공사가 끝났어요. 건물을 눌러 업그레이드를 확인하세요!',
+    'bubble.upgradeWorking': '인부들이 건물을 넓히고 있어요.',
+    'bubble.upgradeMax': '최대 업그레이드 ★★★',
+    'bubble.upgradeLocked': '{stars} 레벨 {level}부터',
+    'bubble.upgrade': '업그레이드 {stars} · {coinIcon} {coins} {goodsIcon} {goods}',
+    'world.upgraded': '{stars} 업그레이드 완료!',
+    'upgrade.started': '업그레이드 공사를 시작했어요!',
+    'account.privacy': '개인정보 처리방침',
+    'login.title': '오늘의 선물',
+    'login.comeBack': '매일 찾아와 주세요!',
+    'login.intro':
+      '매일 접속해 연속 기록을 늘리세요. 7일째에는 지폐가 기다려요. 하루라도 빠지면 기록이 처음부터 다시 시작돼요.',
+    'login.day': '{n}일째',
+    'login.claim': '받기',
+    'login.claimed': '{n}일째 선물을 받았어요!',
+    'login.streak#one': '연속 {n}일',
+    'login.streak#other': '연속 {n}일',
   },
   content: {
     buildings: {
@@ -698,6 +720,34 @@ const translation: Translation = {
         title: '꿈의 도시',
         intro: '마지막 도전이에요. 지금까지 걸어온 길을 기념할 경기장을 지어요, 시장님!',
         labels: ['경기장 준공하기'],
+      },
+      neighbors: {
+        title: '좋은 이웃',
+        intro:
+          '도시는 혼자 자라지 않아요! "이웃"을 열어 다른 시장의 도시를 방문하고 도와주세요. 도울 때마다 코인을 받아요.',
+        labels: ['이웃 방문하기', '이웃 2명 돕기'],
+      },
+      market: {
+        title: '장날',
+        intro:
+          '마켓이 열렸어요! 남는 작물은 다른 시장에게 팔 수 있어요. "이웃"에서 "마켓" 탭을 열고 묶음을 판매에 올리세요.',
+        labels: ['묶음 판매 등록하기'],
+      },
+      trader: {
+        title: '상인',
+        intro: '가게에 물품이 부족한가요? 마켓에서 다른 시장의 묶음을 사고, 남는 물품은 계속 판매하세요.',
+        labels: ['마켓에서 묶음 사기', '묶음 3개 판매 등록하기'],
+      },
+      renovation: {
+        title: '리모델링',
+        intro:
+          '계속 새로 짓기보다 가진 건물을 꾸며 보세요! 집을 누르고 "업그레이드": 자리를 더 차지하지 않고 주민과 임대료가 늘어나요.',
+        labels: ['집 업그레이드하기'],
+      },
+      stars: {
+        title: '별빛 거리',
+        intro: '두 번째 별이 열렸어요! 상점과 공공시설을 업그레이드하세요. 별 하나마다 수입이나 수용량이 늘어나요.',
+        labels: ['건물 3번 업그레이드하기'],
       },
     },
     products: {

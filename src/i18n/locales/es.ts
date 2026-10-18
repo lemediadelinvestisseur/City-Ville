@@ -497,6 +497,28 @@ const translation: Translation = {
     'demo.reply1': '¡Hola! Que te diviertas 🙂',
     'demo.reply2': '¡Buena idea!',
     'demo.reply3': '¡Jaja, aquí igual!',
+    'fail.limitReached': 'Has alcanzado el máximo de este edificio: sube de nivel o mejora los que ya tienes.',
+    'fail.maxStars': 'Este edificio ya está mejorado al máximo.',
+    'build.lockLimit': 'Máximo alcanzado',
+    'build.countTitle': 'Construidos / máximo en tu nivel',
+    'bubble.upgradeTitle': 'Mejora: {name}',
+    'bubble.upgradeDone': '¡Las obras han terminado: toca el edificio para descubrir su mejora!',
+    'bubble.upgradeWorking': 'Los obreros están ampliando el edificio.',
+    'bubble.upgradeMax': 'Mejora máxima ★★★',
+    'bubble.upgradeLocked': '{stars} en el nivel {level}',
+    'bubble.upgrade': 'Mejorar {stars} · {coinIcon} {coins} {goodsIcon} {goods}',
+    'world.upgraded': '¡{stars} Mejorado!',
+    'upgrade.started': '¡Obras de mejora iniciadas!',
+    'account.privacy': 'Política de privacidad',
+    'login.title': 'Regalo del día',
+    'login.comeBack': '¡Vuelve cada día!',
+    'login.intro':
+      'Conéctate cada día para aumentar tu racha: el 7.º día te esperan billetes. Si fallas un día, la racha vuelve a empezar.',
+    'login.day': 'Día {n}',
+    'login.claim': 'Recoger',
+    'login.claimed': '¡Regalo del día {n} recogido!',
+    'login.streak#one': 'Racha: {n} día',
+    'login.streak#other': 'Racha: {n} días seguidos',
   },
   content: {
     buildings: {
@@ -749,6 +771,36 @@ const translation: Translation = {
         title: 'La ciudad de tus sueños',
         intro: '¡Último reto: un estadio para celebrar todo el camino recorrido, Alcalde!',
         labels: ['Inaugurar el estadio'],
+      },
+      neighbors: {
+        title: 'Buena vecindad',
+        intro:
+          '¡Una ciudad nunca crece sola! Abre «Vecinos», visita la ciudad de otro alcalde y échale una mano: cada ayuda te da monedas.',
+        labels: ['Visitar a un vecino', 'Ayudar a 2 vecinos'],
+      },
+      market: {
+        title: 'Día de mercado',
+        intro:
+          '¡El mercado está abierto! Puedes vender tus cosechas sobrantes a otros alcaldes. Abre «Vecinos», luego la pestaña «Mercado», y pon un lote a la venta.',
+        labels: ['Poner un lote a la venta'],
+      },
+      trader: {
+        title: 'Comerciante',
+        intro:
+          '¿Tus comercios necesitan mercancías? Compra un lote a otro alcalde en el mercado y sigue vendiendo tus excedentes.',
+        labels: ['Comprar un lote en el mercado', 'Poner 3 lotes a la venta'],
+      },
+      renovation: {
+        title: 'Renovación',
+        intro:
+          'En lugar de construir cada vez más, ¡mejora lo que ya tienes! Toca una casa y luego «Mejorar»: más habitantes y más alquiler, sin ocupar más espacio.',
+        labels: ['Mejorar una casa'],
+      },
+      stars: {
+        title: 'Barrio de estrellas',
+        intro:
+          '¡Las segundas estrellas están desbloqueadas! Mejora tus comercios y servicios: cada estrella aumenta sus ingresos o su capacidad.',
+        labels: ['Mejorar 3 edificios'],
       },
     },
     products: {

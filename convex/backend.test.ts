@@ -411,3 +411,15 @@ describe('marché', () => {
     vi.useRealTimers();
   });
 });
+
+describe('page de confidentialité', () => {
+  it('est servie en HTML sur /confidentialite', async () => {
+    const t = convexTest(schema, modules);
+    const res = await t.fetch('/confidentialite', { method: 'GET' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    const html = await res.text();
+    expect(html).toContain('Politique de confidentialité');
+    expect(html).toContain('Supprimer mon compte');
+  });
+});

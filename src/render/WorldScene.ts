@@ -45,6 +45,14 @@ interface View {
   /** Bateau amarré (ou parti en mer) d'un port. */
   boat: Phaser.GameObjects.Image | null;
   boatHome: { x: number; y: number } | null;
+  /** Étoiles d'amélioration, au pied du bâtiment. */
+  stars: Phaser.GameObjects.Text | null;
+}
+
+/** Travaux en cours sur une construction : chantier initial ou amélioration. */
+function worksOf(entity: Entity): { startedAt: number; endsAt: number } | null {
+  if (!entity.built) return entity.construction ?? null;
+  return entity.upgrade ?? null;
 }
 
 interface Placement {
@@ -307,6 +315,7 @@ export class WorldScene extends Phaser.Scene {
   private badgeFor(entity: Entity): BadgeKind | null {
     switch (this.game_.primaryAction(entity).type) {
       case 'finishBuild':
+      case 'finishUpgrade':
         return 'build';
       case 'unloadBoat':
         return 'fish';
@@ -344,6 +353,7 @@ export class WorldScene extends Phaser.Scene {
       crew: null,
       boat: null,
       boatHome: null,
+      stars: null,
     };
     this.views.set(entity.id, view);
     this.syncView(view);
@@ -360,6 +370,7 @@ export class WorldScene extends Phaser.Scene {
     view.crew?.worker.destroy();
     view.crew?.hammer.destroy();
     view.boat?.destroy();
+    view.stars?.destroy();
     this.views.delete(id);
     if (this.selectedId === id) this.select(null);
   }
@@ -425,16 +436,45 @@ export class WorldScene extends Phaser.Scene {
     this.syncBoat(view);
     this.syncTimer(view);
     this.syncCrew(view);
+    this.syncStars(view);
+  }
+
+  /** « ★★ » dorées devant un bâtiment amélioré. */
+  private syncStars(view: View): void {
+    const stars = view.entity.stars ?? 0;
+    if (stars <= 0 || !view.entity.built) {
+      view.stars?.destroy();
+      view.stars = null;
+      return;
+    }
+    if (!view.stars) {
+      view.stars = this.add
+        .text(0, 0, '', {
+          fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+          fontStyle: '900',
+          fontSize: '34px',
+          color: '#ffd54f',
+          stroke: '#6d4c00',
+          strokeThickness: 7,
+        })
+        .setOrigin(0.5, 1)
+        .setResolution(Math.min(2, this.dpr * 1.5));
+    }
+    const a = this.anchor(view);
+    const front = a.y + ((a.w + a.d) / 2) * (TILE_H / 2);
+    view.stars
+      .setText('★'.repeat(stars))
+      .setPosition(a.x, front + 6 * this.overlayScale)
+      .setScale(this.overlayScale * Math.max(1, a.w * 0.4))
+      .setDepth(view.main.depth + 0.05)
+      .setVisible(this.game_.isTileUnlocked(view.entity.x, view.entity.y));
   }
 
   /** Un ouvrier au marteau sur chaque chantier en cours. */
   private syncCrew(view: View): void {
     const { entity } = view;
-    const working =
-      !entity.built &&
-      !!entity.construction &&
-      this.game_.now() < entity.construction.endsAt &&
-      this.game_.isTileUnlocked(entity.x, entity.y);
+    const works = worksOf(entity);
+    const working = !!works && this.game_.now() < works.endsAt && this.game_.isTileUnlocked(entity.x, entity.y);
     if (!working) {
       view.crew?.worker.destroy();
       view.crew?.hammer.destroy();
@@ -503,7 +543,8 @@ export class WorldScene extends Phaser.Scene {
   /** Fin de l'attente à afficher en direct, ou null. */
   private timerEnd(entity: Entity): number | null {
     const now = this.game_.now();
-    if (!entity.built && entity.construction && now < entity.construction.endsAt) return entity.construction.endsAt;
+    const works = worksOf(entity);
+    if (works && now < works.endsAt) return works.endsAt;
     if (entity.port?.tripId && now < entity.port.readyAt) return entity.port.readyAt;
     return null;
   }
@@ -532,7 +573,7 @@ export class WorldScene extends Phaser.Scene {
     const center = footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d);
     const s = this.overlayScale;
     // Sous le bâtiment pour un chantier (au-dessus de la barre), au-dessus du port pour un bateau.
-    const y = view.entity.built ? this.topOf(view) - 4 * s : center.y + 14 * s;
+    const y = worksOf(view.entity) ? center.y + 14 * s : this.topOf(view) - 4 * s;
     view.timer
       .setText(formatClock((end - this.game_.now()) / 1000))
       .setPosition(center.x, y)
@@ -542,8 +583,8 @@ export class WorldScene extends Phaser.Scene {
 
   /** Avancement du chantier en vingtièmes (null : pas de chantier en cours). */
   private buildProgress(entity: Entity): number | null {
-    const c = entity.construction;
-    if (entity.built || !c) return null;
+    const c = worksOf(entity);
+    if (!c) return null;
     const ratio = (this.game_.now() - c.startedAt) / Math.max(1, c.endsAt - c.startedAt);
     return Math.max(0, Math.min(20, Math.floor(ratio * 20)));
   }
@@ -625,10 +666,9 @@ export class WorldScene extends Phaser.Scene {
   private refreshDynamic(): void {
     this.night.refresh(Date.now(), this.game_.state.entities, (e) => this.game_.isTileUnlocked(e.x, e.y));
     for (const view of this.views.values()) {
-      if (view.timer || (view.entity.construction && !view.entity.built) || view.entity.port?.tripId)
-        this.syncTimer(view);
+      if (view.timer || worksOf(view.entity) || view.entity.port?.tripId) this.syncTimer(view);
       const e = view.entity;
-      if (e.house || e.business || e.farm || e.port || !e.built) {
+      if (e.house || e.business || e.farm || e.port || worksOf(e)) {
         const badge = this.badgeFor(e);
         const progress = this.buildProgress(e);
         const barChanged = progress !== null && !view.barKey.startsWith(`${progress}@`);
@@ -705,7 +745,7 @@ export class WorldScene extends Phaser.Scene {
     const scale = Math.max(0.8, Math.min(1.7, 0.55 / this.camCtl.userZoom));
     if (Math.abs(scale - this.overlayScale) < 0.02) return;
     this.overlayScale = scale;
-    for (const view of this.views.values()) if (view.badge || view.bar || view.timer) this.syncView(view);
+    for (const view of this.views.values()) if (view.badge || view.bar || view.timer || view.stars) this.syncView(view);
   }
 
   // ———————————————————————————— Évènements ————————————————————————————
@@ -767,6 +807,20 @@ export class WorldScene extends Phaser.Scene {
             },
           );
         }
+      }),
+    );
+    on(
+      game.events.on('upgradeStarted', (entity) => {
+        const view = this.views.get(entity.id);
+        if (view) this.openSiteFx(view);
+      }),
+    );
+    on(
+      game.events.on('upgradeComplete', (entity) => {
+        const view = this.views.get(entity.id);
+        if (!view) return;
+        this.riseFx(view);
+        this.celebrate(view, t('world.upgraded', { stars: '★'.repeat(entity.stars ?? 1) }), '#ffd54f');
       }),
     );
     on(game.events.on('reward', ({ entityId, reward }) => this.onReward(entityId, reward)));
@@ -1061,6 +1115,9 @@ export class WorldScene extends Phaser.Scene {
     switch (action.type) {
       case 'finishBuild':
         result = game.finishBuild(entity.id);
+        break;
+      case 'finishUpgrade':
+        result = game.finishUpgrade(entity.id);
         break;
       case 'unloadBoat':
         result = game.unloadBoat(entity.id);
@@ -1358,11 +1415,11 @@ export class WorldScene extends Phaser.Scene {
     this.fx.crates(a.x, a.y);
   }
 
-  private celebrate(view: View): void {
+  private celebrate(view: View, text = t('world.done'), color = '#ffffff'): void {
     const a = this.anchor(view);
     this.fx.puffs(a.x, a.y, a.w, a.d, 8);
     this.fx.stars(a.x, a.top + 30);
-    this.fx.popText(a.x, a.top - 40 * this.overlayScale, t('world.done'), '#ffffff', 0, this.overlayScale);
+    this.fx.popText(a.x, a.top - 40 * this.overlayScale, text, color, 0, this.overlayScale);
   }
 
   private onReward(entityId: number | null, reward: Reward): void {

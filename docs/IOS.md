@@ -52,7 +52,8 @@ signing » et choisis ton équipe (Team). Branche ton iPhone, choisis-le en haut
 - **Contenu entre joueurs** (pseudos, villes, chat) : signaler et bloquer un joueur ou un message ✅,
   modération dans l'admin et par les modérateurs dans le jeu ✅, insultes et liens masqués dans le chat ✅
 - **Achats** : uniquement par les achats intégrés d'Apple pour le cash (RevenueCat) — à brancher
-- **Politique de confidentialité** : une page web à fournir (données : pseudo, sauvegarde, statistiques de jeu)
+- **Politique de confidentialité** : servie par Convex sur `…convex.site/confidentialite`, liée depuis Réglages ›
+  Compte ✅ (adresse de contact à renseigner dans `convex/privacy.ts`)
 - **Classification d'âge** et captures d'écran (6,9 pouces et 6,5 pouces) dans App Store Connect
 - Le nom de l'app ne doit pas reprendre une marque existante (« CityVille » appartient à Zynga)
 

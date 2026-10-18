@@ -536,4 +536,28 @@ export const FR = {
   'demo.reply1': 'Salut ! Bon jeu à toi 🙂',
   'demo.reply2': 'Bonne idée !',
   'demo.reply3': 'Haha, pareil ici !',
+
+  // ——— Améliorations, limites, cadeau de connexion ———
+  'fail.limitReached': 'Nombre maximal atteint pour ce bâtiment : montez de niveau ou améliorez ceux que vous avez.',
+  'fail.maxStars': 'Ce bâtiment est déjà amélioré au maximum.',
+  'build.lockLimit': 'Maximum atteint',
+  'build.countTitle': 'Exemplaires construits / maximum à votre niveau',
+  'bubble.upgradeTitle': 'Amélioration : {name}',
+  'bubble.upgradeDone': 'Les travaux sont finis : touchez le bâtiment pour découvrir son amélioration !',
+  'bubble.upgradeWorking': 'Les ouvriers agrandissent le bâtiment.',
+  'bubble.upgradeMax': 'Amélioration maximale ★★★',
+  'bubble.upgradeLocked': '{stars} au niveau {level}',
+  'bubble.upgrade': 'Améliorer {stars} · {coinIcon} {coins} {goodsIcon} {goods}',
+  'world.upgraded': '{stars} Amélioré !',
+  'upgrade.started': 'Travaux d’amélioration lancés !',
+  'account.privacy': 'Politique de confidentialité',
+  'login.title': 'Cadeau du jour',
+  'login.comeBack': 'Revenez chaque jour !',
+  'login.intro':
+    'Connectez-vous chaque jour pour faire grimper la série : le 7e jour, des billets vous attendent. Un jour manqué, et la série repart à zéro.',
+  'login.day': 'Jour {n}',
+  'login.claim': 'Récupérer',
+  'login.claimed': 'Cadeau du jour {n} récupéré !',
+  'login.streak#one': 'Série : {n} jour',
+  'login.streak#other': 'Série : {n} jours d’affilée',
 } as const;
