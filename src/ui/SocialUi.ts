@@ -109,10 +109,10 @@ export class SocialUi {
     this.edgePill.classList.toggle('is-visible', near && !this.visiting && !this.panel.isOpen);
   }
 
-  openNeighbors(): void {
+  openNeighbors(tab: 'neighbors' | 'market' = 'neighbors'): void {
     this.deps.closeTransient();
     this.edgePill.classList.remove('is-visible');
-    this.panel.open('neighbors');
+    this.panel.open(tab);
   }
 
   private async help(profile: Profile): Promise<void> {
@@ -136,6 +136,7 @@ export class SocialUi {
       this.panel.close();
       this.visiting = visit;
       social.openVisit(visit);
+      this.deps.ctx.game.visitedNeighbor();
       this.visitBar.show(visit);
       document.body.classList.add('is-visiting');
       this.edgePill.classList.remove('is-visible');

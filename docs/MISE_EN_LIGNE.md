@@ -38,6 +38,14 @@ npx convex env set ADMIN_KEY "une-phrase-longue-et-secrete-de-plus-de-16-caracte
 `npm run dev`) et envoie chaque modification de `convex/` pendant que tu développes, sans toucher à la
 production. L'interface admin est sur `/admin.html` (saisis la clé admin).
 
+**Compte testeur** : la boutique (paiements simulés) et les outils de test ne s'affichent que pour un compte
+marqué « testeur ». Dans l'admin, carte « Trouver un joueur », cherche ton pseudo et clique « Rendre testeur ».
+En développement (`npm run dev`), tout est visible.
+
+**Politique de confidentialité** : servie par Convex sur `https://<déploiement>.convex.site/confidentialite`
+(en production : https://combative-wombat-666.eu-west-1.convex.site/confidentialite). C'est l'adresse à donner
+à App Store Connect. L'adresse de contact se règle dans `convex/privacy.ts` (`PRIVACY_CONTACT`).
+
 ## Ce que fait le serveur
 
 | Module           | Rôle                                                                                         |

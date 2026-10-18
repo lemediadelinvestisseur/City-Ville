@@ -12,6 +12,7 @@ export function questIcon(art: ArtLibrary, iconId: string): HTMLElement {
     return h('img', { attrs: { src: art.iconUrl(ArtKey.cropIcon(iconId), 96), alt: '' } });
   if (iconId === 'expand') return h('span', { class: 'quest-svg', html: Icons.expand });
   if (iconId === 'level') return h('span', { class: 'quest-svg', html: Icons.trophy });
+  if (iconId === 'goods') return h('span', { class: 'quest-svg', html: Icons.goods });
   return h('span', { class: 'quest-svg quest-svg--lea', html: LEA_AVATAR });
 }
 

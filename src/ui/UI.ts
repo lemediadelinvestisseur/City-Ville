@@ -3,7 +3,7 @@ import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
 import { findQuestHint, type HintTarget } from '@/core/hints';
 import { DAY_NIGHT_MODES, dayNightAt, type DayNightMode } from '@/core/dayNight';
 import type { BuildingDef, CropDef, FailReason, Reward, TripDef } from '@/core/types';
-import { CHUNK_SIZE, ENERGY_REGEN_SEC, xpForLevel } from '@/data/balance';
+import { CHUNK_SIZE, DAILY_STREAK_DAYS, ENERGY_REGEN_SEC, dailyReward, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
 import type { StoreProduct } from '@/data/products';
@@ -51,6 +51,8 @@ export class UI {
   private placebar = h('div', { class: 'placebar' });
   private banner = h('div', { class: 'banner' });
   private buildButton!: HTMLButtonElement;
+  private socialButton?: HTMLButtonElement;
+  private dailyOffered: string | null = null;
   private editButton!: HTMLButtonElement;
   private mode: Mode = 'play';
   private plantCropId: string | null = null;
@@ -144,6 +146,11 @@ export class UI {
     // Inscription (pseudo) d'abord, puis l'introduction du tutoriel.
     this.social.start(() => {
       if (!this.ctx.game.state.tutorial.introSeen) this.showIntro();
+      else this.offerDailyReward();
+      // L'app peut rester ouverte en arrière-plan d'un jour à l'autre.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && this.ctx.game.state.tutorial.introSeen) this.offerDailyReward();
+      });
       this.options.social.backend
         .me()
         .then((me) => this.setTester(me.tester || import.meta.env.DEV))
@@ -249,7 +256,7 @@ export class UI {
     this.dock.append(
       this.buildButton,
       this.editButton,
-      button('Voisins', Icons.population, 'dock__btn--social', () => this.social.openNeighbors()),
+      (this.socialButton = button('Voisins', Icons.population, 'dock__btn--social', () => this.social.openNeighbors())),
       button('Boutique', Icons.shop, 'dock__btn--shop', () => this.openShop('cash')),
       button('Réglages', Icons.settings, 'dock__btn--settings', () => this.showSettings()),
     );
@@ -291,6 +298,7 @@ export class UI {
     this.placebar.classList.toggle('is-open', placing);
     this.editButton.classList.toggle('is-active', this.mode === 'edit');
     this.buildButton.classList.toggle('is-hint', this.hint?.kind === 'shop' && !this.buildMenu.isOpen);
+    this.socialButton?.classList.toggle('is-hint', this.hint?.kind === 'social' && !this.social.panel.isOpen);
     this.renderPlacebar();
     this.renderBanner();
   }
@@ -525,6 +533,47 @@ export class UI {
     );
   }
 
+  /** Fenêtre « Cadeau du jour », une fois par jour (date locale du joueur). */
+  private offerDailyReward(): void {
+    const { game } = this.ctx;
+    const today = localDay(new Date());
+    const status = game.dailyStatus(today);
+    if (!status.available || this.dailyOffered === today) return;
+    this.dailyOffered = today;
+    const days = Array.from({ length: DAILY_STREAK_DAYS }, (_, i) => i + 1).map((day) => {
+      const reward = dailyReward(day, game.state.level);
+      const state = day < status.day ? ' is-done' : day === status.day ? ' is-today' : '';
+      return h(
+        'div',
+        { class: `daily__day${state}` },
+        h('span', { class: 'daily__label', text: `Jour ${day}` }),
+        icon(reward.cash ? Icons.cash : Icons.coin),
+        h('span', { class: 'daily__amount', text: reward.cash ? `+${reward.cash}` : formatNumber(reward.coins) }),
+      );
+    });
+    this.modals.show({
+      title: 'Cadeau du jour',
+      kicker: status.day > 1 ? `Série : ${status.day} jours d’affilée` : 'Revenez chaque jour !',
+      avatar: true,
+      body: [
+        h('p', {
+          text: 'Connectez-vous chaque jour pour faire grimper la série : le 7e jour, des billets vous attendent. Un jour manqué, et la série repart à zéro.',
+        }),
+        h('div', { class: 'daily' }, ...days),
+        this.rewardChips(status.reward),
+      ],
+      buttons: [
+        {
+          label: 'Récupérer',
+          onClick: () => {
+            const result = game.claimDailyReward(today);
+            if (result.ok) this.toasts.show(`Cadeau du jour ${result.day} récupéré !`, 'success');
+          },
+        },
+      ],
+    });
+  }
+
   private showIntro(): void {
     const { game } = this.ctx;
     const quest = getQuestDef('welcome');
@@ -592,6 +641,8 @@ export class UI {
       this.ctx.bus.emit('ui:focusEntity', { entityId: hint.entityId });
     } else if (hint.kind === 'shop') {
       this.buildMenu.open({ defId: hint.defId, category: hint.category });
+    } else if (hint.kind === 'social') {
+      this.social.openNeighbors(hint.tab);
     } else {
       this.ctx.bus.emit('ui:focusTile', { x: (hint.cx + 0.5) * CHUNK_SIZE, y: (hint.cy + 0.5) * CHUNK_SIZE });
       this.toasts.show('Touchez le panneau « À vendre » pour agrandir la ville.', 'info');
@@ -900,4 +951,10 @@ export class UI {
       });
     });
   }
+}
+
+/** Date locale au format AAAA-MM-JJ (le jour change à minuit pour le joueur). */
+function localDay(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

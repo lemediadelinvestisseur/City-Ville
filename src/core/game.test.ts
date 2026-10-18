@@ -14,7 +14,7 @@ import { coastX, isWater, terrainAt } from '@/data/terrain';
 import { sceneryOf } from '@/data/scenery';
 import { Game, type Clock } from './game';
 import { findHint, findQuestHint } from './hints';
-import { createNewGame } from './newGame';
+import { SAVE_VERSION, createNewGame } from './newGame';
 import { deserialize, serialize } from './save';
 import type { Entity } from './types';
 
@@ -568,7 +568,7 @@ describe('sauvegarde', () => {
     // Une route posée sur ce qui est désormais la mer disparaît.
     file.state.entities.push({ id: 9999, defId: 'road', x: 31, y: 20, built: true });
     const restored = deserialize(JSON.stringify(file))!;
-    expect(restored.version).toBe(4);
+    expect(restored.version).toBe(SAVE_VERSION);
     const migrated = restored.entities.find((e) => e.id === placed.entity.id)!;
     expect(migrated).not.toHaveProperty('buildProgress');
     expect(migrated.construction?.endsAt).toBe(clock.now() + getBuildingDef('cottage').buildSec * 1000);
@@ -592,5 +592,79 @@ describe('sauvegarde', () => {
     const reloaded = new Game(deserialize(raw)!, clock);
     expect(reloaded.primaryAction(reloaded.getEntity(plot.id)!).type).toBe('harvest');
     expect(reloaded.state.energy).toBe(energyMaxForLevel(reloaded.state.level));
+  });
+});
+
+describe('récompense quotidienne', () => {
+  it('suit une série de 7 jours et repart au jour 1 après un jour manqué', () => {
+    const { game } = setup();
+    expect(game.dailyStatus('2026-10-18')).toMatchObject({ available: true, day: 1 });
+    const coins = game.state.coins;
+    const first = game.claimDailyReward('2026-10-18');
+    expect(first.ok).toBe(true);
+    expect(game.state.coins).toBeGreaterThan(coins);
+    expect(game.claimDailyReward('2026-10-18')).toMatchObject({ ok: false, reason: 'notReady' });
+    expect(game.dailyStatus('2026-10-18')).toMatchObject({ available: false, day: 1 });
+
+    // Passage de mois et série complète : le 7e jour donne des billets.
+    const days = ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24'];
+    for (const day of days) expect(game.claimDailyReward(day).ok).toBe(true);
+    expect(game.state.daily.streak).toBe(7);
+    expect(game.dailyStatus('2026-10-24').reward.cash).toBeGreaterThan(0);
+    expect(game.dailyStatus('2026-10-25')).toMatchObject({ available: true, day: 1 });
+    expect(game.claimDailyReward('2026-10-25').ok).toBe(true);
+    expect(game.dailyStatus('2026-10-26').day).toBe(2);
+    expect(game.dailyStatus('2026-10-28').day).toBe(1);
+    expect(game.dailyStatus('2026-11-01')).toMatchObject({ available: true, day: 1 });
+  });
+
+  it('refuse une date antérieure ou mal formée', () => {
+    const { game } = setup();
+    expect(game.claimDailyReward('2026-10-18').ok).toBe(true);
+    expect(game.claimDailyReward('2026-10-17')).toMatchObject({ ok: false, reason: 'notReady' });
+    expect(game.claimDailyReward('hier')).toMatchObject({ ok: false, reason: 'invalid' });
+  });
+
+  it('migre une sauvegarde v4 et conserve la série', () => {
+    const { game, clock } = setup();
+    game.claimDailyReward('2026-03-30');
+    const file = JSON.parse(serialize(game.state, clock.now()));
+    expect(deserialize(JSON.stringify(file))!.daily).toEqual({ lastDay: '2026-03-30', streak: 1 });
+    file.version = 4;
+    delete file.state.daily;
+    expect(deserialize(JSON.stringify(file))!.daily).toEqual({ lastDay: null, streak: 0 });
+  });
+});
+
+describe('objectifs voisins et marché', () => {
+  it('progressent avec les visites, l’aide et le marché', () => {
+    const { game } = setup();
+    game.devGrant({ xp: 2000, goods: 50 });
+    const active = () => game.state.quests.active.map((q) => q.id);
+    expect(active()).toContain('neighbors');
+    expect(active()).toContain('market');
+    expect(
+      findQuestHint(
+        game,
+        game.state.quests.active.find((q) => q.id === 'neighbors')!,
+      ),
+    ).toEqual({
+      kind: 'social',
+      tab: 'neighbors',
+    });
+    game.visitedNeighbor();
+    game.rewardHelpGiven();
+    game.rewardHelpGiven();
+    expect(game.state.quests.completed).toContain('neighbors');
+
+    expect(game.marketReserve(10).ok).toBe(true);
+    game.marketListed();
+    expect(game.state.quests.completed).toContain('market');
+    if (game.state.level >= 8) {
+      expect(active()).toContain('trader');
+      expect(game.marketBuy(10, 20).ok).toBe(true);
+      const trader = game.state.quests.active.find((q) => q.id === 'trader')!;
+      expect(trader.counts[0]).toBe(1);
+    }
   });
 });

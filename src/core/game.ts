@@ -10,6 +10,8 @@ import {
   SELL_REFUND_RATIO,
   energyMaxForLevel,
   expansionPrice,
+  dailyReward,
+  DAILY_STREAK_DAYS,
   helpGivenReward,
   helpReceivedReward,
   levelUpReward,
@@ -70,6 +72,24 @@ export interface GameEvents {
 export function inaugurationBonus(def: BuildingDef): number {
   return Math.round((def.cost.coins ?? 0) * 0.05);
 }
+
+/** État de la récompense quotidienne pour un jour donné. */
+export interface DailyStatus {
+  /** La récompense du jour peut être réclamée. */
+  available: boolean;
+  /** Jour de la série (1 à 7) réclamable aujourd'hui, ou déjà réclamé. */
+  day: number;
+  reward: Reward;
+}
+
+/** Jour précédent (AAAA-MM-JJ), calculé en UTC pour ignorer les changements d'heure. */
+export function previousDay(day: string): string {
+  const date = new Date(`${day}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface Derived {
   population: number;
@@ -864,6 +884,10 @@ export class Game {
       case 'unloadBoat':
         return true;
       case 'expand':
+      case 'helpNeighbor':
+      case 'visitNeighbor':
+      case 'marketSell':
+      case 'marketBuy':
         return true;
     }
   }
@@ -908,6 +932,31 @@ export class Game {
     return { ok: true };
   }
 
+  // ———————————————————————————— Récompense quotidienne ————————————————————————————
+
+  /** `today` : date locale du joueur (AAAA-MM-JJ), fournie par l'interface. */
+  dailyStatus(today: string): DailyStatus {
+    const { lastDay, streak } = this.state.daily;
+    if (lastDay === today) {
+      return { available: false, day: streak, reward: dailyReward(streak, this.state.level) };
+    }
+    const day = lastDay !== null && lastDay === previousDay(today) ? (streak % DAILY_STREAK_DAYS) + 1 : 1;
+    return { available: true, day, reward: dailyReward(day, this.state.level) };
+  }
+
+  claimDailyReward(today: string): Result<{ day: number; reward: Reward }> {
+    if (!DAY_PATTERN.test(today)) return fail('invalid');
+    // Une date antérieure à la dernière réclamation (horloge reculée) est refusée.
+    if (this.state.daily.lastDay !== null && today < this.state.daily.lastDay) return fail('notReady');
+    const status = this.dailyStatus(today);
+    if (!status.available) return fail('notReady');
+    this.state.daily = { lastDay: today, streak: status.day };
+    this.give(status.reward, null);
+    this.track({ type: 'dailyReward' });
+    this.changed();
+    return { ok: true, day: status.day, reward: status.reward };
+  }
+
   // ———————————————————————————— Voisins ————————————————————————————
 
   /**
@@ -920,6 +969,12 @@ export class Game {
     this.track({ type: 'helpNeighbor' });
     this.changed();
     return reward;
+  }
+
+  /** Visite de la ville d'un autre joueur (objectifs). */
+  visitedNeighbor(): void {
+    this.track({ type: 'visitNeighbor' });
+    this.changed();
   }
 
   /** Crédite les coups de main reçus pendant l'absence du joueur. */
@@ -942,6 +997,12 @@ export class Game {
     this.state.goods -= qty;
     this.changed();
     return { ok: true };
+  }
+
+  /** Lot accepté par le serveur (les marchandises ont été mises de côté par `marketReserve`). */
+  marketListed(): void {
+    this.track({ type: 'marketSell' });
+    this.changed();
   }
 
   /** Rend des marchandises (lot retiré ou expiré), même au-delà de la capacité. */
@@ -967,6 +1028,7 @@ export class Game {
     this.spend({ coins: total });
     this.state.goods += qty;
     this.events.emit('reward', { entityId: null, reward: { goods: qty } });
+    this.track({ type: 'marketBuy' });
     this.changed();
     return { ok: true };
   }

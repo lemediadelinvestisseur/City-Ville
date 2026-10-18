@@ -92,6 +92,19 @@ export function helpReceivedReward(level: number): { coins: number; xp: number }
   return { coins: 30 + level * 15, xp: 1 };
 }
 
+/**
+ * Récompense de connexion quotidienne : une série de 7 jours qui repart au
+ * jour 1 si l'on manque une journée. Les pièces suivent le niveau.
+ */
+export const DAILY_STREAK_DAYS = 7;
+
+export function dailyReward(day: number, level: number): { coins: number; xp: number; cash?: number } {
+  const d = Math.min(Math.max(1, day), DAILY_STREAK_DAYS);
+  const coins = Math.round(((100 + level * 40) * (1 + (d - 1) * 0.5)) / 10) * 10;
+  const xp = 5 + d * 5;
+  return d === DAILY_STREAK_DAYS ? { coins, xp, cash: 3 } : { coins, xp };
+}
+
 /** Bonus maximal cumulé des décorations (%). */
 export const MAX_DECORATION_BONUS = 50;
 
