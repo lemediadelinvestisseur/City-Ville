@@ -602,3 +602,65 @@ export function tileHighlight(): ArtPiece {
   ctx.fill();
   return { canvas, originX: 0.5, originY: 0 };
 }
+
+export const ROCK_VARIANTS = 2;
+
+/** Case de montagne (roche et cailloux). */
+export function rockTile(variant: number): ArtPiece {
+  const { painter, finish } = isoCanvas(1, 1, 0, 2);
+  const base = variant % 2 === 0 ? '#8d8a7e' : '#86837a';
+  const e = 0.015;
+  painter.flat(-e, -e, 1 + e, 1 + e, 0, base);
+  const { ctx } = painter;
+  ctx.save();
+  painter.path([
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 0],
+    [0, 1, 0],
+  ]);
+  ctx.clip();
+  const rand = seeded(700 + variant * 23);
+  for (let i = 0; i < 9; i++) {
+    const [sx, sy] = painter.p(rand(), rand());
+    ctx.fillStyle = rgba(rand() < 0.5 ? '#5d5a52' : '#b5b1a5', 0.35 + rand() * 0.3);
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 3 + rand() * 6, 2 + rand() * 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  return finish();
+}
+
+export const MOUNTAIN_VARIANTS = 3;
+
+/** Sommet de montagne (emprise 2 × 2), enneigé. */
+export function mountainArt(variant: number): ArtPiece {
+  const height = [150, 120, 175][variant % 3] ?? 150;
+  const { painter: p, finish } = isoCanvas(2, 2, height + 10);
+  const apex: V3 = [1 + (variant - 1) * 0.12, 1 - (variant - 1) * 0.1, height];
+  const left: V3 = [0, 2, 0];
+  const right: V3 = [2, 0, 0];
+  const front: V3 = [2, 2, 0];
+  const mix = (a: V3, b: V3, t: number): V3 => [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ];
+  p.fill([left, front, apex], '#7d7a70', '#5d5a52');
+  p.fill([right, front, apex], '#5f5c54', '#4a4740');
+  // Arêtes rocheuses.
+  p.line(mix(front, apex, 0.15), mix(front, apex, 0.6), 'rgba(40,38,34,0.35)', 2);
+  p.line(mix(left, apex, 0.3), mix(front, apex, 0.55), 'rgba(40,38,34,0.25)', 1.5);
+  // Neige au sommet.
+  const t = 0.62;
+  p.fill(
+    [mix(left, apex, t), mix(left, apex, t + 0.08), apex, mix(front, apex, t + 0.05), mix(front, apex, t - 0.04)],
+    '#f5f7fa',
+  );
+  p.fill(
+    [mix(front, apex, t - 0.04), mix(front, apex, t + 0.05), apex, mix(right, apex, t + 0.06), mix(right, apex, t)],
+    '#d5dce4',
+  );
+  return finish();
+}

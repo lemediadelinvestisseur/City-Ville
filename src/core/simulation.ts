@@ -2,6 +2,7 @@ import { BUILDINGS, getBuildingDef } from '@/data/buildings';
 import { CROPS, TRIPS } from '@/data/crops';
 import type { Clock } from './game';
 import { Game } from './game';
+import { CHUNK_SIZE } from '@/data/balance';
 import { CHUNKS_X, CHUNKS_Y } from './grid';
 import { createNewGame } from './newGame';
 import type { BuildingDef, Entity } from './types';
@@ -161,21 +162,30 @@ function bestAffordable(game: Game, category: BuildingDef['category'], reserve: 
 }
 
 function placeSomewhere(game: Game, def: BuildingDef): boolean {
-  for (let y = 0; y < 40; y++) {
-    for (let x = 0; x < 40; x++) {
-      if (game.checkPlacement(def, x, y) === null) return game.place(def.id, x, y).ok;
+  // Seules les zones achetées comptent : on les parcourt case par case.
+  for (const key of game.state.unlockedChunks) {
+    const [cx = 0, cy = 0] = key.split(',').map(Number);
+    for (let y = cy * CHUNK_SIZE; y < (cy + 1) * CHUNK_SIZE; y++) {
+      for (let x = cx * CHUNK_SIZE; x < (cx + 1) * CHUNK_SIZE; x++) {
+        if (game.checkPlacement(def, x, y) === null) return game.place(def.id, x, y).ok;
+      }
     }
   }
   return false;
 }
 
+/** Achète la zone disponible la moins chère. */
 function tryExpand(game: Game): boolean {
+  let best: { cx: number; cy: number; coins: number } | null = null;
   for (let cy = 0; cy < CHUNKS_Y; cy++) {
     for (let cx = 0; cx < CHUNKS_X; cx++) {
-      if (game.expansionInfo(cx, cy).status === 'purchasable' && game.buyExpansion(cx, cy).ok) return true;
+      const info = game.expansionInfo(cx, cy);
+      if (info.status === 'purchasable' && !info.reason && (!best || info.coins < best.coins)) {
+        best = { cx, cy, coins: info.coins };
+      }
     }
   }
-  return false;
+  return best !== null && game.buyExpansion(best.cx, best.cy).ok;
 }
 
 /** Dépense les pièces : services si la population plafonne, sinon un mélange équilibré. */

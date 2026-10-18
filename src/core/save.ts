@@ -1,8 +1,7 @@
 import { findBuildingDef } from '@/data/buildings';
 import { findCropDef } from '@/data/crops';
 import { findQuestDef } from '@/data/quests';
-import { CHUNK_SIZE, EAST_CHUNK_X } from '@/data/balance';
-import { wildTrees } from '@/data/startingTown';
+import { CHUNK_SIZE } from '@/data/balance';
 import { isWater } from '@/data/terrain';
 import { SAVE_VERSION } from './newGame';
 import type { GameState } from './types';
@@ -53,16 +52,31 @@ const MIGRATIONS: Record<number, Migration> = {
     });
     return state;
   },
-  /** v2 → v3 : la mer à l'est devient un bras de mer ; une rive est boisée apparaît. */
-  2: (state) => {
+  /** v2 → v3 : la mer à l'est devient un bras de mer (la rive est boisée est désormais un décor). */
+  2: (state) => state,
+  /**
+   * v3 → v4 : la carte s'agrandit (forêts, montagnes, lacs). Les arbres sauvages
+   * des zones non achetées deviennent du décor ; une construction tombée dans
+   * l'eau d'un nouveau rivage est retirée et remboursée.
+   */
+  3: (state) => {
+    const unlocked = new Set(Array.isArray(state.unlockedChunks) ? (state.unlockedChunks as unknown[]) : []);
     const entities = Array.isArray(state.entities) ? (state.entities as unknown[]).filter(isObject) : [];
-    let nextId = typeof state.nextEntityId === 'number' ? state.nextEntityId : entities.length + 1;
-    for (const tree of wildTrees()) {
-      if (tree.x < EAST_CHUNK_X * CHUNK_SIZE) continue;
-      entities.push({ id: nextId++, defId: tree.defId, x: tree.x, y: tree.y, built: true, starter: true });
-    }
-    state.entities = entities;
-    state.nextEntityId = nextId;
+    let refund = 0;
+    state.entities = entities.filter((entity) => {
+      const x = typeof entity.x === 'number' ? entity.x : 0;
+      const y = typeof entity.y === 'number' ? entity.y : 0;
+      const chunk = `${Math.floor(x / CHUNK_SIZE)},${Math.floor(y / CHUNK_SIZE)}`;
+      const wildTree = entity.starter === true && typeof entity.defId === 'string' && entity.defId.startsWith('tree_');
+      if (wildTree && !unlocked.has(chunk)) return false;
+      if (overlapsWater(entity)) {
+        const def = typeof entity.defId === 'string' ? findBuildingDef(entity.defId) : undefined;
+        if (def && entity.starter !== true) refund += def.cost.coins ?? 0;
+        return false;
+      }
+      return true;
+    });
+    if (typeof state.coins === 'number') state.coins += refund;
     return state;
   },
 };

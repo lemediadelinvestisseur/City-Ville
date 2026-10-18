@@ -5,8 +5,9 @@ import { CHUNKS_X, CHUNKS_Y, chunkOf, roadMask } from '@/core/grid';
 import type { Entity, FailReason, Reward } from '@/core/types';
 import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
-import { isShallow, isWater, terrainAt } from '@/data/terrain';
-import { ArtKey, CLOUD_VARIANTS, GRASS_VARIANTS, SAND_VARIANTS, WATER_VARIANTS } from './art/library';
+import { isWater } from '@/data/terrain';
+import { ArtKey, CLOUD_VARIANTS } from './art/library';
+import { LOCKED_TINT, MapLayer } from './MapLayer';
 import type { BadgeKind } from './art/sprites';
 import { CameraController } from './CameraController';
 import { HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } from './iso';
@@ -17,14 +18,12 @@ import { MovingVan } from './MovingVan';
 import { NightLayer } from './NightLayer';
 import { WalkerSystem } from './WalkerSystem';
 
-const DEPTH_GROUND = 0;
 const DEPTH_ROAD = 2;
 const DEPTH_LIMITS = 4;
 const DEPTH_OVERLAY = 1_000_000;
 const DEPTH_GHOST = 2_000_000;
 const DEPTH_CLOUDS = 4_000_000;
 
-const LOCKED_TINT = 0xa9bb92;
 const TAP_SLOP_CSS = 10;
 
 interface View {
@@ -64,9 +63,9 @@ export class WorldScene extends Phaser.Scene {
   private camCtl!: CameraController;
   private fx!: Effects;
   private views = new Map<number, View>();
-  private ground: Phaser.GameObjects.Image[] = [];
-  /** Quelques cases d'eau scintillent doucement. */
-  private waterTiles: Phaser.GameObjects.Image[] = [];
+  /** Sol et décor de la carte, construits à l'approche de la caméra. */
+  private map!: MapLayer;
+  private mapCheckAt = 0;
   private limits!: Phaser.GameObjects.Graphics;
   private overlay!: Phaser.GameObjects.Graphics;
   private signs = new Map<string, Phaser.GameObjects.Image>();
@@ -125,7 +124,10 @@ export class WorldScene extends Phaser.Scene {
     }
     this.cameras.main.setBackgroundColor('#2f9fc7');
     this.fx = new Effects(this);
-    this.buildGround();
+    this.map = new MapLayer(this, this.ctx.art, {
+      isChunkUnlocked: (cx, cy) => this.game_.isChunkUnlocked(cx, cy),
+      isRoad: (x, y) => this.game_.isRoad(x, y),
+    });
     this.limits = this.add.graphics().setDepth(DEPTH_LIMITS);
     this.overlay = this.add.graphics().setDepth(DEPTH_GHOST - 1);
     this.walkers = new WalkerSystem(this);
@@ -162,6 +164,7 @@ export class WorldScene extends Phaser.Scene {
     );
     const start = tileToWorld(16.5, 18.5);
     this.camCtl.centerOn(start.x, start.y);
+    this.map.update(this.cameras.main);
     this.updateOverlayScale();
 
     this.setupInput();
@@ -198,8 +201,11 @@ export class WorldScene extends Phaser.Scene {
       if (view.boat?.visible && view.boatHome)
         view.boat.y = view.boatHome.y + Math.sin(time / 600 + view.entity.id) * 2;
     }
-    const glint = 0.9 + Math.sin(time / 900) * 0.08;
-    for (const tile of this.waterTiles) tile.setAlpha(tile.getData('phase') ? glint : 1);
+    this.map.animate(time);
+    if (time >= this.mapCheckAt) {
+      this.mapCheckAt = time + 200;
+      this.map.update(this.cameras.main);
+    }
     if (this.arrow.visible && this.hintEntityId !== null) {
       const view = this.views.get(this.hintEntityId);
       if (view) this.arrow.y = this.topOf(view) - 72 * this.overlayScale + Math.sin(time / 180) * 10;
@@ -211,42 +217,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   // ———————————————————————————— Terrain ————————————————————————————
-
-  private buildGround(): void {
-    for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
-        const hash = x * 7 + y * 13 + ((x * y) % 5);
-        const terrain = terrainAt(x, y);
-        const key =
-          terrain === 'water'
-            ? ArtKey.water(hash % WATER_VARIANTS, isShallow(x, y))
-            : terrain === 'sand'
-              ? ArtKey.sand(hash % SAND_VARIANTS)
-              : ArtKey.grass(hash % GRASS_VARIANTS);
-        const piece = this.ctx.art.get(key);
-        const pos = tileToWorld(x, y);
-        const tile = this.add.image(pos.x, pos.y, key).setOrigin(piece.originX, piece.originY).setDepth(DEPTH_GROUND);
-        if (terrain === 'water') {
-          if (hash % 4 === 0) {
-            tile.setData('phase', true);
-            this.waterTiles.push(tile);
-          }
-        } else if (!this.game_.isTileUnlocked(x, y)) tile.setTint(LOCKED_TINT);
-        this.ground.push(tile);
-      }
-    }
-  }
-
-  private refreshGroundTint(): void {
-    for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
-        const tile = this.ground[y * MAP_W + x];
-        if (!tile || isWater(x, y)) continue;
-        if (this.game_.isTileUnlocked(x, y)) tile.clearTint();
-        else tile.setTint(LOCKED_TINT);
-      }
-    }
-  }
 
   /** Limites de la ville (pointillés) et panneaux « À vendre ». */
   private refreshLimits(): void {
@@ -317,7 +287,9 @@ export class WorldScene extends Phaser.Scene {
 
   private textureFor(entity: Entity): string {
     const def = getBuildingDef(entity.defId);
-    if (def.id === 'road') return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y), entity.x, entity.y));
+    if (def.id === 'road') {
+      return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y) || this.map.isWildRoad(x, y), entity.x, entity.y));
+    }
     if (!entity.built) return ArtKey.construction(Math.min(4, Math.max(def.size.w, def.size.d)));
     return ArtKey.building(def.id);
   }
@@ -677,6 +649,7 @@ export class WorldScene extends Phaser.Scene {
         if (key !== view.textureKey) this.syncView(view);
       }
     }
+    this.map.refreshRoads();
     this.walkers.setRoads(roads.filter((r) => this.game_.isTileUnlocked(r.x, r.y)));
     this.walkers.setTarget(Math.min(28, Math.round(this.game_.derived().population / 7)));
   }
@@ -746,7 +719,8 @@ export class WorldScene extends Phaser.Scene {
         this.addView(entity);
         if (entity.defId === 'road' || entity.defId === 'bridge') this.refreshRoads();
         const view = this.views.get(entity.id);
-        if (view) this.popIn(view);
+        // Les arbres et routes offerts avec une zone apparaissent sans effet.
+        if (view && !entity.starter) this.popIn(view);
         if (view && !entity.built) this.openSiteFx(view);
       }),
     );
@@ -796,8 +770,8 @@ export class WorldScene extends Phaser.Scene {
     );
     on(game.events.on('reward', ({ entityId, reward }) => this.onReward(entityId, reward)));
     on(
-      game.events.on('expanded', () => {
-        this.refreshGroundTint();
+      game.events.on('expanded', ({ cx, cy }) => {
+        this.map.unlock(cx, cy);
         this.refreshLimits();
         for (const view of this.views.values()) this.syncView(view);
         this.refreshRoads();
