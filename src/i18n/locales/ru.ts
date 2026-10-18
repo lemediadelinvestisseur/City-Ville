@@ -354,7 +354,7 @@ const translation: Translation = {
     'conflict.local': 'Эту',
     'helps.one': 'Помощь от {names}: +{coins} монет!',
     'helps.many': '{names} помогли вам: +{coins} монет!',
-    'helps.someone': 'ваших соседей',
+    'helps.someone': 'Ваши соседи',
     'account.title': 'Аккаунт',
     'account.loggedAs': 'Вы вошли как {name}',
     'account.role.admin': 'администратор',
