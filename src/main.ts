@@ -15,6 +15,7 @@ import { LocalBackend } from './services/online/LocalBackend';
 import { MockPaymentProvider } from './services/payments/MockPaymentProvider';
 import { SoundFx } from './services/sound';
 import { Preferences } from './services/preferences';
+import { mirroredStorage, restoreNativeBackup, setupNative } from './services/native';
 import { safeStorage } from './services/storage';
 import { UI } from './ui/UI';
 
@@ -54,7 +55,7 @@ function boot(): void {
   const uiRoot = document.getElementById('ui');
   if (!gameRoot || !uiRoot) throw new Error('Conteneurs #game et #ui introuvables');
 
-  const storage = safeStorage();
+  const storage = mirroredStorage(safeStorage());
   const game = loadOrCreate(storage);
   const bus = new Emitter<AppEvents>();
   const art = ArtLibrary.build();
@@ -143,6 +144,7 @@ function boot(): void {
   });
 
   bindSounds(ctx, sound, uiRoot);
+  void setupNative(ctx);
 
   bus.on('world:ready', () => {
     document.getElementById('loading')?.classList.add('is-done');
@@ -157,10 +159,13 @@ function boot(): void {
   if (import.meta.env.DEV) Object.assign(window, { __cityVille: { game, bus, scene, phaser, backend } });
 }
 
-try {
-  boot();
-} catch (error) {
-  console.error(error);
-  const loading = document.getElementById('loading');
-  if (loading) loading.textContent = 'Impossible de démarrer le jeu sur cet appareil.';
-}
+// Dans l'appli native, on restaure d'abord la sauvegarde si iOS a vidé le stockage web.
+void restoreNativeBackup().then(() => {
+  try {
+    boot();
+  } catch (error) {
+    console.error(error);
+    const loading = document.getElementById('loading');
+    if (loading) loading.textContent = 'Impossible de démarrer le jeu sur cet appareil.';
+  }
+});

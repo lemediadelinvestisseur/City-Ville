@@ -10,6 +10,10 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    // Le projet iOS contient une copie du build : inutile de la surveiller.
+    watch: { ignored: ['**/ios/**', '**/android/**'] },
+  },
   build: {
     target: 'es2022',
     sourcemap: true,

@@ -11,14 +11,17 @@
             │                    │                               │   │   │               │
             │          actions ──┴───────────────────────────────┘   └───┴── bus (app/)   │
             │                                                                              │
-            │   src/services : paiement · stockage · sons                                  │
-            └──────────────────────────────────────────────────────────────────────────────┘
+            │   src/services : paiement · stockage · sons · en ligne (Backend) · natif      │
+            └──────────────────────────────────────────────────┬───────────────────────────┘
+                                                               │ (si VITE_CONVEX_URL)
+                                                    convex/ : serveur (comptes, sauvegarde,
+                                                    voisins, marché, statistiques, admin)
 ```
 
 ### `src/core` — le moteur de règles (pur)
 
 - `Game` (`game.ts`) détient l'état (`GameState`) et expose **toutes** les actions : `place`, `move`, `sell`,
-  `buildStep`, `collectRent`, `plant`, `harvest`, `supply`, `collectBusiness`, `speedUp`, `buyExpansion`,
+  `finishBuild`, `collectRent`, `plant`, `harvest`, `supply`, `collectBusiness`, `speedUp`, `buyExpansion`,
   `buyCashOffer`, `grantStoreProduct`…
 - Chaque action renvoie un `Result` (`{ ok: true, … }` ou `{ ok: false, reason }`) : l'interface traduit la
   raison en message (`ui/messages.ts`).
@@ -63,6 +66,18 @@ Interface en DOM (et non dans le canevas) : texte net, mise en page fluide, acce
 - `payments/` : interface `PaymentProvider` + `MockPaymentProvider` (voir [MONETIZATION.md](MONETIZATION.md)).
 - `storage.ts` : `localStorage` tolérant aux pannes (bascule en mémoire si indisponible).
 - `sound.ts` : bruitages synthétisés en Web Audio (aucun fichier).
+- `online/` : interface `Backend` (compte, sauvegarde, voisins, classement, marché, mesures) avec deux
+  implémentations : `ConvexBackend` (serveur) et `LocalBackend` (démo hors-ligne, voisins fictifs dont les
+  villes sont générées par le joueur simulé). `app/online.ts` synchronise la sauvegarde (révisions, conflits),
+  envoie les sessions et récupère les coups de main.
+- `native.ts` : intégrations Capacitor (copie de la sauvegarde dans le stockage natif, vibrations, barre d'état).
+- `preferences.ts` : préférences de l'appareil (cycle jour/nuit).
+
+### `convex/` — le serveur
+
+Fonctions Convex en TypeScript, qui réutilisent `src/core` (relecture des sauvegardes) et `src/data`
+(règles des pseudos, du marché). Voir [MISE_EN_LIGNE.md](MISE_EN_LIGNE.md). L'interface admin est une page à
+part (`admin.html`, `src/admin/`).
 
 ## Flux d'une action
 
@@ -89,9 +104,12 @@ Sauvegarde 0,8 s après chaque changement, et quand l'onglet passe en arrière-p
 
 - `npm run check` : TypeScript strict, ESLint, Prettier, tests Vitest (logique de jeu).
 - CI GitHub Actions (`.github/workflows/ci.yml`) sur chaque push et pull request.
-- En développement, `window.__cityVille` expose `{ game, bus, scene }` pour les tests de bout en bout.
+- En développement, `window.__cityVille` expose `{ game, bus, scene, phaser, backend }` pour les tests de
+  bout en bout.
+- `src/core/balance.test.ts` fait jouer un joueur simulé (`core/simulation.ts`) pendant 25 jours et vérifie
+  le rythme de progression (niveau 30 en deux à trois semaines).
 
 ## Plateformes
 
-Aujourd'hui : web (navigateur mobile et ordinateur, installable en PWA). Pour les stores : empaqueter avec
-**Capacitor** (Android / iOS) — le build Vite (`base: './'`) est déjà compatible. Voir [ROADMAP.md](ROADMAP.md).
+Web (navigateur mobile et ordinateur, installable en PWA) et **iOS** via Capacitor (`ios/`, voir
+[IOS.md](IOS.md)). Android suivra avec `npx cap add android`.

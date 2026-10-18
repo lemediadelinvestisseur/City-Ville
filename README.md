@@ -20,17 +20,21 @@ npm run dev        # http://localhost:5173 (et l'adresse réseau pour tester sur
 Pour jouer sur votre téléphone pendant le développement : connectez-le au même Wi-Fi que l'ordinateur et ouvrez
 l'adresse « Network » affichée par `npm run dev`.
 
-| Commande          | Rôle                                            |
-| ----------------- | ----------------------------------------------- |
-| `npm run dev`     | Serveur de développement (rechargement à chaud) |
-| `npm run build`   | Vérification des types puis build de production |
-| `npm run preview` | Sert le build de production localement          |
-| `npm test`        | Tests unitaires (Vitest) de la logique de jeu   |
-| `npm run lint`    | ESLint                                          |
-| `npm run format`  | Formatage Prettier                              |
-| `npm run check`   | Types + lint + format + tests (comme la CI)     |
+| Commande           | Rôle                                            |
+| ------------------ | ----------------------------------------------- |
+| `npm run dev`      | Serveur de développement (rechargement à chaud) |
+| `npm run build`    | Vérification des types puis build de production |
+| `npm run preview`  | Sert le build de production localement          |
+| `npm test`         | Tests unitaires (Vitest) de la logique de jeu   |
+| `npm run lint`     | ESLint                                          |
+| `npm run format`   | Formatage Prettier                              |
+| `npm run check`    | Types + lint + format + tests (comme la CI)     |
+| `npx convex dev`   | Serveur en ligne de développement (voir docs)   |
+| `npm run ios:sync` | Compile et copie le jeu dans le projet iOS      |
+| `npm run ios:open` | Ouvre le projet dans Xcode                      |
 
-La planche de tous les visuels générés est disponible en développement sur `/art.html`.
+La planche de tous les visuels générés est disponible en développement sur `/art.html`, l'interface admin sur
+`/admin.html`. Mise en ligne : [docs/MISE_EN_LIGNE.md](docs/MISE_EN_LIGNE.md) ; iPhone : [docs/IOS.md](docs/IOS.md).
 
 ## Ce que contient la V1
 
@@ -40,9 +44,14 @@ La planche de tous les visuels générés est disponible en développement sur `
 - **Chantiers à minuteur** (de 30 s à 16 h selon le bâtiment), puis inauguration ; accélérables contre du cash.
 - **Cultures** : 9 cultures, des fraises (5 min) aux pommes (24 h) ; mode plantation en série.
 - **Pêche** : ville au bord de la mer, ponton / port de pêche / port industriel, sorties en mer.
-- **Progression jusqu'au niveau 30** (~3 semaines), 65 constructions, calibrée par un joueur simulé.
+- **Progression jusqu'au niveau 30** (~3 semaines), 66 constructions, calibrée par un joueur simulé.
+- **Deux rives** séparées par un bras de mer, reliées par un pont (niveau 15) ; **cycle jour/nuit**.
+- **En ligne** (serveur Convex) : pseudo, sauvegarde synchronisée, voisins (visite, coup de main quotidien),
+  classement, **marché** entre joueurs, signalement et blocage. Sans serveur : mode démo hors-ligne.
+- **Interface admin** (`/admin.html`) : joueurs actifs, rétention J1/J7/J30, temps de jeu, progression.
+- **Application iPhone** (Capacitor) : voir [docs/IOS.md](docs/IOS.md).
 - **Économie** : pièces, cash (monnaie premium), énergie qui se recharge, XP et niveaux avec déblocages.
-- **Objectifs guidés** (24) avec flèches d'aide, récompenses et passages de niveau.
+- **Objectifs guidés** (25) avec flèches d'aide, récompenses et passages de niveau.
 - **Agrandissements** de la ville par zones de 8 × 8.
 - **Mode édition** : déplacer ou vendre une construction.
 - **Boutique** : packs de cash (paiement simulé) et échanges cash → pièces / énergie.

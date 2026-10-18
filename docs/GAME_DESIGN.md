@@ -23,6 +23,15 @@ chantier, on revient plus tard.
 - **Énergie** : encaisser un loyer ou une recette, récolter, décharger un bateau coûtent 1 énergie.
   +1 toutes les 3 minutes, recharge complète à chaque niveau. C'est le rythme de la session… et un levier de
   monétisation.
+- **Deux rives** : la carte (64 × 40) est coupée du nord au sud par un bras de mer. La rive est s'ouvre au
+  niveau 15 : on y pose un **pont** (20 000 pièces, chantier de 3 h) d'une rive à l'autre, puis on achète ses
+  zones.
+- **Jour et nuit** : cycle de 30 minutes commun à tous (20 min de jour, 2 de crépuscule, 6 de nuit, 2 d'aube),
+  purement visuel (fenêtres et lampadaires allumés). Option « heure réelle » ou « toujours le jour ».
+- **Voisins** : on ajoute des voisins, on visite leur ville et on les aide une fois par jour (pièces pour les
+  deux). Classements par niveau et par population.
+- **Marché** (niveau 5) : vente de lots de 10 à 500 marchandises, de 1 à 12 pièces l'unité, 5 lots au plus,
+  taxe de 10 %, invendus rendus après 48 h.
 - **Pêche** : la ville est au bord de la mer. Un ponton, un port de pêche ou un port industriel se pose au bord
   de l'eau ; son bateau part en mer (choix de la sortie, comme une culture) et rapporte des marchandises.
 - **Habitants** : apportés par les habitations, plafonnés par les bâtiments publics (mairie, école…). Certains
