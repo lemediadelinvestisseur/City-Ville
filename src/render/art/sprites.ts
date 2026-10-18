@@ -108,7 +108,37 @@ function drawBasket(ctx: Ctx, cx: number, cy: number, s: number): void {
   ctx.stroke();
 }
 
-export type BadgeKind = 'coin' | 'goods' | 'build' | 'harvest' | 'plant';
+/** Poisson stylisé (pêche à décharger). */
+export function drawFish(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number): void {
+  const h = w * 0.45;
+  const grad = ctx.createLinearGradient(cx, cy - h / 2, cx, cy + h / 2);
+  grad.addColorStop(0, '#4fc3f7');
+  grad.addColorStop(1, '#0277bd');
+  ctx.fillStyle = grad;
+  ctx.strokeStyle = '#01579b';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(cx + w * 0.32, cy);
+  ctx.lineTo(cx + w * 0.52, cy - h * 0.55);
+  ctx.lineTo(cx + w * 0.52, cy + h * 0.55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(cx - w * 0.06, cy, w * 0.4, h / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(cx - w * 0.28, cy - h * 0.12, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#0d2b45';
+  ctx.beginPath();
+  ctx.arc(cx - w * 0.28, cy - h * 0.12, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+export type BadgeKind = 'coin' | 'goods' | 'build' | 'harvest' | 'plant' | 'fish';
 
 /** Bulle d'état affichée au-dessus d'une construction. */
 export function badge(kind: BadgeKind): ArtPiece {
@@ -116,7 +146,14 @@ export function badge(kind: BadgeKind): ArtPiece {
   const { canvas, ctx } = createCanvas(size, size + 12);
   const cx = size / 2;
   const cy = size / 2;
-  const border = { coin: '#f5a623', goods: '#ef6c00', build: '#1e88e5', harvest: '#43a047', plant: '#8d6e63' }[kind];
+  const border = {
+    coin: '#f5a623',
+    goods: '#ef6c00',
+    build: '#1e88e5',
+    harvest: '#43a047',
+    plant: '#8d6e63',
+    fish: '#0288d1',
+  }[kind];
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath();
   ctx.ellipse(cx, size + 7, 12, 4, 0, 0, Math.PI * 2);
@@ -134,6 +171,7 @@ export function badge(kind: BadgeKind): ArtPiece {
   else if (kind === 'goods') drawCrate(ctx, cx, cy, 26);
   else if (kind === 'build') drawHammer(ctx, cx, cy + 2, 30);
   else if (kind === 'harvest') drawBasket(ctx, cx, cy + 2, 34);
+  else if (kind === 'fish') drawFish(ctx, cx, cy + 1, 34);
   else {
     // Pousse à planter.
     ctx.fillStyle = '#8b6240';

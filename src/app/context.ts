@@ -1,9 +1,11 @@
 import type { Emitter } from '@/core/emitter';
 import type { Game } from '@/core/game';
 import type { HintTarget } from '@/core/hints';
+import type { DayNightMode } from '@/core/dayNight';
 import type { FailReason, PrimaryAction, Reward } from '@/core/types';
 import type { ArtLibrary } from '@/render/art/library';
 import type { PaymentProvider } from '@/services/payments/PaymentProvider';
+import type { Preferences } from '@/services/preferences';
 import type { SoundFx } from '@/services/sound';
 
 /** Position à l'écran, en pixels CSS. */
@@ -34,6 +36,8 @@ export interface AppEvents {
   'world:placement': PlacementInfo | null;
   'world:editSelect': { entityId: number; screen: ScreenPoint } | null;
   'world:hint': HintTarget | null;
+  /** La caméra s'approche du bord de la ville (invitation à voir les voisins). */
+  'world:edge': boolean;
   'fx:reward': { screen: ScreenPoint; reward: Reward };
   // Interface → monde
   'ui:startPlacement': { defId: string };
@@ -46,6 +50,7 @@ export interface AppEvents {
   /** Centre la caméra sur une case (coordonnées de case, fractionnaires possibles). */
   'ui:focusTile': { x: number; y: number };
   'ui:modalOpen': boolean;
+  'ui:dayNightMode': DayNightMode;
 }
 
 export interface AppContext {
@@ -54,4 +59,5 @@ export interface AppContext {
   art: ArtLibrary;
   payments: PaymentProvider;
   sound: SoundFx;
+  prefs: Preferences;
 }

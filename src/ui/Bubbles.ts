@@ -2,7 +2,7 @@ import type { ScreenPoint } from '@/app/context';
 import type { Game } from '@/core/game';
 import type { Entity } from '@/core/types';
 import { getBuildingDef } from '@/data/buildings';
-import { getCropDef } from '@/data/crops';
+import { getCropDef, getTripDef } from '@/data/crops';
 import { clear, h, icon } from './dom';
 import { formatClock, formatNumber } from './format';
 import { Icons } from './icons';
@@ -96,7 +96,8 @@ export class Bubble {
     if (this.kind === 'edit') return `edit:${entity.id}`;
     const action = this.game.primaryAction(entity).type;
     const cost = this.game.speedUpCost(entity);
-    return `info:${entity.id}:${action}:${cost}:${this.game.decorationBonus(entity)}:${entity.farm?.cropId ?? ''}`;
+    const content = entity.farm?.cropId ?? entity.port?.tripId ?? '';
+    return `info:${entity.id}:${action}:${cost}:${this.game.decorationBonus(entity)}:${content}`;
   }
 
   private timing(entity: Entity): Timing {
@@ -104,6 +105,14 @@ export class Bubble {
     const def = getBuildingDef(entity.defId);
     const action = game.primaryAction(entity);
     const now = game.now();
+    if (action.type === 'waitBuild') {
+      const remaining = (action.readyAt - now) / 1000;
+      return { remaining, progress: 1 - remaining / Math.max(1, def.buildSec), served: null };
+    }
+    if (action.type === 'waitBoat' && entity.port?.tripId) {
+      const remaining = (action.readyAt - now) / 1000;
+      return { remaining, progress: 1 - remaining / getTripDef(entity.port.tripId).durationSec, served: null };
+    }
     if (action.type === 'waitRent' && def.category === 'house') {
       const remaining = (action.readyAt - now) / 1000;
       return { remaining, progress: 1 - remaining / def.rent.intervalSec, served: null };
@@ -172,44 +181,65 @@ export class Bubble {
     const lines: Array<HTMLElement | string> = [];
     let title = def.name;
 
-    switch (def.category) {
-      case 'house': {
-        const rent = game.rentFor(entity);
-        lines.push(h('span', {}, 'Loyer : ', icon(Icons.coin), ` ${formatNumber(rent.coins)}`));
-        lines.push(`${def.population} habitants`);
-        break;
-      }
-      case 'business': {
-        if (action.type === 'supply') {
-          lines.push(h('span', {}, 'Besoin de ', icon(Icons.goods), ` ${def.supplyGoods} marchandises`));
-          lines.push('Touchez le commerce pour l’approvisionner.');
-        } else if (timing.served) {
-          this.refs.served = h('span', { text: `Clients servis : ${timing.served.served}/${timing.served.total}` });
-          lines.push(this.refs.served);
-          lines.push(h('span', {}, 'Recette : ', icon(Icons.coin), ` ${formatNumber(game.payoutFor(entity).coins)}`));
-        }
-        break;
-      }
-      case 'farm': {
-        if (entity.farm?.cropId) {
-          const crop = getCropDef(entity.farm.cropId);
-          title = `${def.name} — ${crop.name}`;
-          lines.push(h('span', {}, 'Récolte : ', icon(Icons.goods), ` ${crop.goods} marchandises`));
-        }
-        break;
-      }
-      case 'community':
-        lines.push(`+${def.popCap} habitants max`);
-        break;
-      case 'storage':
-        lines.push(`+${def.goodsCap} de stockage`);
-        break;
-      case 'decoration':
-        lines.push(`+${def.bonus.percent} % de revenus aux bâtiments proches (rayon ${def.bonus.radius})`);
-        break;
-      default:
-        break;
+    if (!entity.built) {
+      title = `Chantier : ${def.name}`;
+      lines.push(
+        action.type === 'finishBuild'
+          ? 'Les travaux sont finis : touchez le bâtiment pour l’inaugurer !'
+          : 'Les ouvriers sont à l’œuvre. Revenez l’inaugurer à la fin du chantier.',
+      );
+      lines.push(h('span', {}, 'Inauguration : ', icon(Icons.xp), ` ${def.xp} XP`));
     }
+
+    if (entity.built)
+      switch (def.category) {
+        case 'port': {
+          if (entity.port?.tripId) {
+            const trip = getTripDef(entity.port.tripId);
+            title = `${def.name} — ${trip.name}`;
+            lines.push(h('span', {}, 'Pêche : ', icon(Icons.goods), ` ${trip.goods} marchandises`));
+          } else {
+            lines.push('Le bateau est à quai. Touchez le port pour l’envoyer en mer.');
+          }
+          break;
+        }
+        case 'house': {
+          const rent = game.rentFor(entity);
+          lines.push(h('span', {}, 'Loyer : ', icon(Icons.coin), ` ${formatNumber(rent.coins)}`));
+          lines.push(`${def.population} habitants`);
+          break;
+        }
+        case 'business': {
+          if (action.type === 'supply') {
+            lines.push(h('span', {}, 'Besoin de ', icon(Icons.goods), ` ${def.supplyGoods} marchandises`));
+            lines.push('Touchez le commerce pour l’approvisionner.');
+          } else if (timing.served) {
+            this.refs.served = h('span', { text: `Clients servis : ${timing.served.served}/${timing.served.total}` });
+            lines.push(this.refs.served);
+            lines.push(h('span', {}, 'Recette : ', icon(Icons.coin), ` ${formatNumber(game.payoutFor(entity).coins)}`));
+          }
+          break;
+        }
+        case 'farm': {
+          if (entity.farm?.cropId) {
+            const crop = getCropDef(entity.farm.cropId);
+            title = `${def.name} — ${crop.name}`;
+            lines.push(h('span', {}, 'Récolte : ', icon(Icons.goods), ` ${crop.goods} marchandises`));
+          }
+          break;
+        }
+        case 'community':
+          lines.push(`+${def.popCap} habitants max`);
+          break;
+        case 'storage':
+          lines.push(`+${def.goodsCap} de stockage`);
+          break;
+        case 'decoration':
+          lines.push(`+${def.bonus.percent} % de revenus aux bâtiments proches (rayon ${def.bonus.radius})`);
+          break;
+        default:
+          break;
+      }
     const bonus = game.decorationBonus(entity);
     if (bonus > 0) lines.push(h('span', { class: 'bubble__bonus', text: `Bonus décorations : +${bonus} %` }));
 

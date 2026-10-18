@@ -2,3 +2,6 @@ dist
 coverage
 node_modules
 package-lock.json
+convex/_generated
+ios
+android

@@ -37,6 +37,14 @@ export function failMessage(reason: FailReason, missing?: number): string {
       return 'Offre déjà achetée.';
     case 'energyFull':
       return 'Votre énergie est déjà au maximum.';
+    case 'onWater':
+      return 'Impossible de construire sur l’eau.';
+    case 'needsWater':
+      return 'Cette construction doit toucher l’eau.';
+    case 'bridgeSpan':
+      return 'Le pont doit enjamber le bras de mer, d’une rive à l’autre.';
+    case 'needsBridge':
+      return 'Construisez d’abord un pont pour rejoindre la rive est.';
     case 'invalid':
       return 'Action impossible.';
   }

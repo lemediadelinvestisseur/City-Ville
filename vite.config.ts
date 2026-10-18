@@ -10,13 +10,24 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    // Le projet iOS contient une copie du build : inutile de la surveiller.
+    watch: { ignored: ['**/ios/**', '**/android/**'] },
+  },
   build: {
     target: 'es2022',
     sourcemap: true,
     chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        admin: fileURLToPath(new URL('./admin.html', import.meta.url)),
+      },
+    },
   },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'convex/**/*.test.ts'],
+    server: { deps: { inline: ['convex-test'] } },
     environment: 'node',
   },
 });

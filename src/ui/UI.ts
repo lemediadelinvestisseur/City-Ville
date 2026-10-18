@@ -1,12 +1,14 @@
 import type { AppContext, PlacementInfo } from '@/app/context';
 import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
 import { findQuestHint, type HintTarget } from '@/core/hints';
-import type { BuildingDef, CropDef, FailReason, Reward } from '@/core/types';
+import { DAY_NIGHT_MODES, dayNightAt, type DayNightMode } from '@/core/dayNight';
+import type { BuildingDef, CropDef, FailReason, Reward, TripDef } from '@/core/types';
 import { CHUNK_SIZE, ENERGY_REGEN_SEC, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
 import type { StoreProduct } from '@/data/products';
 import { getQuestDef } from '@/data/quests';
+import { isEastChunk } from '@/data/terrain';
 import { ArtKey } from '@/render/art/library';
 import { Bubble } from './Bubbles';
 import { BuildMenu } from './BuildMenu';
@@ -20,12 +22,15 @@ import { failMessage } from './messages';
 import { Modals } from './Modals';
 import { QuestTracker, questIcon } from './QuestTracker';
 import { Shop, type ShopTab } from './Shop';
+import { SocialUi, type SocialOptions } from './SocialUi';
 import { Toasts } from './Toasts';
+import { TripPicker } from './TripPicker';
 
 type Mode = 'play' | 'edit';
 
 export interface UiOptions {
   onReset: () => void;
+  social: SocialOptions;
 }
 
 /** Interface HTML superposée au jeu : relie le moteur, le monde et les composants. */
@@ -37,9 +42,11 @@ export class UI {
   private modals: Modals;
   private buildMenu: BuildMenu;
   private cropPicker: CropPicker;
+  private tripPicker: TripPicker;
   private bubble: Bubble;
   private shop: Shop;
   private flying: FlyingRewards;
+  readonly social: SocialUi;
   private dock = h('nav', { class: 'dock', attrs: { 'aria-label': 'Actions' } });
   private placebar = h('div', { class: 'placebar' });
   private banner = h('div', { class: 'banner' });
@@ -74,6 +81,12 @@ export class UI {
       (crop) => this.plant(crop),
       () => this.refreshDock(),
     );
+    this.tripPicker = new TripPicker(
+      game,
+      art,
+      (id, trip) => this.sendBoat(id, trip),
+      () => this.refreshDock(),
+    );
     this.bubble = new Bubble(game, {
       speedUp: (id) => this.speedUp(id),
       move: (id) => {
@@ -89,6 +102,14 @@ export class UI {
       () => undefined,
     );
     this.flying = new FlyingRewards(this.hud);
+    this.social = new SocialUi({
+      ctx,
+      modals: this.modals,
+      toasts: this.toasts,
+      social: options.social,
+      onLayoutChange: () => this.refreshDock(),
+      closeTransient: () => this.closeTransient(),
+    });
 
     this.buildDock();
     this.root.append(
@@ -101,6 +122,10 @@ export class UI {
       this.placebar,
       this.buildMenu.el,
       this.cropPicker.el,
+      this.tripPicker.el,
+      this.social.panel.el,
+      this.social.edgePill,
+      this.social.visitBar.el,
       this.flying.el,
       this.shop.el,
       this.modals.el,
@@ -113,7 +138,10 @@ export class UI {
 
   /** À appeler une fois le monde prêt. */
   start(): void {
-    if (!this.ctx.game.state.tutorial.introSeen) this.showIntro();
+    // Inscription (pseudo) d'abord, puis l'introduction du tutoriel.
+    this.social.start(() => {
+      if (!this.ctx.game.state.tutorial.introSeen) this.showIntro();
+    });
   }
 
   // ———————————————————————————— Câblage ————————————————————————————
@@ -149,6 +177,8 @@ export class UI {
         this.plantTarget = entityId;
         this.cropPicker.open();
         this.refreshDock();
+      } else if (action.type === 'sendBoat') {
+        this.tripPicker.open(entityId);
       } else {
         this.bubble.showInfo(entityId, screen);
       }
@@ -157,6 +187,7 @@ export class UI {
       if (selection) this.bubble.showEdit(selection.entityId, selection.screen);
       else this.bubble.close();
     });
+    bus.on('world:edge', (near) => this.social.setEdge(near));
     bus.on('world:lockedTap', ({ cx, cy }) => this.offerExpansion(cx, cy));
     bus.on('world:emptyTap', () => this.closeTransient());
     bus.on('world:cameraMoved', () => this.bubble.close());
@@ -182,6 +213,8 @@ export class UI {
     this.bubble.close();
     this.buildMenu.close();
     this.cropPicker.close();
+    this.tripPicker.close();
+    this.social.panel.close();
   }
 
   // ———————————————————————————— Barre d'actions ————————————————————————————
@@ -201,6 +234,7 @@ export class UI {
     this.dock.append(
       this.buildButton,
       this.editButton,
+      button('Voisins', Icons.population, 'dock__btn--social', () => this.social.openNeighbors()),
       button('Boutique', Icons.shop, 'dock__btn--shop', () => this.openShop('cash')),
       button('Réglages', Icons.settings, 'dock__btn--settings', () => this.showSettings()),
     );
@@ -230,7 +264,15 @@ export class UI {
 
   private refreshDock(): void {
     const placing = this.placement !== null;
-    this.dock.classList.toggle('is-hidden', placing || this.buildMenu.isOpen || this.cropPicker.isOpen);
+    this.dock.classList.toggle(
+      'is-hidden',
+      placing ||
+        this.buildMenu.isOpen ||
+        this.cropPicker.isOpen ||
+        this.tripPicker.isOpen ||
+        this.social.panel.isOpen ||
+        this.social.isVisiting,
+    );
     this.placebar.classList.toggle('is-open', placing);
     this.editButton.classList.toggle('is-active', this.mode === 'edit');
     this.buildButton.classList.toggle('is-hint', this.hint?.kind === 'shop' && !this.buildMenu.isOpen);
@@ -252,7 +294,7 @@ export class UI {
       ? h('span', {
           class: 'placebar__status is-ok',
           text:
-            def.category === 'road'
+            def.id === 'road'
               ? 'Touchez la route pour la poser, glissez pour en tracer'
               : 'Touchez la carte pour choisir l’emplacement',
         })
@@ -362,6 +404,18 @@ export class UI {
     this.refreshDock();
   }
 
+  private sendBoat(entityId: number, trip: TripDef): void {
+    const result = this.ctx.game.sendBoat(entityId, trip.id);
+    if (!result.ok) {
+      if (result.reason === 'levelLocked')
+        this.toasts.show(`${trip.name} : niveau ${trip.requires?.level} requis.`, 'error');
+      else this.onFail(result.reason, result.missing);
+      return;
+    }
+    this.tripPicker.close();
+    this.toasts.show(`Le bateau part en mer : retour dans ${formatDuration(trip.durationSec)}.`, 'info');
+  }
+
   private checkPlantMode(): void {
     if (!this.plantCropId) return;
     const hasEmpty = this.ctx.game.state.entities.some((e) => e.farm && e.farm.cropId === null);
@@ -466,11 +520,12 @@ export class UI {
         h(
           'ul',
           { class: 'tips' },
+          h('li', {}, icon(Icons.energy), 'Encaisser et récolter coûtent 1 énergie, qui se recharge avec le temps.'),
           h(
             'li',
             {},
-            icon(Icons.energy),
-            'Chaque action (encaisser, récolter, construire) coûte 1 énergie, qui se recharge avec le temps.',
+            icon(Icons.clock),
+            'Les chantiers avancent tout seuls : revenez inaugurer vos bâtiments une fois terminés.',
           ),
           h(
             'li',
@@ -576,21 +631,30 @@ export class UI {
     }
     if (info.status !== 'purchasable') return;
     const levelOk = game.state.level >= info.level;
+    const needsBridge = info.reason === 'needsBridge';
+    const east = isEastChunk(cx);
     this.modals.show({
-      title: 'Agrandir la ville',
+      title: east ? 'La rive est' : 'Agrandir la ville',
       kicker: 'Nouvelle zone',
       body: [
-        h('p', { text: 'Débloquez une nouvelle zone de 8 × 8 cases pour construire encore plus !' }),
+        h('p', {
+          text: east
+            ? 'De l’autre côté du bras de mer, une nouvelle rive attend vos habitants. Un pont permet de la rejoindre.'
+            : 'Débloquez une nouvelle zone de 8 × 8 cases pour construire encore plus !',
+        }),
         h('div', { class: 'chips' }, h('span', { class: 'chip' }, icon(Icons.coin), formatNumber(info.coins))),
         levelOk
           ? null
           : h('p', { class: 'warn', text: `Niveau ${info.level} requis (vous êtes niveau ${game.state.level}).` }),
+        levelOk && needsBridge
+          ? h('p', { class: 'warn', text: 'Construisez d’abord un pont (menu Construire › Routes).' })
+          : null,
       ],
       buttons: [
         { label: 'Plus tard', kind: 'secondary' },
         {
           label: 'Acheter',
-          disabled: !levelOk,
+          disabled: !levelOk || needsBridge,
           onClick: () => {
             const result = game.buyExpansion(cx, cy);
             if (!result.ok) this.onFail(result.reason, result.missing);
@@ -681,6 +745,8 @@ export class UI {
           'div',
           { class: 'settings' },
           this.soundToggle(),
+          this.dayNightToggle(),
+          this.social.accountSection(),
           h('button', {
             class: 'btn btn--secondary',
             text: 'Revoir l’introduction',
@@ -710,6 +776,45 @@ export class UI {
       },
     });
     return toggle;
+  }
+
+  private dayNightToggle(): HTMLElement {
+    const { prefs, bus } = this.ctx;
+    const names: Record<DayNightMode, string> = {
+      cycle: 'Jour / nuit : cycle de 30 min',
+      real: 'Jour / nuit : heure réelle',
+      off: 'Jour / nuit : toujours le jour',
+    };
+    const status = h('span', { class: 'muted settings__hint' });
+    const describe = () => {
+      const date = new Date();
+      const state = dayNightAt(Date.now(), prefs.dayNight, date.getHours() + date.getMinutes() / 60);
+      if (prefs.dayNight === 'off') status.textContent = '';
+      else {
+        const wait = formatDuration((state.nextChangeAt - Date.now()) / 1000);
+        status.textContent =
+          state.phase === 'day'
+            ? `Il fait jour — la nuit tombe dans ${wait}.`
+            : state.phase === 'night'
+              ? `Il fait nuit — le jour se lève dans ${wait}.`
+              : state.phase === 'dusk'
+                ? 'Le soleil se couche…'
+                : 'Le soleil se lève…';
+      }
+    };
+    const toggle = h('button', {
+      class: 'btn btn--secondary',
+      text: names[prefs.dayNight],
+      onClick: () => {
+        const next = DAY_NIGHT_MODES[(DAY_NIGHT_MODES.indexOf(prefs.dayNight) + 1) % DAY_NIGHT_MODES.length] ?? 'cycle';
+        prefs.setDayNight(next);
+        bus.emit('ui:dayNightMode', next);
+        toggle.textContent = names[next];
+        describe();
+      },
+    });
+    describe();
+    return h('div', { class: 'settings__row' }, toggle, status);
   }
 
   private replayIntro(): void {

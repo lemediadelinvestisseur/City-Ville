@@ -1,4 +1,5 @@
-import { CHUNK_SIZE, MAP_SIZE, STARTING_CHUNKS } from './balance';
+import { CHUNK_SIZE, MAP_H, MAP_W, STARTING_CHUNKS } from './balance';
+import { coastX, terrainAt } from './terrain';
 
 export interface StartingPlacement {
   defId: string;
@@ -15,7 +16,9 @@ const AREA_MAX = 31;
 
 function roads(): StartingPlacement[] {
   const list: StartingPlacement[] = [];
-  for (let x = AREA_MIN; x <= AREA_MAX; x++) list.push({ defId: 'road', x, y: MAIN_ROAD_Y });
+  // La route principale s'arrête avant la plage.
+  const roadEnd = Math.min(AREA_MAX, coastX(MAIN_ROAD_Y) - 2);
+  for (let x = AREA_MIN; x <= roadEnd; x++) list.push({ defId: 'road', x, y: MAIN_ROAD_Y });
   for (let y = AREA_MIN; y <= AREA_MAX; y++) {
     if (y !== MAIN_ROAD_Y) list.push({ defId: 'road', x: CROSS_ROAD_X, y });
   }
@@ -39,13 +42,13 @@ export const STARTING_TOWN: readonly StartingPlacement[] = [
   { defId: 'tree_pine', x: 10, y: 11 },
   { defId: 'tree_oak', x: 8, y: 13 },
   { defId: 'tree_pine', x: 26, y: 9 },
-  { defId: 'tree_oak', x: 28, y: 11 },
-  { defId: 'tree_pine', x: 30, y: 9 },
+  { defId: 'palm', x: 28, y: 11 },
+  { defId: 'palm', x: 28, y: 9 },
   { defId: 'tree_oak', x: 9, y: 27 },
   { defId: 'tree_pine', x: 11, y: 30 },
   { defId: 'tree_oak', x: 8, y: 24 },
-  { defId: 'tree_pine', x: 29, y: 29 },
-  { defId: 'tree_oak', x: 31, y: 25 },
+  { defId: 'palm', x: 29, y: 29 },
+  { defId: 'tree_oak', x: 25, y: 26 },
   { defId: 'tree_pine', x: 26, y: 31 },
   { defId: 'tree_oak', x: 22, y: 13 },
   { defId: 'tree_pine', x: 17, y: 9 },
@@ -69,13 +72,13 @@ export function wildTrees(seed = 2010): StartingPlacement[] {
   const unlocked = new Set(STARTING_CHUNKS.map(([cx, cy]) => `${cx},${cy}`));
   const taken = new Set<string>();
   const list: StartingPlacement[] = [];
-  for (let i = 0; i < 260; i++) {
-    const x = Math.floor(rand() * MAP_SIZE);
-    const y = Math.floor(rand() * MAP_SIZE);
+  for (let i = 0; i < 420; i++) {
+    const x = Math.floor(rand() * MAP_W);
+    const y = Math.floor(rand() * MAP_H);
     const chunk = `${Math.floor(x / CHUNK_SIZE)},${Math.floor(y / CHUNK_SIZE)}`;
-    if (unlocked.has(chunk) || taken.has(`${x},${y}`)) continue;
+    if (unlocked.has(chunk) || taken.has(`${x},${y}`) || terrainAt(x, y) !== 'grass') continue;
     // Plus dense vers les bords de la carte.
-    const edge = Math.min(x, y, MAP_SIZE - 1 - x, MAP_SIZE - 1 - y);
+    const edge = Math.min(x, y, MAP_W - 1 - x, MAP_H - 1 - y);
     if (rand() < edge / 9) continue;
     taken.add(`${x},${y}`);
     list.push({ defId: rand() < 0.6 ? 'tree_pine' : 'tree_oak', x, y });

@@ -7,7 +7,17 @@ import { WorldScene } from './WorldScene';
  * pixels de l'écran (plafonnée à 2 pour les performances) puis affiché à la
  * taille CSS du conteneur, ce qui garde des graphismes nets sur mobile.
  */
-export function createPhaserGame(parent: HTMLElement, ctx: AppContext): { game: Phaser.Game; scene: WorldScene } {
+export interface PhaserHandle {
+  game: Phaser.Game;
+  scene: WorldScene;
+  /** Ouvre la ville d'un autre joueur (en lecture seule) à la place de la sienne. */
+  openVisit: (visitCtx: AppContext) => void;
+  closeVisit: () => void;
+}
+
+const VISIT_KEY = 'visit';
+
+export function createPhaserGame(parent: HTMLElement, ctx: AppContext): PhaserHandle {
   const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
   const size = () => ({
     width: Math.max(1, Math.round(parent.clientWidth * dpr)),
@@ -45,5 +55,14 @@ export function createPhaserGame(parent: HTMLElement, ctx: AppContext): { game: 
   window.addEventListener('resize', onResize);
   window.visualViewport?.addEventListener('resize', onResize);
   window.addEventListener('orientationchange', onResize);
-  return { game, scene };
+  const closeVisit = () => {
+    if (game.scene.getScene(VISIT_KEY)) game.scene.remove(VISIT_KEY);
+    if (game.scene.isSleeping('world')) game.scene.wake('world');
+  };
+  const openVisit = (visitCtx: AppContext) => {
+    closeVisit();
+    game.scene.sleep('world');
+    game.scene.add(VISIT_KEY, new WorldScene(visitCtx, dpr, { key: VISIT_KEY, readOnly: true }), true);
+  };
+  return { game, scene, openVisit, closeVisit };
 }

@@ -1,4 +1,4 @@
-import { CHUNK_SIZE, MAP_SIZE } from '@/data/balance';
+import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
 import type { Entity, Size } from './types';
 
 export const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
@@ -7,15 +7,16 @@ export function chunkOf(x: number, y: number): { cx: number; cy: number } {
   return { cx: Math.floor(x / CHUNK_SIZE), cy: Math.floor(y / CHUNK_SIZE) };
 }
 
-export const CHUNKS_PER_SIDE = Math.ceil(MAP_SIZE / CHUNK_SIZE);
+export const CHUNKS_X = Math.ceil(MAP_W / CHUNK_SIZE);
+export const CHUNKS_Y = Math.ceil(MAP_H / CHUNK_SIZE);
 
 export function inBounds(x: number, y: number): boolean {
-  return x >= 0 && y >= 0 && x < MAP_SIZE && y < MAP_SIZE;
+  return x >= 0 && y >= 0 && x < MAP_W && y < MAP_H;
 }
 
 /** Grille d'occupation : identifiant de l'entité présente sur chaque case (0 = libre). */
 export class OccupancyGrid {
-  private cells = new Int32Array(MAP_SIZE * MAP_SIZE);
+  private cells = new Int32Array(MAP_W * MAP_H);
 
   clear(): void {
     this.cells.fill(0);
@@ -23,13 +24,13 @@ export class OccupancyGrid {
 
   get(x: number, y: number): number {
     if (!inBounds(x, y)) return 0;
-    return this.cells[y * MAP_SIZE + x] ?? 0;
+    return this.cells[y * MAP_W + x] ?? 0;
   }
 
   fill(x: number, y: number, size: Size, id: number): void {
     for (let dy = 0; dy < size.d; dy++) {
       for (let dx = 0; dx < size.w; dx++) {
-        if (inBounds(x + dx, y + dy)) this.cells[(y + dy) * MAP_SIZE + (x + dx)] = id;
+        if (inBounds(x + dx, y + dy)) this.cells[(y + dy) * MAP_W + (x + dx)] = id;
       }
     }
   }

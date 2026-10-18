@@ -55,6 +55,82 @@ export function grassTile(variant: number): ArtPiece {
   return finish();
 }
 
+export const WATER_VARIANTS = 3;
+
+/** Case de mer : `shallow` près du rivage (plus claire, écume). */
+export function waterTile(variant: number, shallow: boolean): ArtPiece {
+  const { painter, finish } = isoCanvas(1, 1, 0, 2);
+  const base = shallow ? '#4fc6d9' : '#2f9fc7';
+  const e = 0.015;
+  painter.flat(-e, -e, 1 + e, 1 + e, 0, base);
+  const { ctx } = painter;
+  ctx.save();
+  painter.path([
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 0],
+    [0, 1, 0],
+  ]);
+  ctx.clip();
+  const rand = seeded(500 + variant * 41 + (shallow ? 7 : 0));
+  // Reflets en vaguelettes.
+  for (let i = 0; i < 5; i++) {
+    const [sx, sy] = painter.p(0.1 + rand() * 0.8, 0.1 + rand() * 0.8);
+    const w = 6 + rand() * 8;
+    ctx.strokeStyle = rgba('#ffffff', 0.18 + rand() * 0.2);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(sx - w, sy);
+    ctx.quadraticCurveTo(sx - w / 2, sy - 3, sx, sy);
+    ctx.quadraticCurveTo(sx + w / 2, sy + 3, sx + w, sy);
+    ctx.stroke();
+  }
+  if (!shallow) {
+    for (let i = 0; i < 6; i++) {
+      const [sx, sy] = painter.p(rand(), rand());
+      ctx.fillStyle = rgba('#0b4f7a', 0.08 + rand() * 0.06);
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, 8 + rand() * 10, 3 + rand() * 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+  return finish();
+}
+
+/** Case de sable (plage). */
+export function sandTile(variant: number): ArtPiece {
+  const { painter, finish } = isoCanvas(1, 1, 0, 2);
+  const base = variant % 2 === 0 ? '#ecd9a2' : '#e8d49a';
+  const e = 0.015;
+  painter.flat(-e, -e, 1 + e, 1 + e, 0, base);
+  const { ctx } = painter;
+  ctx.save();
+  painter.path([
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 0],
+    [0, 1, 0],
+  ]);
+  ctx.clip();
+  const rand = seeded(300 + variant * 19);
+  for (let i = 0; i < 30; i++) {
+    const [sx, sy] = painter.p(rand(), rand());
+    ctx.fillStyle = rgba(rand() < 0.5 ? '#ffffff' : '#a1824a', 0.12 + rand() * 0.15);
+    ctx.fillRect(sx, sy, 1.6, 1.6);
+  }
+  if (variant === 1) {
+    // Coquillage.
+    const [sx, sy] = painter.p(0.35 + rand() * 0.3, 0.35 + rand() * 0.3);
+    ctx.fillStyle = '#ffccbc';
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 3, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  return finish();
+}
+
 const SIDEWALK = '#d9d3c5';
 const ASPHALT = '#5c6169';
 
@@ -292,6 +368,97 @@ export function cropOverlay(cropId: string, stage: CropStage): ArtPiece {
         ctx.stroke();
         ctx.fillStyle = '#5d4037';
         ctx.fillRect(sx + j - 1, sy - 13, 2, 3);
+        break;
+      }
+      case 'tomato': {
+        ctx.strokeStyle = '#8d6e63';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + j, sy);
+        ctx.lineTo(sx + j, sy - 22);
+        ctx.stroke();
+        ctx.fillStyle = leafDark;
+        ctx.beginPath();
+        ctx.ellipse(sx + j, sy - 10, 7, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        for (const [bx, by] of [
+          [-3, -8],
+          [3, -12],
+          [0, -16],
+        ] as const) {
+          ctx.fillStyle = '#e53935';
+          ctx.beginPath();
+          ctx.arc(sx + bx + j, sy + by, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'sunflower': {
+        ctx.strokeStyle = '#558b2f';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + j, sy);
+        ctx.lineTo(sx + j, sy - 28);
+        ctx.stroke();
+        ctx.fillStyle = '#ffca28';
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4;
+          ctx.beginPath();
+          ctx.ellipse(sx + j + Math.cos(a) * 5, sy - 30 + Math.sin(a) * 5, 3.2, 1.8, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#5d4037';
+        ctx.beginPath();
+        ctx.arc(sx + j, sy - 30, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case 'grape': {
+        ctx.strokeStyle = '#6d4c41';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx + j, sy);
+        ctx.lineTo(sx + j, sy - 18);
+        ctx.stroke();
+        ctx.fillStyle = leaf;
+        ctx.beginPath();
+        ctx.ellipse(sx + j, sy - 20, 8, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#7b1fa2';
+        for (const [bx, by] of [
+          [-2, -14],
+          [2, -14],
+          [0, -11],
+          [-1, -8],
+          [1.5, -8],
+        ] as const) {
+          ctx.beginPath();
+          ctx.arc(sx + bx + j, sy + by, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'apple': {
+        ctx.fillStyle = '#6d4c41';
+        ctx.fillRect(sx + j - 1.5, sy - 14, 3, 14);
+        ctx.fillStyle = leafDark;
+        ctx.beginPath();
+        ctx.ellipse(sx + j, sy - 22, 10, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = leaf;
+        ctx.beginPath();
+        ctx.ellipse(sx + j - 2, sy - 25, 7, 5.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        for (const [bx, by] of [
+          [-5, -20],
+          [4, -18],
+          [1, -27],
+        ] as const) {
+          ctx.fillStyle = '#d32f2f';
+          ctx.beginPath();
+          ctx.arc(sx + bx + j, sy + by, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
         break;
       }
       default:

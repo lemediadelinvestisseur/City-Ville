@@ -591,6 +591,511 @@ const SPECS: Record<string, BuildingSpec> = {
       }
     },
   },
+  // ——— Habitations (suite) ———
+  residence: {
+    size: 3,
+    lot: '#cfd8dc',
+    body: { inset: 0.35, h: 120, wall: '#f3d9b1', floors: 4 },
+    roof: { type: 'gableX', color: '#8d4a36', h: 30 },
+    trim: '#ffffff',
+    windows: { glass: '#b3e5fc', frame: '#ffffff', perTile: 1.5 },
+    door: { side: 'left', at: 0.5, color: '#5d4037', width: 0.4 },
+    after: (p) => bush(p, 2.75, 0.4, 8),
+  },
+  mansion: {
+    size: 3,
+    lot: '#a8d672',
+    fence: '#424242',
+    body: { inset: 0.5, h: 80, wall: '#fdfaf2', floors: 2 },
+    roof: { type: 'pyramid', color: '#455a64', h: 42 },
+    trim: '#d7ccc8',
+    windows: { glass: '#cfe8f7', frame: '#ffffff', perTile: 1.4 },
+    door: { side: 'left', at: 0.5, color: '#3e2723', width: 0.36 },
+    chimney: '#bcaaa4',
+    after: (p, g) => {
+      for (const x of [g.x0 + 0.5, g.x1 - 0.5])
+        p.box(x - 0.06, g.y1 + 0.05, x + 0.06, g.y1 + 0.17, 0, 44, boxColors('#ffffff'));
+      p.box(g.x0 + 0.35, g.y1, g.x1 - 0.35, g.y1 + 0.24, 44, 50, boxColors('#f5f0e6'));
+      bush(p, 0.4, 2.6, 8, '#2e7d32');
+      bush(p, 2.6, 0.4, 8, '#2e7d32');
+    },
+  },
+  lofts: {
+    size: 2,
+    lot: '#cfcac0',
+    body: { inset: 0.25, h: 100, wall: '#b5523b', floors: 3 },
+    roof: { type: 'flat', color: '#5d4037', h: 6 },
+    trim: '#3e2723',
+    windows: { glass: '#a7d8f0', frame: '#263238', perTile: 1.6, big: true },
+    door: { side: 'left', at: 0.5, color: '#263238' },
+    extraHeight: 18,
+    after: (p, g) => p.box(g.x0 + 0.3, g.y0 + 0.3, g.x0 + 0.7, g.y0 + 0.7, g.h + 6, g.h + 22, boxColors('#8d6e63')),
+  },
+  tower: {
+    size: 3,
+    lot: '#cfd8dc',
+    body: { inset: 0.5, h: 210, wall: '#90caf9', floors: 8 },
+    roof: { type: 'flat', color: '#546e7a', h: 8 },
+    trim: '#e3f2fd',
+    windows: { glass: '#e1f5fe', frame: '#1565c0', perTile: 1.6 },
+    door: { side: 'left', at: 0.5, color: '#0d47a1', width: 0.4 },
+    extraHeight: 20,
+    after: (p, g) => roofUnits(p, g, g.h + 8),
+  },
+  skyscraper: {
+    size: 3,
+    lot: '#b0bec5',
+    body: { inset: 0.45, h: 300, wall: '#5c7a99', floors: 12 },
+    roof: { type: 'flat', color: '#37474f', h: 10 },
+    trim: '#cfd8dc',
+    windows: { glass: '#b3e5fc', frame: '#263238', perTile: 1.8 },
+    door: { side: 'left', at: 0.5, color: '#263238', width: 0.45 },
+    extraHeight: 70,
+    after: (p, g) => {
+      const cx = (g.x0 + g.x1) / 2;
+      const cy = (g.y0 + g.y1) / 2;
+      p.box(cx - 0.4, cy - 0.4, cx + 0.4, cy + 0.4, g.h + 10, g.h + 34, boxColors('#455a64'));
+      p.line([cx, cy, g.h + 34], [cx, cy, g.h + 80], '#cfd8dc', 3);
+      p.dot(cx, cy, g.h + 82, 3.5, '#ff5252');
+    },
+  },
+  manor: {
+    size: 4,
+    lot: '#9ccf63',
+    fence: '#f5f5f5',
+    body: { inset: 0.7, h: 86, wall: '#f6ecd8', floors: 2 },
+    roof: { type: 'gableX', color: '#37474f', h: 48 },
+    trim: '#ffffff',
+    windows: { glass: '#cfe8f7', frame: '#ffffff', perTile: 1.3 },
+    door: { side: 'left', at: 0.5, color: '#4e342e', width: 0.4 },
+    chimney: '#a1887f',
+    before: (p) => {
+      p.flat(1.7, 3.3, 2.3, 3.95, 0, '#e0d6c2');
+      p.flat(0.3, 3.35, 1.3, 3.85, 0, '#4fc3f7', '#0288d1');
+    },
+    after: (p) => {
+      bush(p, 3.6, 0.5, 9, '#2e7d32');
+      bush(p, 3.6, 1.5, 8);
+      bush(p, 3.55, 2.6, 9, '#2e7d32');
+      flowerPots(p, 2.6, 3.5, 3.7);
+    },
+  },
+
+  // ——— Commerces (suite) ———
+  fashion: {
+    size: 2,
+    lot: '#ded8cc',
+    body: { inset: 0.3, h: 56, wall: '#f8bbd0', floors: 1 },
+    roof: { type: 'flat', color: '#ad1457', h: 7 },
+    windows: { glass: '#fce4ec', frame: '#ffffff', perTile: 1.6, big: true },
+    door: { side: 'left', at: 0.8, color: '#880e4f' },
+    awning: { side: 'left', colors: ['#212121', '#ffffff'] },
+    sign: { side: 'right', text: 'MODE', bg: '#212121', fg: '#f8bbd0' },
+  },
+  bookshop: {
+    size: 2,
+    lot: '#ded8cc',
+    body: { inset: 0.3, h: 54, wall: '#a5d6a7', floors: 1 },
+    roof: { type: 'gableX', color: '#33691e', h: 28 },
+    windows: { glass: '#fff8e1', frame: '#1b5e20', perTile: 1.6, big: true },
+    door: { side: 'left', at: 0.2, color: '#1b5e20' },
+    awning: { side: 'left', colors: ['#2e7d32', '#fff8e1'] },
+    sign: { side: 'right', text: 'LIVRES', bg: '#1b5e20', fg: '#fff8e1' },
+  },
+  restaurant: {
+    size: 3,
+    lot: '#e2d6c4',
+    body: { inset: 0.4, h: 60, wall: '#fff3e0', floors: 1 },
+    roof: { type: 'gableY', color: '#8d2a1f', h: 32 },
+    windows: { glass: '#ffe0b2', frame: '#5d4037', perTile: 1.4, big: true },
+    door: { side: 'left', at: 0.5, color: '#5d4037', width: 0.36 },
+    awning: { side: 'left', colors: ['#8d2a1f', '#fff3e0'] },
+    sign: { side: 'right', text: 'RESTAURANT', bg: '#3e2723', fg: '#ffcc80' },
+    chimney: '#8d6e63',
+    after: (p) => {
+      for (const x of [0.6, 1.5, 2.4]) {
+        p.groundEllipse(x, 2.8, 0, 0.12, 'rgba(0,0,0,0.15)');
+        p.line([x, 2.8, 0], [x, 2.8, 12], '#5d4037', 2);
+        p.groundEllipse(x, 2.8, 12, 0.11, '#ffffff', '#bdbdbd');
+      }
+    },
+  },
+  supermarket: {
+    size: 3,
+    lot: '#cfcac0',
+    body: { inset: 0.25, h: 64, wall: '#eceff1', floors: 1 },
+    roof: { type: 'flat', color: '#9e9e9e', h: 8 },
+    trim: '#e53935',
+    windows: { glass: '#e3f2fd', frame: '#c62828', perTile: 1.5, big: true },
+    door: { side: 'left', at: 0.5, color: '#c62828', width: 0.5 },
+    sign: { side: 'left', text: 'SUPERMARCHÉ', bg: '#c62828', fg: '#ffffff' },
+    extraHeight: 20,
+    after: (p, g) => roofUnits(p, g, g.h + 8),
+  },
+  hotel: {
+    size: 3,
+    lot: '#d8d2c6',
+    body: { inset: 0.4, h: 170, wall: '#ffe0b2', floors: 6 },
+    roof: { type: 'flat', color: '#6d4c41', h: 8 },
+    trim: '#ffffff',
+    windows: { glass: '#b3e5fc', frame: '#ffffff', perTile: 1.5 },
+    door: { side: 'left', at: 0.5, color: '#4e342e', width: 0.42 },
+    extraHeight: 34,
+    after: (p, g) => {
+      p.sign('left', g.x0 + 0.3, g.x1 - 0.3, g.h + 10, g.h + 30, (g.y0 + g.y1) / 2, '#4e342e', '#ffd54f', 'HÔTEL ★★★');
+      p.box(g.x0 + 0.5, g.y1, g.x1 - 0.5, g.y1 + 0.35, 30, 34, boxColors('#c62828'));
+    },
+  },
+  mall: {
+    size: 4,
+    lot: '#cfcac0',
+    body: { inset: 0.3, h: 84, wall: '#e1f5fe', floors: 2 },
+    roof: { type: 'flat', color: '#90a4ae', h: 8 },
+    trim: '#0288d1',
+    windows: { glass: '#b3e5fc', frame: '#0277bd', perTile: 1.5, big: true },
+    door: { side: 'left', at: 0.5, color: '#01579b', width: 0.6 },
+    sign: { side: 'left', text: 'CENTRE COMMERCIAL', bg: '#0277bd', fg: '#ffffff' },
+    extraHeight: 34,
+    after: (p, g) => {
+      const cx = (g.x0 + g.x1) / 2;
+      const cy = (g.y0 + g.y1) / 2;
+      p.pyramidRoof(cx - 0.7, cy - 0.7, cx + 0.7, cy + 0.7, g.h + 8, 28, '#81d4fa', 0.02);
+      roofUnits(p, g, g.h + 8);
+    },
+  },
+  bowling: {
+    size: 3,
+    lot: '#d1c4e9',
+    body: { inset: 0.35, h: 62, wall: '#5e35b1', floors: 1 },
+    roof: { type: 'flat', color: '#311b92', h: 8 },
+    door: { side: 'left', at: 0.5, color: '#1a0f4a', width: 0.45 },
+    sign: { side: 'right', text: 'BOWLING', bg: '#ffeb3b', fg: '#311b92' },
+    extraHeight: 50,
+    after: (p, g) => {
+      // Quille géante sur le toit.
+      const [sx, sy] = p.p((g.x0 + g.x1) / 2, (g.y0 + g.y1) / 2, g.h + 8);
+      const { ctx } = p;
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#9e9e9e';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(sx - 8, sy);
+      ctx.quadraticCurveTo(sx - 14, sy - 22, sx - 5, sy - 30);
+      ctx.quadraticCurveTo(sx - 8, sy - 44, sx, sy - 46);
+      ctx.quadraticCurveTo(sx + 8, sy - 44, sx + 5, sy - 30);
+      ctx.quadraticCurveTo(sx + 14, sy - 22, sx + 8, sy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#e53935';
+      ctx.fillRect(sx - 5, sy - 33, 10, 3);
+    },
+  },
+  amusement_park: {
+    size: 4,
+    lot: '#c5e1a5',
+    fence: '#ffffff',
+    body: { inset: 1.4, h: 40, wall: '#ffcc80', floors: 1 },
+    roof: { type: 'pyramid', color: '#e53935', h: 30 },
+    windows: { glass: '#fff8e1', frame: '#ffffff', perTile: 1.2 },
+    door: { side: 'left', at: 0.5, color: '#bf360c' },
+    extraHeight: 110,
+    before: (p) => {
+      // Grande roue à l'arrière.
+      const [sx, sy] = p.p(0.9, 0.9, 80);
+      const { ctx } = p;
+      ctx.strokeStyle = '#9e9e9e';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(sx - 20, sy + 80);
+      ctx.lineTo(sx, sy);
+      ctx.lineTo(sx + 20, sy + 80);
+      ctx.stroke();
+      ctx.strokeStyle = '#1e88e5';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 56, 0, Math.PI * 2);
+      ctx.stroke();
+      const colors = ['#e53935', '#fdd835', '#43a047', '#8e24aa', '#fb8c00', '#00acc1'];
+      for (let i = 0; i < 12; i++) {
+        const a = (i * Math.PI) / 6;
+        ctx.strokeStyle = 'rgba(30,136,229,0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + Math.cos(a) * 56, sy + Math.sin(a) * 56);
+        ctx.stroke();
+        ctx.fillStyle = colors[i % colors.length] ?? '#fff';
+        ctx.fillRect(sx + Math.cos(a) * 56 - 5, sy + Math.sin(a) * 56 - 2, 10, 9);
+      }
+    },
+    after: (p) => {
+      // Manège.
+      p.groundEllipse(3.0, 3.0, 0, 0.55, '#fff59d', '#f9a825');
+      p.line([3.0, 3.0, 0], [3.0, 3.0, 32], '#fdd835', 3);
+      const [sx, sy] = p.p(3.0, 3.0, 32);
+      p.ctx.fillStyle = '#ec407a';
+      p.ctx.beginPath();
+      p.ctx.moveTo(sx - 30, sy + 12);
+      p.ctx.lineTo(sx, sy - 12);
+      p.ctx.lineTo(sx + 30, sy + 12);
+      p.ctx.closePath();
+      p.ctx.fill();
+      bush(p, 0.4, 3.6, 8);
+      bush(p, 3.6, 0.4, 8);
+    },
+  },
+  stadium: {
+    size: 4,
+    lot: '#cfcac0',
+    body: { inset: 0.15, h: 50, wall: '#eceff1', floors: 2 },
+    roof: { type: 'flat', color: '#b0bec5', h: 6 },
+    trim: '#1e88e5',
+    door: { side: 'left', at: 0.5, color: '#1565c0', width: 0.5 },
+    extraHeight: 40,
+    after: (p, g) => {
+      // Pelouse et tribunes vues d'en haut.
+      p.flat(g.x0 + 0.35, g.y0 + 0.35, g.x1 - 0.35, g.y1 - 0.35, g.h + 6, '#e53935');
+      p.flat(g.x0 + 0.7, g.y0 + 0.7, g.x1 - 0.7, g.y1 - 0.7, g.h + 6, '#43a047', '#ffffff');
+      p.line([(g.x0 + g.x1) / 2, g.y0 + 0.7, g.h + 6], [(g.x0 + g.x1) / 2, g.y1 - 0.7, g.h + 6], '#ffffff', 1.5);
+      for (const [x, y] of [
+        [g.x0 + 0.15, g.y0 + 0.15],
+        [g.x1 - 0.15, g.y0 + 0.15],
+        [g.x0 + 0.15, g.y1 - 0.15],
+        [g.x1 - 0.15, g.y1 - 0.15],
+      ] as const) {
+        p.line([x, y, g.h], [x, y, g.h + 40], '#9e9e9e', 2.5);
+        p.box(x - 0.15, y - 0.08, x + 0.15, y + 0.08, g.h + 40, g.h + 48, boxColors('#fffde7'));
+      }
+    },
+  },
+
+  // ——— Services (suite) ———
+  library: {
+    size: 2,
+    lot: '#e3ded3',
+    body: { inset: 0.3, h: 60, wall: '#efe6d2', floors: 1 },
+    roof: { type: 'gableY', color: '#6d4c41', h: 28 },
+    windows: { glass: '#fff8e1', frame: '#8d6e63', perTile: 1.4 },
+    door: { side: 'left', at: 0.5, color: '#5d4037' },
+    sign: { side: 'left', text: 'BIBLIOTHÈQUE', bg: '#5d4037', fg: '#fff8e1' },
+  },
+  hospital: {
+    size: 3,
+    lot: '#e0e0e0',
+    body: { inset: 0.3, h: 110, wall: '#fafafa', floors: 4 },
+    roof: { type: 'flat', color: '#b0bec5', h: 8 },
+    trim: '#4caf50',
+    windows: { glass: '#b2ebf2', frame: '#ffffff', perTile: 1.6 },
+    door: { side: 'left', at: 0.5, color: '#00796b', width: 0.45 },
+    extraHeight: 24,
+    after: (p, g) => {
+      const cx = (g.x0 + g.x1) / 2;
+      const cy = (g.y0 + g.y1) / 2;
+      p.flat(cx - 0.45, cy - 0.45, cx + 0.45, cy + 0.45, g.h + 8, '#eceff1', '#9e9e9e');
+      p.flat(cx - 0.1, cy - 0.32, cx + 0.1, cy + 0.32, g.h + 8, '#e53935');
+      p.flat(cx - 0.32, cy - 0.1, cx + 0.32, cy + 0.1, g.h + 8, '#e53935');
+      p.leftQuad(g.x0 + 0.9, g.x1 - 0.9, g.h - 26, g.h - 6, g.y1 + 0.01, '#e53935');
+    },
+  },
+  train_station: {
+    size: 3,
+    lot: '#d7ccc8',
+    body: { inset: 0.35, h: 66, wall: '#d7a86e', floors: 1 },
+    roof: { type: 'gableX', color: '#4e342e', h: 36 },
+    windows: { glass: '#fff8e1', frame: '#ffffff', perTile: 1.3, big: true },
+    door: { side: 'left', at: 0.5, color: '#3e2723', width: 0.4 },
+    sign: { side: 'left', text: 'GARE', bg: '#1a237e', fg: '#ffffff' },
+    extraHeight: 50,
+    after: (p, g) => {
+      cupola(p, g.x1 - 0.5, g.y0 + 0.5, g.h + 6, '#d7a86e', '#4e342e', true);
+      // Rails le long du bâtiment.
+      for (const y of [g.y0 - 0.05, g.y0 - 0.25]) p.line([0.05, y, 0], [2.95, y, 0], '#616161', 2);
+    },
+  },
+  university: {
+    size: 3,
+    lot: '#a8d672',
+    body: { inset: 0.4, h: 84, wall: '#b0412e', floors: 3 },
+    roof: { type: 'gableY', color: '#37474f', h: 34 },
+    trim: '#f5f0e6',
+    windows: { glass: '#cfe8f7', frame: '#ffffff', perTile: 1.4 },
+    door: { side: 'left', at: 0.5, color: '#3e2723', width: 0.36 },
+    extraHeight: 50,
+    after: (p, g) => {
+      cupola(p, (g.x0 + g.x1) / 2, (g.y0 + g.y1) / 2, g.h + 14, '#f5f0e6', '#37474f', true);
+      flagPole(p, g.x1 - 0.2, g.y1 - 0.2, 0, 70, '#7b1fa2');
+    },
+  },
+  museum: {
+    size: 3,
+    lot: '#e8e2d4',
+    body: { inset: 0.4, h: 70, wall: '#f5f0e6', floors: 1 },
+    roof: { type: 'gableY', color: '#bdb6a8', h: 26 },
+    door: { side: 'left', at: 0.5, color: '#5d4037', width: 0.4 },
+    sign: { side: 'left', text: 'MUSÉE', bg: '#f5f0e6', fg: '#5d4037' },
+    after: (p, g) => {
+      const cols = 6;
+      for (let i = 0; i < cols; i++) {
+        const x = g.x0 + 0.2 + ((g.x1 - g.x0 - 0.4) * i) / (cols - 1);
+        p.box(x - 0.05, g.y1 + 0.05, x + 0.05, g.y1 + 0.15, 0, g.h - 4, boxColors('#ffffff'));
+      }
+      p.box(g.x0 + 0.1, g.y1, g.x1 - 0.1, g.y1 + 0.2, g.h - 6, g.h, boxColors('#ece6d8'));
+    },
+  },
+  convention_center: {
+    size: 3,
+    lot: '#cfd8dc',
+    body: { inset: 0.25, h: 70, wall: '#80cbc4', floors: 2 },
+    roof: { type: 'flat', color: '#00695c', h: 8 },
+    trim: '#e0f2f1',
+    windows: { glass: '#e0f7fa', frame: '#004d40', perTile: 1.8, big: true },
+    door: { side: 'left', at: 0.5, color: '#004d40', width: 0.5 },
+    sign: { side: 'right', text: 'CONGRÈS', bg: '#004d40', fg: '#ffffff' },
+    extraHeight: 20,
+    after: (p, g) => roofUnits(p, g, g.h + 8),
+  },
+  airport: {
+    size: 4,
+    lot: '#9e9e9e',
+    body: { inset: 0.25, h: 56, wall: '#eceff1', floors: 1 },
+    roof: { type: 'flat', color: '#cfd8dc', h: 6 },
+    trim: '#1565c0',
+    windows: { glass: '#b3e5fc', frame: '#1565c0', perTile: 1.8, big: true },
+    door: { side: 'left', at: 0.3, color: '#0d47a1', width: 0.5 },
+    sign: { side: 'left', text: 'AÉROPORT', bg: '#1565c0', fg: '#ffffff' },
+    extraHeight: 90,
+    after: (p, g) => {
+      // Tour de contrôle.
+      const x = g.x1 - 0.7;
+      const y = g.y0 + 0.7;
+      p.box(x - 0.18, y - 0.18, x + 0.18, y + 0.18, g.h, g.h + 60, boxColors('#eceff1'));
+      p.box(x - 0.32, y - 0.32, x + 0.32, y + 0.32, g.h + 60, g.h + 76, boxColors('#4fc3f7'));
+      p.flat(x - 0.34, y - 0.34, x + 0.34, y + 0.34, g.h + 78, '#455a64');
+      // Petit avion.
+      const [sx, sy] = p.p(g.x0 + 1.0, g.y0 + 1.2, g.h + 12);
+      const { ctx } = p;
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#78909c';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, 26, 5, -0.46, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(sx - 4, sy - 2);
+      ctx.lineTo(sx + 10, sy - 18);
+      ctx.lineTo(sx + 14, sy - 16);
+      ctx.lineTo(sx + 6, sy + 2);
+      ctx.lineTo(sx + 2, sy + 14);
+      ctx.lineTo(sx - 4, sy + 14);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    },
+  },
+
+  // ——— Stockage (suite) ———
+  silo: {
+    size: 2,
+    lot: '#c9b08a',
+    body: { inset: 0.3, h: 40, wall: '#c0392b', floors: 1 },
+    roof: { type: 'gableY', color: '#5b4a42', h: 26 },
+    trim: '#ffffff',
+    extraHeight: 70,
+    after: (p) => {
+      p.box(1.2, 0.2, 1.8, 0.8, 0, 110, boxColors('#b0bec5'));
+      p.pyramidRoof(1.2, 0.2, 1.8, 0.8, 110, 18, '#78909c', 0.02);
+      for (let z = 20; z < 110; z += 18) p.leftQuad(1.2, 1.8, z, z + 2, 0.8, '#90a4ae');
+    },
+  },
+  big_warehouse: {
+    size: 3,
+    lot: '#cfcac0',
+    body: { inset: 0.2, h: 70, wall: '#a1887f', floors: 1 },
+    roof: { type: 'gableX', color: '#6d4c41', h: 26 },
+    trim: '#d7ccc8',
+    sign: { side: 'right', text: 'DÉPÔT', bg: '#3e2723', fg: '#ffffff' },
+    after: (p, g) => {
+      for (const x of [g.x0 + 0.2, g.x0 + 1.1, g.x0 + 2.0]) {
+        p.leftQuad(x, x + 0.7, 0, 40, g.y1 + 0.01, '#d7ccc8', '#8d6e63');
+        for (let z = 4; z < 40; z += 4) p.line([x, g.y1 + 0.012, z], [x + 0.7, g.y1 + 0.012, z], '#bcaaa4', 1);
+      }
+    },
+  },
+  logistics: {
+    size: 3,
+    lot: '#bdbdbd',
+    body: { inset: 0.2, h: 64, wall: '#ffb74d', floors: 1 },
+    roof: { type: 'flat', color: '#757575', h: 8 },
+    trim: '#e65100',
+    sign: { side: 'left', text: 'LOGISTIQUE', bg: '#e65100', fg: '#ffffff' },
+    extraHeight: 20,
+    after: (p, g) => {
+      roofUnits(p, g, g.h + 8);
+      for (const y of [g.y0 + 0.2, g.y0 + 1.0, g.y0 + 1.8]) {
+        p.rightQuad(y, y + 0.6, 0, 34, g.x1 + 0.01, '#eceff1', '#9e9e9e');
+      }
+    },
+  },
+
+  // ——— Pêche ———
+  pier: {
+    size: 2,
+    lot: null,
+    body: { inset: 0.55, h: 34, wall: '#a1673f', floors: 1 },
+    roof: { type: 'gableY', color: '#1e88e5', h: 24 },
+    windows: { glass: '#fff8e1', frame: '#ffffff', perTile: 1.2 },
+    door: { side: 'left', at: 0.3, color: '#5d4037' },
+    before: (p) => {
+      p.box(0.05, 0.05, 1.95, 1.95, 0, 5, boxColors('#c8914b'));
+      for (let x = 0.05; x < 1.95; x += 0.2) p.line([x, 1.95, 5], [x, 0.05, 5], '#a1673f', 1);
+    },
+    after: (p) => {
+      // Casiers et filet.
+      p.box(1.6, 1.4, 1.85, 1.65, 5, 14, boxColors('#8d6e63'));
+      p.box(0.15, 1.6, 0.4, 1.85, 5, 12, boxColors('#4fc3f7'));
+      p.line([1.85, 0.2, 5], [1.85, 0.2, 30], '#6d4c41', 3);
+    },
+  },
+  fishing_port: {
+    size: 3,
+    lot: '#b0aca4',
+    body: { inset: 0.5, h: 54, wall: '#e0e0e0', floors: 1 },
+    roof: { type: 'gableX', color: '#1565c0', h: 26 },
+    trim: '#1565c0',
+    door: { side: 'left', at: 0.3, color: '#0d47a1', width: 0.5 },
+    sign: { side: 'right', text: 'CRIÉE', bg: '#0d47a1', fg: '#ffffff' },
+    after: (p) => {
+      for (const [x, y] of [
+        [2.6, 2.6],
+        [2.3, 2.75],
+        [0.4, 2.7],
+      ] as const)
+        p.box(x - 0.13, y - 0.13, x + 0.13, y + 0.13, 0, 12, boxColors('#4fc3f7'));
+      p.line([2.85, 0.3, 0], [2.85, 0.3, 50], '#9e9e9e', 3);
+      p.line([2.85, 0.3, 50], [2.2, 0.3, 46], '#9e9e9e', 2);
+    },
+  },
+  harbor: {
+    size: 3,
+    lot: '#9e9e9e',
+    body: { inset: 0.35, h: 70, wall: '#607d8b', floors: 1 },
+    roof: { type: 'gableX', color: '#37474f', h: 22 },
+    trim: '#cfd8dc',
+    sign: { side: 'left', text: 'PORT', bg: '#263238', fg: '#ffffff' },
+    extraHeight: 70,
+    after: (p) => {
+      // Conteneurs et grue.
+      const colors = ['#e53935', '#1e88e5', '#43a047', '#fb8c00'];
+      for (let i = 0; i < 4; i++) {
+        p.box(0.2 + i * 0.6, 2.7, 0.7 + i * 0.6, 2.95, 0, 16, boxColors(colors[i] ?? '#fff'));
+      }
+      p.box(2.6, 0.2, 2.75, 0.35, 0, 130, boxColors('#fbc02d'));
+      p.box(1.4, 0.2, 2.9, 0.35, 120, 130, boxColors('#fbc02d'));
+      p.line([1.5, 0.28, 120], [1.5, 0.28, 90], '#424242', 1.5);
+    },
+  },
 };
 
 export function buildingArt(defId: string): ArtPiece | null {
