@@ -1,7 +1,8 @@
 # Mettre le jeu en ligne (Convex)
 
 Le serveur du jeu est écrit et testé (`convex/`) : comptes avec pseudo, sauvegarde en ligne, voisins,
-classement, marché, mesures d'audience et interface admin. Tant qu'il n'est pas branché, le jeu tourne en
+classement, marché, chat, annonces, rôles (administrateur et modérateurs), mesures d'audience et interface
+admin. Tant qu'il n'est pas branché, le jeu tourne en
 **mode démo** (voisins et offres fictifs, rien n'est envoyé).
 
 ## 1. Créer le projet Convex (dans le navigateur, une fois)
@@ -9,8 +10,6 @@ classement, marché, mesures d'audience et interface admin. Tant qu'il n'est pas
 1. Sur [dashboard.convex.dev](https://dashboard.convex.dev) : _Log in with GitHub_, puis **Create Project**
    (`city-ville`).
 2. En haut, choisis le déploiement **Production**, puis **Settings** :
-   - **Environment Variables** : ajoute `ADMIN_KEY` = une phrase longue et secrète (16 caractères ou plus),
-     à garder dans ton gestionnaire de mots de passe. C'est la clé de l'interface admin.
    - **General › Deploy Keys › Create Deploy Key** : copie la clé (elle n'est affichée qu'une fois).
    - Note la **Cloud URL** (`https://….convex.cloud`) : elle va dans `.env.production` (déjà fait pour
      `combative-wombat-666`).
@@ -27,20 +26,42 @@ Actions › CI › **Run workflow** sur `main`. Dans le tableau de bord Convex, 
 Le jeu compilé (`npm run build`, donc `npm run ios:sync`) se connecte à l'adresse de `.env.production`.
 `npm run dev` reste en **mode démo** tant qu'aucun déploiement de développement n'est configuré.
 
-## 3. Développer avec un serveur de test (facultatif, sur ton Mac)
+## 3. Devenir l'administrateur (une fois)
+
+L'interface admin et les données sont réservées à **un seul compte**, le tien. Il n'y a pas de mot de passe
+à choisir : c'est ton compte de joueur qui reçoit le rôle d'administrateur.
+
+1. Ouvre le jeu (version en ligne), choisis ta langue puis **ton pseudo** : ton compte est créé.
+2. Donne-lui le rôle, au choix :
+   - **Dans le navigateur** : [dashboard.convex.dev](https://dashboard.convex.dev) › projet › déploiement
+     **Production** › **Functions** › `roles` › `setOwner` › **Run function**, avec les arguments
+     `{ "pseudo": "TonPseudo" }`.
+   - **Ou dans le Terminal** : `npx convex run --prod roles:setOwner '{"pseudo":"TonPseudo"}'`.
+
+   Seul quelqu'un qui a accès à ton projet Convex peut le faire : le jeu et l'interface admin ne peuvent pas
+   appeler cette fonction. Il n'y a **jamais qu'un seul** administrateur : relancer `setOwner` avec un autre
+   pseudo retire le rôle au précédent (`roles:clearOwner` le retire à tout le monde).
+
+3. L'interface admin est sur `/admin.html`. Dans le navigateur où tu joues avec ce compte, elle s'ouvre
+   directement (bouton « Ouvrir l'interface admin » dans Réglages › Compte). Ailleurs (autre ordinateur, ou si
+   tu joues sur iPhone) : dans le jeu, Réglages › Compte › « Code de transfert », puis saisis ce code sur la
+   page admin. Un compte qui n'est pas administrateur est refusé, même avec un code valide.
+
+L'ancienne variable `ADMIN_KEY` ne sert plus : tu peux la supprimer des **Environment Variables** de Convex.
+
+## 4. Développer avec un serveur de test (facultatif, sur ton Mac)
 
 ```bash
 npx convex dev
-npx convex env set ADMIN_KEY "une-phrase-longue-et-secrete-de-plus-de-16-caracteres"
 ```
 
 `npx convex dev` crée un déploiement de développement, écrit son adresse dans `.env.local` (utilisée par
 `npm run dev`) et envoie chaque modification de `convex/` pendant que tu développes, sans toucher à la
-production. L'interface admin est sur `/admin.html` (saisis la clé admin).
+production. Pour l'interface admin de ce serveur de test : `npx convex run roles:setOwner '{"pseudo":"…"}'`.
 
-**Compte testeur** : la boutique (paiements simulés) et les outils de test ne s'affichent que pour un compte
-marqué « testeur ». Dans l'admin, carte « Trouver un joueur », cherche ton pseudo et clique « Rendre testeur ».
-En développement (`npm run dev`), tout est visible.
+**Boutique et outils de test** : ils ne s'affichent que pour le compte administrateur (celui désigné par
+`roles:setOwner`), c'est-à-dire toi. Les autres joueurs ne les voient pas. En développement (`npm run dev`) et
+dans la démo hors ligne, tout reste visible.
 
 **Politique de confidentialité** : servie par Convex sur `https://<déploiement>.convex.site/confidentialite`
 (en production : https://combative-wombat-666.eu-west-1.convex.site/confidentialite). C'est l'adresse à donner
@@ -56,8 +77,30 @@ En développement (`npm run dev`), tout est visible.
 | `leaderboard.ts` | Classements par niveau et par population                                                     |
 | `market.ts`      | Marché : lots de marchandises, achat atomique, taxe, invendus                                |
 | `moderation.ts`  | Blocage et signalement (exigés par Apple pour le contenu entre joueurs)                      |
+| `chat.ts`        | Chat (salon Monde + salon par langue), annonces, modération, purge à 30 jours (`crons.ts`)   |
+| `roles.ts`       | Rôles : administrateur unique (ligne de commande), modérateurs nommés depuis l'admin         |
 | `stats.ts`       | Sessions (signal chaque minute) et évènements de progression                                 |
-| `admin.ts`       | Tableau de bord : audience, rétention J1/J7/J30 par cohorte, temps de jeu, entonnoir…        |
+| `admin.ts`       | Tableau de bord (audience, rétention, langues, chat…), annonces, bannissements — admin seul  |
+
+## Rôles
+
+| Rôle           | Comment l'obtenir                                    | Ce qu'il permet                                                   |
+| -------------- | ---------------------------------------------------- | ----------------------------------------------------------------- |
+| Joueur         | Par défaut                                           | Jouer, chatter (dès le niveau 2), signaler, bloquer               |
+| Modérateur     | Nommé par l'administrateur (admin › Équipe)          | Dans le jeu : supprimer un message du chat, rendre un joueur muet |
+| Administrateur | `roles:setOwner` (voir plus haut, un seul à la fois) | Interface admin et toutes les données, annonces, bannissements    |
+
+Chaque fonction de `admin.ts` et `roles.ts` vérifie le rôle côté serveur : l'interface admin n'est qu'un
+affichage, les données ne sortent jamais pour un autre compte. Un compte banni perd ses droits.
+
+## Chat
+
+- Deux salons : **Monde** (tout le monde) et celui de la **langue** du joueur.
+- Écriture à partir du niveau 2, 200 caractères, 1 message toutes les 3 s (8 par minute au plus) ; liens,
+  adresses e-mail et insultes courantes sont masqués (`src/core/chat.ts`, règles partagées avec le jeu).
+- Toucher un message : visiter la ville de l'auteur, signaler (examiné dans l'admin), bloquer (ses messages
+  disparaissent pour toi). L'équipe peut aussi supprimer le message ou rendre l'auteur muet (1 h, 24 h, 7 j).
+- Les messages de plus de 30 jours sont effacés chaque nuit.
 
 **Identité** : chaque appareil reçoit une clé secrète aléatoire ; le serveur n'en garde que l'empreinte
 (SHA-256). Pas d'e-mail ni de mot de passe : le pseudo suffit. On ajoutera « Se connecter avec Apple » pour

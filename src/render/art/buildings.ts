@@ -1,5 +1,6 @@
 import { shade } from './color';
 import { boxColors, isoCanvas, type ArtPiece, type IsoPainter } from './IsoPainter';
+import { signText } from '@/i18n/content';
 
 type Side = 'left' | 'right';
 
@@ -138,7 +139,8 @@ function drawBuilding(spec: BuildingSpec): ArtPiece {
   }
 
   if (spec.sign) {
-    const { side, text, bg, fg } = spec.sign;
+    const { side, bg, fg } = spec.sign;
+    const text = signText(spec.sign.text);
     let za: number;
     let zb: number;
     if (spec.awning) {
@@ -448,7 +450,7 @@ const SPECS: Record<string, BuildingSpec> = {
     after: (p, g) => {
       roofUnits(p, g, g.h + 8);
       // Marquise lumineuse.
-      p.sign('left', g.x0 + 0.25, g.x1 - 0.25, 44, 64, g.y1 + 0.02, '#ffca28', '#4a148c', 'CINÉMA');
+      p.sign('left', g.x0 + 0.25, g.x1 - 0.25, 44, 64, g.y1 + 0.02, '#ffca28', '#4a148c', signText('CINÉMA'));
       for (let i = 0; i <= 14; i++) {
         const x = g.x0 + 0.25 + ((g.x1 - g.x0 - 0.5) * i) / 14;
         p.dot(x, g.y1 + 0.03, 66, 1.8, '#fff59d');
@@ -742,7 +744,17 @@ const SPECS: Record<string, BuildingSpec> = {
     door: { side: 'left', at: 0.5, color: '#4e342e', width: 0.42 },
     extraHeight: 34,
     after: (p, g) => {
-      p.sign('left', g.x0 + 0.3, g.x1 - 0.3, g.h + 10, g.h + 30, (g.y0 + g.y1) / 2, '#4e342e', '#ffd54f', 'HÔTEL ★★★');
+      p.sign(
+        'left',
+        g.x0 + 0.3,
+        g.x1 - 0.3,
+        g.h + 10,
+        g.h + 30,
+        (g.y0 + g.y1) / 2,
+        '#4e342e',
+        '#ffd54f',
+        signText('HÔTEL ★★★'),
+      );
       p.box(g.x0 + 0.5, g.y1, g.x1 - 0.5, g.y1 + 0.35, 30, 34, boxColors('#c62828'));
     },
   },

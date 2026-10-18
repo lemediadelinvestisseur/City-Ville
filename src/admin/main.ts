@@ -1,12 +1,28 @@
 import './admin.css';
 import { ConvexClient } from 'convex/browser';
+import { ConvexError } from 'convex/values';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
+import { LANGUAGES } from '@/data/languages';
+import { newDeviceToken } from '@/services/online/Backend';
 import { barChart, lineChart } from './charts';
-import { demoDashboard } from './demo';
-import { TARGET_DAYS, type Dashboard } from './types';
+import { demoChat, demoDashboard, demoTeam } from './demo';
+import { TARGET_DAYS, type AdminChat, type Dashboard, type Team } from './types';
 
-const KEY_STORAGE = 'city-ville:admin-key';
+/**
+ * Interface admin. Accès réservé au compte administrateur (rôle « admin »,
+ * unique, désigné en ligne de commande : voir convex/roles.ts). On s'y connecte :
+ *  - automatiquement dans le navigateur où l'on joue avec ce compte ;
+ *  - ou avec un code de transfert (Réglages › Compte du jeu), qui associe ce
+ *    navigateur au compte le temps de la session admin.
+ */
+
+/** Clé de l'appareil du jeu (même site) et clé propre à une connexion par code. */
+const GAME_TOKEN_KEY = 'city-ville:device';
+const ADMIN_TOKEN_KEY = 'city-ville:admin-device';
+/** Après « Se déconnecter », on n'utilise plus automatiquement la clé du jeu. */
+const SKIP_GAME_KEY = 'city-ville:admin-skip-game';
+
 const root = document.getElementById('admin') as HTMLElement;
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 const client = convexUrl ? new ConvexClient(convexUrl) : null;
@@ -26,12 +42,23 @@ const pct = (value: number | null) => (value === null ? '—' : `${Math.round(va
 const num = (value: number) => new Intl.NumberFormat('fr-FR').format(Math.round(value));
 const dec = (value: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(value);
 const shortDay = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
+const languageName = (code: string | null) =>
+  code === null || code === '?' ? 'inconnue' : (LANGUAGES.find((l) => l.code === code)?.name ?? code);
 function ago(ms: number): string {
   const min = Math.round((Date.now() - ms) / 60_000);
   if (min < 1) return 'à l’instant';
   if (min < 60) return `il y a ${min} min`;
   const h = Math.round(min / 60);
   return h < 48 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
+}
+
+function errorText(error: unknown): string {
+  const code = error instanceof ConvexError ? String(error.data) : '';
+  if (code === 'forbidden') return 'Action refusée (droits insuffisants).';
+  if (code === 'notFound') return 'Joueur introuvable.';
+  if (code === 'invalidCode') return 'Code invalide ou expiré.';
+  if (code === 'invalidText') return 'Message vide ou non autorisé.';
+  return 'Erreur : réessayez.';
 }
 
 function card(title: string, ...content: Array<Node | string | null>): HTMLElement {
@@ -70,10 +97,31 @@ function heat(value: number | null): HTMLElement {
   return cell;
 }
 
-let days = 30;
-let unsubscribe: (() => void) | null = null;
+/** Session admin : clé utilisée et son origine. */
+interface Session {
+  token: string;
+  pseudo: string;
+  /** Clé créée par un code de transfert (à révoquer à la déconnexion). */
+  own: boolean;
+}
 
-function render(data: Dashboard, key: string, demo: boolean): void {
+let days = 30;
+let session: Session | null = null;
+let stops: Array<() => void> = [];
+let latest: { dashboard: Dashboard | null; team: Team; chat: AdminChat } = { dashboard: null, team: [], chat: [] };
+const flash = el('p', 'flash');
+
+function notify(text: string, bad = false): void {
+  flash.textContent = text;
+  flash.classList.toggle('is-bad', bad);
+  flash.classList.add('is-on');
+  window.setTimeout(() => flash.classList.remove('is-on'), 3500);
+}
+
+function render(demo: boolean): void {
+  const data = latest.dashboard;
+  if (!data) return;
+  const token = session?.token ?? '';
   root.replaceChildren();
   const { totals } = data;
   const header = el(
@@ -83,7 +131,9 @@ function render(data: Dashboard, key: string, demo: boolean): void {
     el(
       'span',
       `badge${demo ? ' badge--demo' : ''}`,
-      demo ? 'Données de démonstration' : `Temps réel · ${new Date(data.generatedAt).toLocaleTimeString('fr-FR')}`,
+      demo
+        ? 'Données de démonstration'
+        : `Temps réel · ${new Date(data.generatedAt).toLocaleTimeString('fr-FR')} · ${session?.pseudo ?? ''}`,
     ),
   );
   const range = el('div', 'range');
@@ -91,17 +141,14 @@ function render(data: Dashboard, key: string, demo: boolean): void {
     const b = el('button', d === days ? 'is-active' : '', `${d} jours`);
     b.addEventListener('click', () => {
       days = d;
-      start(key);
+      if (session) start(session);
+      else startDemo();
     });
     range.append(b);
   }
   if (!demo) {
     const out = el('button', 'logout', 'Se déconnecter');
-    out.addEventListener('click', () => {
-      sessionStorage.removeItem(KEY_STORAGE);
-      unsubscribe?.();
-      login();
-    });
+    out.addEventListener('click', () => void logout());
     range.append(out);
   }
   header.append(range);
@@ -116,6 +163,7 @@ function render(data: Dashboard, key: string, demo: boolean): void {
     kpi('Retour à 30 jours (J30)', pct(totals.retentionD30), 'objectif : 6 %'),
     kpi('Durée moyenne d’une session', `${dec(totals.avgSessionMin)} min`),
     kpi('Sessions par joueur et par jour', dec(totals.sessionsPerActiveDay)),
+    kpi('Messages du chat aujourd’hui', num(data.chat.messagesToday), `${num(data.chat.authorsToday)} auteurs`),
   );
 
   const labels = data.daily.map((d) => shortDay(d.day));
@@ -201,7 +249,14 @@ function render(data: Dashboard, key: string, demo: boolean): void {
     'Plateformes (sessions)',
     table(
       ['Plateforme', 'Sessions'],
-      data.platforms.sort((a, b) => b.count - a.count).map((p) => [p.platform, num(p.count)]),
+      [...data.platforms].sort((a, b) => b.count - a.count).map((p) => [p.platform, num(p.count)]),
+    ),
+  );
+  const languages = card(
+    'Langues des joueurs',
+    table(
+      ['Langue', 'Joueurs'],
+      data.languages.map((l) => [languageName(l.language), num(l.count)]),
     ),
   );
 
@@ -210,70 +265,46 @@ function render(data: Dashboard, key: string, demo: boolean): void {
     b.disabled = demo;
     b.addEventListener('click', () => {
       b.disabled = true;
-      void run().finally(() => {
-        b.disabled = false;
-      });
+      void run()
+        .catch((e: unknown) => notify(errorText(e), true))
+        .finally(() => {
+          b.disabled = false;
+        });
     });
     return b;
   };
-  /** Bascule « testeur » : outils de test et boutique visibles dans le jeu pour ce compte. */
-  const testerButton = (id: string, tester: boolean) =>
-    action(
-      tester ? 'Testeur ✓' : 'Rendre testeur',
-      () =>
-        client?.mutation(api.admin.setTester, { key, playerId: id as Id<'players'>, tester: !tester }) ??
-        Promise.resolve(),
-    );
-  const searchInput = el('input', 'login__input');
-  searchInput.placeholder = 'Pseudo…';
-  const searchResults = el('div');
-  searchInput.addEventListener('input', () => {
-    const text = searchInput.value;
-    if (!client || text.trim().length < 2) {
-      searchResults.replaceChildren();
-      return;
-    }
-    void client.query(api.admin.findPlayers, { key, text }).then((players) => {
-      searchResults.replaceChildren(
-        table(
-          ['Pseudo', 'Niveau', 'Testeur'],
-          players.map((p) => [p.pseudo, String(p.level), testerButton(p.id, p.tester)]),
-        ),
-      );
-    });
-  });
-  const search = card(
-    'Trouver un joueur',
-    el(
-      'p',
-      'muted',
-      'Le compte « testeur » voit la boutique (paiements simulés) et les outils de test. Active-le sur ton propre compte uniquement.',
-    ),
-    searchInput,
-    searchResults,
-  );
+  const mutate = client ?? null;
   const recent = card(
     'Derniers joueurs connectés',
     table(
-      ['Pseudo', 'Niveau', 'Habitants', 'Inscrit', 'Vu', 'Jours actifs', 'Testeur', ''],
+      ['Pseudo', 'Niveau', 'Habitants', 'Langue', 'Inscrit', 'Vu', 'Jours actifs', ''],
       data.recentPlayers.map((p) => [
-        el('span', p.suspicious ? 'flag' : '', `${p.pseudo}${p.suspicious ? ' ⚠' : ''}${p.banned ? ' (banni)' : ''}`),
+        el(
+          'span',
+          p.suspicious ? 'flag' : '',
+          `${p.pseudo}${p.role === 'admin' ? ' ★' : p.role === 'moderator' ? ' (modo)' : ''}${p.suspicious ? ' ⚠' : ''}${p.banned ? ' (banni)' : ''}`,
+        ),
         String(p.level),
         num(p.population),
+        languageName(p.language),
         ago(p.createdAt),
         ago(p.lastSeenAt),
         String(p.activeDays),
-        testerButton(p.id, p.tester),
-        action(
-          p.banned ? 'Débannir' : 'Bannir',
-          () =>
-            client?.mutation(api.admin.setBanned, { key, playerId: p.id as Id<'players'>, banned: !p.banned }) ??
-            Promise.resolve(),
-          !p.banned,
-        ),
+        p.role === 'admin'
+          ? ''
+          : action(
+              p.banned ? 'Débannir' : 'Bannir',
+              async () =>
+                mutate?.mutation(api.admin.setBanned, { token, playerId: p.id as Id<'players'>, banned: !p.banned }),
+              !p.banned,
+            ),
       ]),
     ),
-    el('p', 'muted', '⚠ : progression invraisemblable détectée dans une sauvegarde (triche possible).'),
+    el(
+      'p',
+      'muted',
+      '★ : administrateur · ⚠ : progression invraisemblable détectée dans une sauvegarde (triche possible).',
+    ),
   );
   const reports = card(
     `Signalements à traiter (${data.reports.length})`,
@@ -284,23 +315,24 @@ function render(data: Dashboard, key: string, demo: boolean): void {
             const actions = el(
               'span',
               'actions',
-              action(
-                'Classer',
-                () =>
-                  client?.mutation(api.admin.resolveReport, { key, reportId: r.id as Id<'reports'> }) ??
-                  Promise.resolve(),
+              action('Classer', async () =>
+                mutate?.mutation(api.admin.resolveReport, { token, reportId: r.id as Id<'reports'> }),
               ),
-              action(
-                'Réinitialiser le pseudo',
-                () =>
-                  client?.mutation(api.admin.resetPseudo, { key, playerId: r.targetId as Id<'players'> }) ??
-                  Promise.resolve(),
-              ),
+              r.messageId
+                ? action('Supprimer le message', async () => {
+                    await mutate?.mutation(api.chat.remove, {
+                      token,
+                      messageId: r.messageId as Id<'chatMessages'>,
+                    });
+                    await mutate?.mutation(api.admin.resolveReport, { token, reportId: r.id as Id<'reports'> });
+                  })
+                : action('Réinitialiser le pseudo', async () =>
+                    mutate?.mutation(api.admin.resetPseudo, { token, playerId: r.targetId as Id<'players'> }),
+                  ),
               action(
                 'Bannir',
-                () =>
-                  client?.mutation(api.admin.setBanned, { key, playerId: r.targetId as Id<'players'>, banned: true }) ??
-                  Promise.resolve(),
+                async () =>
+                  mutate?.mutation(api.admin.setBanned, { token, playerId: r.targetId as Id<'players'>, banned: true }),
                 true,
               ),
             );
@@ -310,66 +342,267 @@ function render(data: Dashboard, key: string, demo: boolean): void {
       : el('p', 'muted', 'Aucun signalement en attente.'),
   );
 
+  // ——— Annonce à tous les joueurs ———
+  const text = el('textarea', 'field');
+  text.maxLength = 200;
+  text.rows = 3;
+  text.placeholder = 'Ex. : Nouvelle mise à jour ce soir à 20 h : le port industriel arrive !';
+  const target = el('select', 'field');
+  target.append(el('option', '', 'Tous les joueurs (salon Monde)'));
+  target.options[0]!.value = '';
+  for (const l of LANGUAGES) {
+    const option = el('option', '', `Joueurs en ${l.name}`);
+    option.value = l.code;
+    target.append(option);
+  }
+  const send = action('Envoyer l’annonce', async () => {
+    if (!text.value.trim()) return;
+    await mutate?.mutation(api.admin.announce, {
+      token,
+      text: text.value,
+      ...(target.value ? { language: target.value } : {}),
+    });
+    text.value = '';
+    notify('Annonce envoyée : elle s’affiche en fenêtre chez les joueurs concernés.');
+  });
+  const announce = card(
+    'Annonce aux joueurs',
+    el(
+      'p',
+      'muted',
+      'Affichée en fenêtre à chaque joueur concerné (tout de suite s’il joue, sinon à sa prochaine visite), rangée dans ses notifications et mise en avant dans le chat. 200 caractères maximum.',
+    ),
+    el('div', 'form', text, target, send),
+  );
+
+  // ——— Équipe de modération ———
+  const pseudo = el('input', 'field');
+  pseudo.placeholder = 'Pseudo du futur modérateur';
+  const addModerator = action('Nommer modérateur', async () => {
+    if (!pseudo.value.trim()) return;
+    const result = await mutate?.mutation(api.roles.setModerator, { token, pseudo: pseudo.value, moderator: true });
+    pseudo.value = '';
+    if (result) notify(`${result.pseudo} est maintenant modérateur.`);
+  });
+  const team = card(
+    'Équipe',
+    el(
+      'p',
+      'muted',
+      'Les modérateurs peuvent supprimer des messages du chat et rendre un joueur muet, depuis le jeu. Ils n’ont accès ni à cette interface ni aux données. Le rôle d’administrateur ne se donne qu’en ligne de commande (voir docs/MISE_EN_LIGNE.md).',
+    ),
+    table(
+      ['Pseudo', 'Rôle', 'Vu', ''],
+      latest.team.map((m) => [
+        m.pseudo,
+        m.role === 'admin' ? 'Administrateur' : 'Modérateur',
+        ago(m.lastSeenAt),
+        m.role === 'moderator'
+          ? action(
+              'Retirer',
+              async () => mutate?.mutation(api.roles.setModerator, { token, pseudo: m.pseudo, moderator: false }),
+              true,
+            )
+          : '',
+      ]),
+    ),
+    el('div', 'form form--inline', pseudo, addModerator),
+  );
+
+  // ——— Modération du chat ———
+  const chat = card(
+    'Chat : derniers messages',
+    latest.chat.length
+      ? table(
+          ['Salon', 'Pseudo', 'Message', 'Quand', ''],
+          latest.chat.map((m) => [
+            m.channel === 'world' ? 'Monde' : languageName(m.channel.slice(5)),
+            `${m.pseudo}${m.kind === 'announcement' ? ' (annonce)' : ''}`,
+            el('span', m.deleted ? 'deleted' : '', m.text),
+            ago(m.createdAt),
+            m.deleted
+              ? 'supprimé'
+              : el(
+                  'span',
+                  'actions',
+                  action(
+                    'Supprimer',
+                    async () => mutate?.mutation(api.chat.remove, { token, messageId: m.id as Id<'chatMessages'> }),
+                    true,
+                  ),
+                  m.kind === 'message' && !m.role
+                    ? action('Muet 24 h', async () =>
+                        mutate?.mutation(api.chat.mute, {
+                          token,
+                          playerId: m.playerId as Id<'players'>,
+                          minutes: 1440,
+                        }),
+                      )
+                    : null,
+                ),
+          ]),
+        )
+      : el('p', 'muted', 'Aucun message pour le moment.'),
+  );
+
   root.append(
     header,
+    flash,
     kpis,
     el('div', 'grid', activity, playtime),
     cohorts,
     el('div', 'grid', levels, pace),
-    el('div', 'grid', funnel, platforms),
-    search,
+    el('div', 'grid', funnel, el('div', 'stack', platforms, languages)),
+    el('div', 'grid', announce, team),
+    chat,
     recent,
     reports,
   );
 }
 
-function start(key: string): void {
-  unsubscribe?.();
-  if (!client) {
-    render(demoDashboard(days), key, true);
-    return;
-  }
+function stop(): void {
+  for (const unsubscribe of stops) unsubscribe();
+  stops = [];
+}
+
+function startDemo(): void {
+  stop();
+  latest = { dashboard: demoDashboard(days), team: demoTeam(), chat: demoChat() };
+  render(true);
+}
+
+/** Abonnements temps réel : le tableau se met à jour tout seul. */
+function start(current: Session): void {
+  stop();
+  if (!client) return;
+  session = current;
   root.replaceChildren(el('p', 'loading', 'Chargement…'));
-  // Abonnement temps réel : le tableau se met à jour tout seul.
-  unsubscribe = client.onUpdate(
-    api.admin.dashboard,
-    { key, days },
-    (data) => {
-      sessionStorage.setItem(KEY_STORAGE, key);
-      render(data, key, false);
-    },
-    () => {
-      sessionStorage.removeItem(KEY_STORAGE);
-      login('Clé admin refusée.');
-    },
+  const { token } = current;
+  const refused = () => {
+    stop();
+    void logout('Accès refusé : ce compte n’est pas (ou plus) l’administrateur.');
+  };
+  stops.push(
+    client.onUpdate(
+      api.admin.dashboard,
+      { token, days },
+      (data) => {
+        latest.dashboard = data;
+        render(false);
+      },
+      refused,
+    ),
+    client.onUpdate(
+      api.roles.team,
+      { token },
+      (team) => {
+        latest.team = team;
+        render(false);
+      },
+      () => undefined,
+    ),
+    client.onUpdate(
+      api.admin.recentChat,
+      { token },
+      (chat) => {
+        latest.chat = chat;
+        render(false);
+      },
+      () => undefined,
+    ),
   );
+}
+
+async function logout(error = ''): Promise<void> {
+  stop();
+  const current = session;
+  session = null;
+  latest = { dashboard: null, team: [], chat: [] };
+  if (current?.own) {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    await client?.mutation(api.players.logout, { token: current.token }).catch(() => undefined);
+  } else {
+    // Clé du jeu : on la laisse au jeu, mais on ne s'en sert plus ici.
+    sessionStorage.setItem(SKIP_GAME_KEY, '1');
+  }
+  login(error);
+}
+
+/** Vérifie qu'une clé appartient bien à l'administrateur, puis ouvre le tableau de bord. */
+async function tryToken(token: string, own: boolean): Promise<boolean> {
+  if (!client) return false;
+  try {
+    const me = await client.query(api.admin.whoami, { token });
+    start({ token, pseudo: me.pseudo, own });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function login(error = ''): void {
   root.replaceChildren();
   const input = el('input', 'login__input');
-  input.type = 'password';
-  input.placeholder = 'Clé admin';
-  input.autocomplete = 'current-password';
-  const button = el('button', 'login__btn', 'Entrer');
+  input.placeholder = 'ABCD-EFGH-JKLM';
+  input.autocomplete = 'one-time-code';
+  input.maxLength = 14;
+  const button = el('button', 'login__btn', 'Se connecter');
+  const message = el('p', 'login__error', error);
   const form = el(
     'form',
     'login',
     el('h1', '', 'City Ville — Admin'),
-    el('p', 'muted', 'Saisissez la clé ADMIN_KEY définie dans les variables d’environnement Convex.'),
+    el(
+      'p',
+      'muted',
+      'Réservé au compte administrateur. Ouvrez cette page dans le navigateur où vous jouez avec ce compte, ou saisissez un code de transfert (dans le jeu : Réglages › Compte › Code de transfert).',
+    ),
     input,
     button,
-    error ? el('p', 'login__error', error) : null,
+    message,
   );
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    if (input.value.trim()) start(input.value.trim());
+    const code = input.value.trim();
+    if (!code || !client) return;
+    button.disabled = true;
+    message.textContent = '';
+    const token = newDeviceToken();
+    client
+      .mutation(api.players.redeemTransferCode, { code, token, platform: 'admin' })
+      .then(async () => {
+        if (await tryToken(token, true)) {
+          localStorage.setItem(ADMIN_TOKEN_KEY, token);
+          sessionStorage.removeItem(SKIP_GAME_KEY);
+          return;
+        }
+        // Pas l'administrateur : la clé créée par le code est aussitôt révoquée.
+        await client.mutation(api.players.logout, { token }).catch(() => undefined);
+        message.textContent = 'Ce compte n’est pas l’administrateur.';
+      })
+      .catch((e: unknown) => {
+        message.textContent = errorText(e);
+      })
+      .finally(() => {
+        button.disabled = false;
+      });
   });
   root.append(form);
   input.focus();
 }
 
-const saved = sessionStorage.getItem(KEY_STORAGE);
-if (!client) start('');
-else if (saved) start(saved);
-else login();
+async function boot(): Promise<void> {
+  if (!client) {
+    startDemo();
+    return;
+  }
+  root.replaceChildren(el('p', 'loading', 'Connexion…'));
+  const own = localStorage.getItem(ADMIN_TOKEN_KEY);
+  if (own && (await tryToken(own, true))) return;
+  if (own) localStorage.removeItem(ADMIN_TOKEN_KEY);
+  const game = sessionStorage.getItem(SKIP_GAME_KEY) ? null : localStorage.getItem(GAME_TOKEN_KEY);
+  if (game && (await tryToken(game, false))) return;
+  login(game ? 'Le compte de ce navigateur n’est pas l’administrateur.' : '');
+}
+
+void boot();

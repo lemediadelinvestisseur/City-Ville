@@ -52,8 +52,10 @@ export function privacyHtml(contact = PRIVACY_CONTACT, updated = PRIVACY_UPDATED
   <li><strong>Clé d’appareil</strong> : une clé secrète générée sur votre appareil ; le serveur n’en conserve qu’une empreinte chiffrée. Elle remplace un mot de passe.</li>
   <li><strong>Statistiques de jeu</strong> : début et durée des sessions, plateforme (iOS, web) et évènements de jeu anonymes (niveau atteint, achat de terrain…), pour équilibrer le jeu.</li>
   <li><strong>Fonctions sociales</strong> : vos voisins, l’aide apportée, vos annonces au marché, ainsi que les signalements et blocages que vous effectuez.</li>
+  <li><strong>Chat</strong> : les messages que vous publiez dans les salons, visibles des autres joueurs et de la modération. Ils sont supprimés automatiquement après 30 jours.</li>
+  <li><strong>Langue</strong> : la langue choisie dans les réglages, pour afficher le jeu et le bon salon de chat.</li>
 </ul>
-<p>Sur votre appareil, le jeu enregistre aussi une copie locale de la sauvegarde et vos réglages (son, vibrations, mode nuit).</p>
+<p>Sur votre appareil, le jeu enregistre aussi une copie locale de la sauvegarde et vos réglages (son, vibrations, mode nuit, rappels). Les rappels sont des notifications locales programmées par l’appareil : aucune donnée n’est envoyée pour cela.</p>
 </section>
 
 <section>

@@ -17,6 +17,7 @@ import { DropSystem } from './Drops';
 import { MovingVan } from './MovingVan';
 import { NightLayer } from './NightLayer';
 import { WalkerSystem } from './WalkerSystem';
+import { t } from '@/i18n';
 
 const DEPTH_ROAD = 2;
 const DEPTH_LIMITS = 4;
@@ -797,11 +798,11 @@ export class WorldScene extends Phaser.Scene {
           // Les nouveaux habitants arrivent en camion de déménagement.
           this.van.play(
             { x: entity.x, y: entity.y, w: def.size.w, d: def.size.d },
-            'Emménagement',
+            t('world.movingIn'),
             this.overlayScale,
             () => {
               const a = this.anchor(view);
-              this.fx.popText(a.x, a.top, `+${def.population} habitants`, '#c5e1a5', 0, this.overlayScale);
+              this.fx.popText(a.x, a.top, t('world.residents', { n: def.population }), '#c5e1a5', 0, this.overlayScale);
               this.fx.bounce([view.main]);
             },
           );
@@ -819,7 +820,7 @@ export class WorldScene extends Phaser.Scene {
         const view = this.views.get(entity.id);
         if (!view) return;
         this.riseFx(view);
-        this.celebrate(view, `${'★'.repeat(entity.stars ?? 1)} Amélioré !`, '#ffd54f');
+        this.celebrate(view, t('world.upgraded', { stars: '★'.repeat(entity.stars ?? 1) }), '#ffd54f');
       }),
     );
     on(game.events.on('reward', ({ entityId, reward }) => this.onReward(entityId, reward)));
@@ -1414,7 +1415,7 @@ export class WorldScene extends Phaser.Scene {
     this.fx.crates(a.x, a.y);
   }
 
-  private celebrate(view: View, text = 'Terminé !', color = '#ffffff'): void {
+  private celebrate(view: View, text = t('world.done'), color = '#ffffff'): void {
     const a = this.anchor(view);
     this.fx.puffs(a.x, a.y, a.w, a.d, 8);
     this.fx.stars(a.x, a.top + 30);

@@ -1,5 +1,5 @@
 import { QUESTS } from '@/data/quests';
-import type { Dashboard } from './types';
+import type { AdminChat, Dashboard, Team } from './types';
 
 /** Générateur pseudo-aléatoire déterministe pour des données de démonstration stables. */
 function rng(seed: number): () => number {
@@ -78,8 +78,9 @@ export function demoDashboard(days = 30): Dashboard {
     lastSeenAt: now - i * 47 * 60_000,
     activeDays: Math.max(1, 14 - i),
     banned: false,
-    tester: i === 0,
     suspicious: i === 7 ? 2 : 0,
+    role: i === 0 ? 'admin' : i === 3 ? 'moderator' : null,
+    language: ['fr', 'fr', 'en', 'es', 'fr', 'de', 'pt', 'fr', 'it', 'en', 'fr', 'ja'][i] ?? 'fr',
   }));
   const avg = (key: 'd1' | 'd7' | 'd30') => {
     const values = cohorts.map((c) => c[key]).filter((v): v is number => v !== null);
@@ -115,6 +116,16 @@ export function demoDashboard(days = 30): Dashboard {
       { platform: 'web-android', count: 280 },
       { platform: 'web', count: 190 },
     ],
+    languages: [
+      { language: 'fr', count: Math.round(players * 0.46) },
+      { language: 'en', count: Math.round(players * 0.21) },
+      { language: 'es', count: Math.round(players * 0.11) },
+      { language: 'pt', count: Math.round(players * 0.08) },
+      { language: 'de', count: Math.round(players * 0.07) },
+      { language: 'it', count: Math.round(players * 0.04) },
+      { language: '?', count: Math.round(players * 0.03) },
+    ],
+    chat: { messagesToday: 342, authorsToday: 57 },
     recentPlayers,
     reports: [
       {
@@ -124,7 +135,48 @@ export function demoDashboard(days = 30): Dashboard {
         target: 'Gabriel',
         reason: 'pseudo',
         createdAt: now - 3_600_000,
+        messageId: null,
+      },
+      {
+        id: 'r2',
+        reporter: 'Hugo',
+        targetId: 'demo-11',
+        target: 'Adam',
+        reason: 'chat : « vends des pièces pas chères, écris-moi en privé »',
+        createdAt: now - 1_200_000,
+        messageId: 'm2',
       },
     ],
   } as unknown as Dashboard;
+}
+
+/** Équipe fictive (mode démo). */
+export function demoTeam(): Team {
+  const now = Date.now();
+  return [
+    { id: 'demo-0', pseudo: 'Léa', role: 'admin', lastSeenAt: now - 60_000 },
+    { id: 'demo-3', pseudo: 'Camille', role: 'moderator', lastSeenAt: now - 3 * 3_600_000 },
+  ] as unknown as Team;
+}
+
+/** Messages fictifs du chat (mode démo). */
+export function demoChat(): AdminChat {
+  const now = Date.now();
+  const rows: Array<[string, string, string, number]> = [
+    ['world', 'Malik', 'Qui a déjà le port industriel ?', 4],
+    ['lang:fr', 'Inès', 'Astuce : les décorations près des commerces, ça rapporte !', 11],
+    ['world', 'Adam', 'vends des pièces pas chères, écris-moi en privé', 20],
+    ['lang:en', 'Noah', 'Hello everyone!', 32],
+  ];
+  return rows.map(([channel, pseudo, text, minutes], i) => ({
+    id: `m${i}`,
+    channel,
+    playerId: `demo-${i}`,
+    pseudo,
+    role: null,
+    text,
+    createdAt: now - minutes * 60_000,
+    kind: 'message',
+    deleted: false,
+  })) as unknown as AdminChat;
 }

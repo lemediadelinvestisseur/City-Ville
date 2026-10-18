@@ -1,7 +1,9 @@
-import { backendErrorMessage, type Backend, type Profile } from '@/services/online/Backend';
+import { t, tn } from '@/i18n';
+import type { Backend, Profile } from '@/services/online/Backend';
 import { clear, h, icon } from './dom';
 import { formatNumber } from './format';
 import { Icons } from './icons';
+import { backendErrorMessage } from './messages';
 
 type Tab = 'neighbors' | 'find' | 'ranking' | 'market';
 
@@ -33,7 +35,7 @@ function stats(p: Profile): HTMLElement {
     'span',
     { class: 'person__stats' },
     icon(Icons.xp),
-    ` Niv. ${p.level} · `,
+    ` ${t('common.levelShort', { level: p.level })} · `,
     icon(Icons.population),
     ` ${formatNumber(p.population)}`,
   );
@@ -41,7 +43,7 @@ function stats(p: Profile): HTMLElement {
 
 /** Panneau « Mes voisins » : voisins, recherche de joueurs et classement. */
 export class NeighborsPanel {
-  readonly el = h('section', { class: 'sheet neighbors', attrs: { 'aria-label': 'Voisins' } });
+  readonly el = h('section', { class: 'sheet neighbors', attrs: { 'aria-label': t('neighbors.title') } });
   private tabs = h('div', { class: 'tabs tabs--center', attrs: { role: 'tablist' } });
   private body = h('div', { class: 'neighbors__body' });
   private tab: Tab = 'neighbors';
@@ -57,10 +59,10 @@ export class NeighborsPanel {
       h(
         'div',
         { class: 'sheet__header' },
-        h('h2', { class: 'sheet__title', text: 'Mes voisins' }),
+        h('h2', { class: 'sheet__title', text: t('neighbors.title') }),
         h(
           'button',
-          { class: 'sheet__close', attrs: { 'aria-label': 'Fermer' }, onClick: () => this.close() },
+          { class: 'sheet__close', attrs: { 'aria-label': t('common.close') }, onClick: () => this.close() },
           icon(Icons.close),
         ),
       ),
@@ -92,10 +94,10 @@ export class NeighborsPanel {
   private renderTabs(): void {
     clear(this.tabs);
     const tabs: Array<[Tab, string]> = [
-      ['neighbors', 'Voisins'],
-      ['find', 'Trouver'],
-      ['ranking', 'Classement'],
-      ['market', 'Marché'],
+      ['neighbors', t('neighbors.tabNeighbors')],
+      ['find', t('neighbors.tabFind')],
+      ['ranking', t('neighbors.tabRanking')],
+      ['market', t('neighbors.tabMarket')],
     ];
     for (const [id, label] of tabs) {
       this.tabs.append(
@@ -116,7 +118,7 @@ export class NeighborsPanel {
     const id = ++this.renderId;
     this.renderTabs();
     clear(this.body);
-    this.body.append(h('p', { class: 'neighbors__loading', text: 'Chargement…' }));
+    this.body.append(h('p', { class: 'neighbors__loading', text: t('common.loading') }));
     try {
       const content =
         this.tab === 'neighbors'
@@ -134,7 +136,7 @@ export class NeighborsPanel {
       clear(this.body);
       this.body.append(
         h('p', { class: 'neighbors__empty', text: backendErrorMessage(error) }),
-        h('button', { class: 'btn btn--secondary', text: 'Réessayer', onClick: () => void this.render() }),
+        h('button', { class: 'btn btn--secondary', text: t('common.retry'), onClick: () => void this.render() }),
       );
     }
   }
@@ -159,7 +161,7 @@ export class NeighborsPanel {
   private visitButton(p: Profile): HTMLElement {
     return h('button', {
       class: 'btn btn--primary btn--small',
-      text: 'Visiter',
+      text: t('neighbors.visit'),
       onClick: () => this.callbacks.visit(p),
     });
   }
@@ -169,8 +171,8 @@ export class NeighborsPanel {
     const wrap = h('div', { class: 'people' });
     if (list.length === 0) {
       wrap.append(
-        h('p', { class: 'neighbors__empty', text: 'Pas encore de voisins. Trouvez-en dans l’onglet « Trouver » !' }),
-        h('button', { class: 'btn btn--primary', text: 'Trouver des voisins', onClick: () => this.open('find') }),
+        h('p', { class: 'neighbors__empty', text: t('neighbors.empty') }),
+        h('button', { class: 'btn btn--primary', text: t('neighbors.find'), onClick: () => this.open('find') }),
       );
       return wrap;
     }
@@ -178,23 +180,20 @@ export class NeighborsPanel {
     wrap.append(
       h('p', {
         class: 'neighbors__tip',
-        text:
-          toHelp > 0
-            ? `Aidez vos voisins une fois par jour : vous gagnez des pièces, et eux aussi ! (${toHelp} à aider)`
-            : 'Vous avez aidé tous vos voisins aujourd’hui. Revenez demain !',
+        text: toHelp > 0 ? tn('neighbors.toHelp', toHelp) : t('neighbors.allHelped'),
       }),
     );
     for (const n of list) {
       const helpButton = h('button', {
         class: `btn btn--small ${n.helpedToday ? 'btn--secondary' : 'btn--gold'}`,
-        text: n.helpedToday ? 'Aidé ✓' : 'Aider',
+        text: n.helpedToday ? t('neighbors.helped') : t('neighbors.help'),
         onClick: () => {
           if (n.helpedToday) return;
           helpButton.setAttribute('disabled', '');
           this.callbacks
             .help(n)
             .then(() => {
-              helpButton.textContent = 'Aidé ✓';
+              helpButton.textContent = t('neighbors.helped');
               helpButton.className = 'btn btn--small btn--secondary';
             })
             .catch((e: unknown) => {
@@ -213,21 +212,21 @@ export class NeighborsPanel {
     const wrap = h('div', { class: 'people' });
     const input = h('input', {
       class: 'field__input',
-      attrs: { type: 'search', placeholder: 'Rechercher un pseudo…', autocapitalize: 'off', spellcheck: 'false' },
+      attrs: { type: 'search', placeholder: t('neighbors.search'), autocapitalize: 'off', spellcheck: 'false' },
     });
     const results = h('div', { class: 'people' });
     const addButton = (p: Profile) => {
       const button = h('button', {
         class: 'btn btn--gold btn--small',
-        text: 'Ajouter',
+        text: t('neighbors.add'),
         onClick: () => {
           button.setAttribute('disabled', '');
           this.backend
             .addNeighbor(p.id)
             .then(() => {
-              button.textContent = 'Voisin ✓';
+              button.textContent = t('neighbors.added');
               button.className = 'btn btn--secondary btn--small';
-              this.callbacks.toast(`${p.pseudo} est maintenant votre voisin !`, 'success');
+              this.callbacks.toast(t('neighbors.nowNeighbor', { pseudo: p.pseudo }), 'success');
             })
             .catch((e: unknown) => {
               button.removeAttribute('disabled');
@@ -249,12 +248,12 @@ export class NeighborsPanel {
       timer = window.setTimeout(() => {
         const request = text.length >= 2 ? this.backend.search(text) : this.backend.suggestions();
         request
-          .then((people) => show(people, text.length >= 2 ? 'Aucun joueur trouvé.' : 'Aucune suggestion.'))
+          .then((people) => show(people, text.length >= 2 ? t('neighbors.noResult') : t('neighbors.noSuggestion')))
           .catch((e: unknown) => show([], backendErrorMessage(e)));
       }, 300);
     });
-    show(await this.backend.suggestions(), 'Aucune suggestion pour le moment.');
-    wrap.append(input, h('p', { class: 'neighbors__tip', text: 'Joueurs actifs récemment :' }), results);
+    show(await this.backend.suggestions(), t('neighbors.noSuggestionYet'));
+    wrap.append(input, h('p', { class: 'neighbors__tip', text: t('neighbors.recent') }), results);
     return wrap;
   }
 
@@ -266,8 +265,8 @@ export class NeighborsPanel {
       { class: 'segmented' },
       ...(
         [
-          ['level', 'Niveau'],
-          ['population', 'Population'],
+          ['level', t('neighbors.byLevel')],
+          ['population', t('neighbors.byPopulation')],
         ] as const
       ).map(([id, label]) =>
         h('button', {
@@ -294,7 +293,7 @@ export class NeighborsPanel {
     if (board.myRank !== null && !board.rows.some((p) => p.id === board.me.id)) {
       const row = this.person(board.me, [], h('span', { class: 'rank', text: String(board.myRank) }));
       row.classList.add('is-me');
-      wrap.append(h('p', { class: 'neighbors__tip', text: 'Votre position :' }), row);
+      wrap.append(h('p', { class: 'neighbors__tip', text: t('neighbors.myRank') }), row);
     }
     return wrap;
   }

@@ -1,11 +1,18 @@
+import { CHAT, cleanChatText } from '@/core/chat';
 import { serialize, type KeyValueStorage } from '@/core/save';
 import { simulate } from '@/core/simulation';
 import { normalizePseudo, validatePseudo } from '@/core/pseudo';
 import { MARKET, sellerIncome } from '@/data/market';
+import { t, type MessageKey } from '@/i18n';
 import {
   BackendError,
+  type Announcement,
   type Backend,
+  type ChatFeed,
+  type ChatMessage,
+  type ChatPulse,
   type Leaderboard,
+  type Me,
   type MarketOffer,
   type MyListing,
   type NeighborProfile,
@@ -21,6 +28,7 @@ const HELPED_KEY = 'city-ville:local-helped';
 const CLAIMED_KEY = 'city-ville:local-claimed';
 const LISTINGS_KEY = 'city-ville:local-listings';
 const BOUGHT_KEY = 'city-ville:local-bought';
+const CHAT_KEY = 'city-ville:local-chat';
 /** Dans la démo, un lot trouve preneur au bout de quelques minutes s'il n'est pas trop cher. */
 const DEMO_SALE_MS = 3 * 60_000;
 
@@ -45,6 +53,15 @@ const DEMO: readonly DemoPlayer[] = [
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** Messages du jour des voisins fictifs (heure locale de la journée, en minutes). */
+const DEMO_CHAT: ReadonlyArray<{ minute: number; who: number; key: MessageKey; channel: 'world' | 'lang' }> = [
+  { minute: 8 * 60 + 12, who: 1, key: 'demo.chat1', channel: 'world' },
+  { minute: 9 * 60 + 47, who: 3, key: 'demo.chat2', channel: 'world' },
+  { minute: 12 * 60 + 5, who: 2, key: 'demo.chat3', channel: 'lang' },
+  { minute: 18 * 60 + 30, who: 4, key: 'demo.chat4', channel: 'world' },
+];
+const DEMO_REPLIES: readonly MessageKey[] = ['demo.reply1', 'demo.reply2', 'demo.reply3'];
+
 /**
  * Services en ligne simulés : rien ne quitte l'appareil. Permet de jouer
  * (et de tester l'interface sociale) avant la mise en ligne du serveur.
@@ -52,6 +69,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export class LocalBackend implements Backend {
   readonly kind = 'local' as const;
   private cities = new Map<string, string>();
+  private chatListeners = new Set<() => void>();
 
   constructor(
     private readonly storage: KeyValueStorage,
@@ -119,10 +137,11 @@ export class LocalBackend implements Backend {
     this.write(PSEUDO_KEY, normalizePseudo(pseudo));
   }
 
-  async me() {
-    // Démo hors-ligne : c'est l'appareil du propriétaire, tout est visible.
-    return { ...this.myProfile(), banned: false, tester: true };
+  async me(): Promise<Me> {
+    return { ...this.myProfile(), banned: false, role: null, language: null, mutedUntil: null };
   }
+
+  async setLanguage(): Promise<void> {}
 
   async rename(pseudo: string): Promise<string> {
     await this.register(pseudo);
@@ -142,7 +161,7 @@ export class LocalBackend implements Backend {
   }
 
   forget(): void {
-    for (const key of [PSEUDO_KEY, NEIGHBORS_KEY, HELPED_KEY, CLAIMED_KEY, LISTINGS_KEY, BOUGHT_KEY]) {
+    for (const key of [PSEUDO_KEY, NEIGHBORS_KEY, HELPED_KEY, CLAIMED_KEY, LISTINGS_KEY, BOUGHT_KEY, CHAT_KEY]) {
       this.storage.removeItem(key);
     }
   }
@@ -313,5 +332,127 @@ export class LocalBackend implements Backend {
       all.filter((l) => l.status === 'open'),
     );
     return { coins, goods, sold };
+  }
+
+  // ——— Chat de démonstration (rien ne quitte l'appareil) ———
+
+  private chatMessages(channel: string): ChatMessage[] {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const now = Date.now();
+    const seeds: ChatMessage[] = DEMO_CHAT.filter((m) => (m.channel === 'world') === (channel === 'world'))
+      .map((m) => {
+        const demo = DEMO[m.who] ?? DEMO[0]!;
+        return {
+          id: `demo-${m.key}`,
+          playerId: demo.id,
+          pseudo: demo.pseudo,
+          role: null,
+          level: demo.level,
+          text: t(m.key),
+          createdAt: start.getTime() + m.minute * 60_000,
+          kind: 'message' as const,
+          mine: false,
+        };
+      })
+      .filter((m) => m.createdAt <= now);
+    const stored = this.read<Record<string, ChatMessage[]>>(CHAT_KEY, {})[channel] ?? [];
+    return [...seeds, ...stored.filter((m) => m.createdAt <= now)]
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(-CHAT.pageSize);
+  }
+
+  private storeChat(channel: string, update: (list: ChatMessage[]) => ChatMessage[]): void {
+    const all = this.read<Record<string, ChatMessage[]>>(CHAT_KEY, {});
+    all[channel] = update(all[channel] ?? []).slice(-CHAT.pageSize);
+    this.write(CHAT_KEY, all);
+    for (const listener of this.chatListeners) listener();
+  }
+
+  private feed(channel: string): ChatFeed {
+    return {
+      messages: this.chatMessages(channel),
+      mutedUntil: null,
+      canWrite: this.summary().level >= CHAT.minLevel,
+      canModerate: false,
+    };
+  }
+
+  watchChat(channel: string, onFeed: (feed: ChatFeed) => void): () => void {
+    const listener = () => onFeed(this.feed(channel));
+    this.chatListeners.add(listener);
+    setTimeout(listener, 0);
+    return () => this.chatListeners.delete(listener);
+  }
+
+  watchPulse(channels: string[], onPulse: (pulse: ChatPulse) => void): () => void {
+    const listener = () =>
+      onPulse({
+        latest: channels.map((channel) => ({ channel, at: this.chatMessages(channel).at(-1)?.createdAt ?? 0 })),
+        announcementAt: 0,
+      });
+    this.chatListeners.add(listener);
+    setTimeout(listener, 0);
+    // Les messages programmés de la journée apparaissent avec le temps.
+    const timer = window.setInterval(listener, 60_000);
+    return () => {
+      this.chatListeners.delete(listener);
+      window.clearInterval(timer);
+    };
+  }
+
+  async sendChat(channel: string, text: string): Promise<void> {
+    if (this.summary().level < CHAT.minLevel) throw new BackendError('forbidden');
+    const clean = cleanChatText(text);
+    if (!clean) throw new BackendError('invalidText');
+    const now = Date.now();
+    const message: ChatMessage = {
+      id: `mine-${now}`,
+      playerId: 'me',
+      pseudo: this.myProfile().pseudo,
+      role: null,
+      level: this.summary().level,
+      text: clean,
+      createdAt: now,
+      kind: 'message',
+      mine: true,
+    };
+    this.storeChat(channel, (list) => [...list, message]);
+    // Un voisin fictif répond de temps en temps.
+    if (Math.random() < 0.6) {
+      setTimeout(() => {
+        const demo = DEMO[Math.floor(Math.random() * DEMO.length)] ?? DEMO[0]!;
+        const key = DEMO_REPLIES[Math.floor(Math.random() * DEMO_REPLIES.length)] ?? 'demo.reply1';
+        this.storeChat(channel, (list) => [
+          ...list,
+          {
+            id: `reply-${Date.now()}`,
+            playerId: demo.id,
+            pseudo: demo.pseudo,
+            role: null,
+            level: demo.level,
+            text: t(key),
+            createdAt: Date.now(),
+            kind: 'message',
+            mine: false,
+          },
+        ]);
+      }, 3500);
+    }
+  }
+
+  async deleteChat(id: string): Promise<void> {
+    const all = this.read<Record<string, ChatMessage[]>>(CHAT_KEY, {});
+    for (const channel of Object.keys(all)) this.storeChat(channel, (list) => list.filter((m) => m.id !== id));
+  }
+
+  async reportChat(): Promise<void> {}
+
+  async mute(): Promise<void> {
+    throw new BackendError('forbidden');
+  }
+
+  async announcements(): Promise<Announcement[]> {
+    return [];
   }
 }

@@ -3,7 +3,7 @@ import { findCropDef } from '@/data/crops';
 import { findQuestDef } from '@/data/quests';
 import { CHUNK_SIZE } from '@/data/balance';
 import { isWater } from '@/data/terrain';
-import { SAVE_VERSION } from './newGame';
+import { SAVE_VERSION, emptyDaily } from './newGame';
 import type { GameState } from './types';
 
 /** Accès au stockage clé/valeur (localStorage en web, Preferences en natif…). */
@@ -79,9 +79,14 @@ const MIGRATIONS: Record<number, Migration> = {
     if (typeof state.coins === 'number') state.coins += refund;
     return state;
   },
-  /** v4 → v5 : récompense de connexion quotidienne. */
+  /** v4 → v5 : défis du jour. */
   4: (state) => {
-    state.daily = { lastDay: null, streak: 0 };
+    state.daily = emptyDaily();
+    return state;
+  },
+  /** v5 → v6 : récompense de connexion (série de 7 jours) et améliorations ★ (champs optionnels). */
+  5: (state) => {
+    state.loginStreak = { lastDay: null, streak: 0 };
     return state;
   },
 };
@@ -124,9 +129,9 @@ function validate(state: Record<string, unknown>): boolean {
   if (!numbers.every((key) => typeof state[key] === 'number' && Number.isFinite(state[key]))) return false;
   if (!Array.isArray(state.entities) || !Array.isArray(state.unlockedChunks)) return false;
   if (!isObject(state.quests) || !isObject(state.tutorial) || !isObject(state.stats)) return false;
-  const daily = state.daily;
-  if (!isObject(daily) || (daily.lastDay !== null && typeof daily.lastDay !== 'string')) return false;
-  if (typeof daily.streak !== 'number' || !Number.isFinite(daily.streak)) return false;
+  const login = state.loginStreak;
+  if (!isObject(login) || (login.lastDay !== null && typeof login.lastDay !== 'string')) return false;
+  if (typeof login.streak !== 'number' || !Number.isFinite(login.streak)) return false;
   const quests = state.quests;
   if (!Array.isArray(quests.active) || !Array.isArray(quests.completed)) return false;
   // Contenu retiré ou renommé par une mise à jour : on l'écarte plutôt que de bloquer la partie.
@@ -143,7 +148,22 @@ function validate(state: Record<string, unknown>): boolean {
     (q) => isObject(q) && typeof q.id === 'string' && findQuestDef(q.id) !== undefined && Array.isArray(q.counts),
   );
   quests.completed = (quests.completed as unknown[]).filter((id) => typeof id === 'string' && findQuestDef(id));
+  if (!isValidDaily(state.daily)) state.daily = emptyDaily();
   return true;
+}
+
+function isValidDaily(daily: unknown): boolean {
+  if (!isObject(daily) || typeof daily.day !== 'string' || !Array.isArray(daily.tasks)) return false;
+  if (!isObject(daily.bonus) || typeof daily.bonusClaimed !== 'boolean') return false;
+  return daily.tasks.every(
+    (task) =>
+      isObject(task) &&
+      typeof task.type === 'string' &&
+      typeof task.target === 'number' &&
+      typeof task.count === 'number' &&
+      typeof task.claimed === 'boolean' &&
+      isObject(task.reward),
+  );
 }
 
 export function loadGame(storage: KeyValueStorage, key: string): GameState | null {

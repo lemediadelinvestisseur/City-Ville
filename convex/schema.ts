@@ -20,16 +20,24 @@ export default defineSchema({
     createdDay: v.string(),
     lastSeenAt: v.number(),
     banned: v.optional(v.boolean()),
-    /** Compte testeur (le propriétaire du jeu) : outils de test et boutique visibles. */
-    tester: v.optional(v.boolean()),
     /** Sauvegardes à la progression invraisemblable (à examiner dans l'admin). */
     suspicious: v.optional(v.number()),
+    /**
+     * Rôle : absent pour un joueur. « admin » (un seul, attribué en ligne de commande)
+     * accède à l'interface admin ; « moderator » modère le chat depuis le jeu.
+     */
+    role: v.optional(v.union(v.literal('admin'), v.literal('moderator'))),
+    /** Langue choisie (code de src/data/languages.ts). */
+    language: v.optional(v.string()),
+    /** Ne peut plus écrire dans le chat jusqu'à cette date. */
+    mutedUntil: v.optional(v.number()),
   })
     .index('by_pseudoKey', ['pseudoKey'])
     .index('by_xp', ['xp'])
     .index('by_population', ['population'])
     .index('by_lastSeen', ['lastSeenAt'])
-    .index('by_createdAt', ['createdAt']),
+    .index('by_createdAt', ['createdAt'])
+    .index('by_role', ['role']),
 
   /** Une clé secrète par appareil (seule son empreinte est stockée). */
   devices: defineTable({
@@ -92,6 +100,8 @@ export default defineSchema({
     reason: v.string(),
     createdAt: v.number(),
     resolved: v.boolean(),
+    /** Message du chat signalé. */
+    messageId: v.optional(v.id('chatMessages')),
   })
     .index('by_resolved', ['resolved', 'createdAt'])
     .index('by_reporter', ['reporterId'])
@@ -126,6 +136,25 @@ export default defineSchema({
     .index('by_client', ['clientSessionId'])
     .index('by_started', ['startedAt'])
     .index('by_player', ['playerId', 'startedAt']),
+
+  /** Chat : salon mondial (« world ») ou d'une langue (« lang:fr »), annonces de l'équipe. */
+  chatMessages: defineTable({
+    channel: v.string(),
+    playerId: v.id('players'),
+    /** Pseudo, rôle et niveau au moment de l'envoi. */
+    pseudo: v.string(),
+    role: v.optional(v.union(v.literal('admin'), v.literal('moderator'))),
+    level: v.number(),
+    text: v.string(),
+    createdAt: v.number(),
+    kind: v.union(v.literal('message'), v.literal('announcement')),
+    /** Retiré par son auteur ou par un modérateur (gardé pour l'examen des signalements). */
+    deleted: v.optional(v.boolean()),
+  })
+    .index('by_channel', ['channel', 'createdAt'])
+    .index('by_player', ['playerId', 'createdAt'])
+    .index('by_kind', ['kind', 'createdAt'])
+    .index('by_createdAt', ['createdAt']),
 
   /** Évènements de jeu notables (objectifs terminés, niveaux…) pour l'entonnoir. */
   events: defineTable({

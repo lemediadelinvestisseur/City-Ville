@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 City-builder isométrique mobile-first : TypeScript strict, Vite, Phaser 4 (monde) + HTML/CSS (interface).
-Textes du jeu, commentaires et documentation en **français**.
+Commentaires et documentation en **français** ; le jeu est traduit en 11 langues (le français est la source).
 
 ## Commandes
 
@@ -20,6 +20,10 @@ Textes du jeu, commentaires et documentation en **français**.
   démarrage si un bâtiment n'a pas de visuel).
 - Changement du format de sauvegarde : incrémenter `SAVE_VERSION` et ajouter une migration (`src/core/save.ts`).
 - Paiements : uniquement via `PaymentProvider` ; ne jamais créditer d'achat sans succès du fournisseur.
+- Textes visibles : jamais en dur. Clé dans `src/i18n/fr.ts` (+ `t()` / `tn()`), puis traduction dans chaque
+  fichier de `src/i18n/locales/` ; contenu de `src/data` affiché via `src/i18n/content.ts` (`buildingName`…).
+- Droits (admin, modérateurs) : toujours vérifiés côté serveur (`requireAdmin` / `requireStaff` dans
+  `convex/lib/util.ts`) ; le rôle d'administrateur ne se donne qu'en ligne de commande (`roles:setOwner`).
 
 ## Vérifier dans un navigateur
 

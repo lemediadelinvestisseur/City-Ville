@@ -154,6 +154,23 @@ export interface QuestProgress {
   startedAt: number;
 }
 
+/** Un défi du jour tiré au sort. */
+export interface DailyTask {
+  type: string;
+  target: number;
+  count: number;
+  reward: Reward;
+  claimed: boolean;
+}
+
+export interface DailyState {
+  /** Jour des défis (AAAA-MM-JJ, heure locale de l'appareil) ; vide tant qu'ils ne sont pas débloqués. */
+  day: string;
+  tasks: DailyTask[];
+  bonus: Reward;
+  bonusClaimed: boolean;
+}
+
 export interface GameState {
   version: number;
   createdAt: number;
@@ -179,8 +196,9 @@ export interface GameState {
   oneTimePurchases: string[];
   stats: Record<string, number>;
   tutorial: { introSeen: boolean };
-  /** Récompense quotidienne : dernier jour réclamé (AAAA-MM-JJ, heure locale) et série en cours. */
-  daily: { lastDay: string | null; streak: number };
+  daily: DailyState;
+  /** Récompense de connexion : dernier jour réclamé (AAAA-MM-JJ, heure locale) et série en cours. */
+  loginStreak: { lastDay: string | null; streak: number };
 }
 
 export type FailReason =
@@ -275,4 +293,4 @@ export type GameplayEvent =
   | { type: 'visitNeighbor' }
   | { type: 'marketSell' }
   | { type: 'marketBuy' }
-  | { type: 'dailyReward' };
+  | { type: 'loginReward' };

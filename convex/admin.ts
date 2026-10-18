@@ -1,19 +1,27 @@
 import { v } from 'convex/values';
+import { CHAT, cleanChatText } from '../src/core/chat';
+import { isLanguage } from '../src/data/languages';
 import { QUESTS } from '../src/data/quests';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
-import { dayOf, fail } from './lib/util';
+import { dayOf, fail, requireAdmin } from './lib/util';
 
 const DAY_MS = 86_400_000;
 
-/**
- * Accès admin : clé secrète `ADMIN_KEY` définie dans les variables
- * d'environnement du déploiement Convex (jamais dans le code).
+/*
+ * Accès admin : réservé au compte qui a le rôle « admin » (un seul, désigné en
+ * ligne de commande avec `roles:setOwner`, voir convex/roles.ts). Chaque
+ * fonction reçoit la clé secrète de l'appareil de ce compte.
  */
-function requireAdmin(key: string): void {
-  const expected = process.env.ADMIN_KEY;
-  if (!expected || expected.length < 16 || key !== expected) fail('forbidden');
-}
+
+/** Qui est connecté à l'interface admin (refusé si ce n'est pas l'administrateur). */
+export const whoami = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const admin = await requireAdmin(ctx, token);
+    return { pseudo: admin.pseudo, role: admin.role ?? null };
+  },
+});
 
 function addDays(day: string, n: number): string {
   return dayOf(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS);
@@ -31,9 +39,9 @@ function daysBetween(from: string, to: string): string[] {
  * on agrégera chaque nuit avec une tâche planifiée).
  */
 export const dashboard = query({
-  args: { key: v.string(), days: v.optional(v.number()) },
-  handler: async (ctx, { key, days = 30 }) => {
-    requireAdmin(key);
+  args: { token: v.string(), days: v.optional(v.number()) },
+  handler: async (ctx, { token, days = 30 }) => {
+    await requireAdmin(ctx, token);
     const now = Date.now();
     const today = dayOf(now);
     const range = Math.max(7, Math.min(90, days));
@@ -164,6 +172,16 @@ export const dashboard = query({
       .order('desc')
       .take(50);
     const pseudoOf = new Map(players.map((p) => [p._id, p.pseudo]));
+    const languages = new Map<string, number>();
+    for (const p of players) {
+      if (p.banned) continue;
+      const code = p.language ?? '?';
+      languages.set(code, (languages.get(code) ?? 0) + 1);
+    }
+    const chatToday = await ctx.db
+      .query('chatMessages')
+      .withIndex('by_createdAt', (q) => q.gte('createdAt', Date.parse(`${today}T00:00:00Z`)))
+      .take(10_000);
 
     const dau = activeByDay.get(today)?.size ?? 0;
     const lastWeek = new Set<Id<'players'>>();
@@ -195,6 +213,11 @@ export const dashboard = query({
       levelPace,
       questFunnel,
       platforms: [...platforms.entries()].map(([platform, count]) => ({ platform, count })),
+      languages: [...languages.entries()].sort((a, b) => b[1] - a[1]).map(([language, count]) => ({ language, count })),
+      chat: {
+        messagesToday: chatToday.filter((m) => m.kind === 'message').length,
+        authorsToday: new Set(chatToday.map((m) => m.playerId)).size,
+      },
       recentPlayers: recent.map((p) => ({
         id: p._id,
         pseudo: p.pseudo,
@@ -204,8 +227,9 @@ export const dashboard = query({
         lastSeenAt: p.lastSeenAt,
         activeDays: activeDaysByPlayer.get(p._id)?.size ?? 0,
         banned: p.banned === true,
-        tester: p.tester === true,
         suspicious: p.suspicious ?? 0,
+        role: p.role ?? null,
+        language: p.language ?? null,
       })),
       reports: reports.map((r) => ({
         id: r._id,
@@ -214,61 +238,80 @@ export const dashboard = query({
         target: pseudoOf.get(r.targetId) ?? '?',
         reason: r.reason,
         createdAt: r.createdAt,
+        messageId: r.messageId ?? null,
       })),
     };
   },
 });
 
 export const setBanned = mutation({
-  args: { key: v.string(), playerId: v.id('players'), banned: v.boolean() },
-  handler: async (ctx, { key, playerId, banned }) => {
-    requireAdmin(key);
+  args: { token: v.string(), playerId: v.id('players'), banned: v.boolean() },
+  handler: async (ctx, { token, playerId, banned }) => {
+    const admin = await requireAdmin(ctx, token);
+    if (playerId === admin._id) fail('forbidden');
     await ctx.db.patch(playerId, { banned });
   },
 });
 
-/** Donne (ou retire) l'accès aux outils de test et à la boutique. */
-export const setTester = mutation({
-  args: { key: v.string(), playerId: v.id('players'), tester: v.boolean() },
-  handler: async (ctx, { key, playerId, tester }) => {
-    requireAdmin(key);
-    await ctx.db.patch(playerId, { tester });
-  },
-});
-
-/** Recherche d'un joueur par pseudo (début du pseudo), pour l'admin. */
-export const findPlayers = query({
-  args: { key: v.string(), text: v.string() },
-  handler: async (ctx, { key, text }) => {
-    requireAdmin(key);
-    const prefix = text
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-    if (prefix.length < 2) return [];
-    const found = await ctx.db
-      .query('players')
-      .withIndex('by_pseudoKey', (q) => q.gte('pseudoKey', prefix).lt('pseudoKey', `${prefix}\uffff`))
-      .take(10);
-    return found.map((p) => ({ id: p._id, pseudo: p.pseudo, level: p.level, tester: p.tester === true }));
-  },
-});
-
 export const resolveReport = mutation({
-  args: { key: v.string(), reportId: v.id('reports') },
-  handler: async (ctx, { key, reportId }) => {
-    requireAdmin(key);
+  args: { token: v.string(), reportId: v.id('reports') },
+  handler: async (ctx, { token, reportId }) => {
+    await requireAdmin(ctx, token);
     await ctx.db.patch(reportId, { resolved: true });
   },
 });
 
 /** Remplace un pseudo inapproprié par « Maire » suivi d'un numéro. */
 export const resetPseudo = mutation({
-  args: { key: v.string(), playerId: v.id('players') },
-  handler: async (ctx, { key, playerId }) => {
-    requireAdmin(key);
+  args: { token: v.string(), playerId: v.id('players') },
+  handler: async (ctx, { token, playerId }) => {
+    await requireAdmin(ctx, token);
     const pseudo = `Maire ${String(playerId).slice(-5)}`;
     await ctx.db.patch(playerId, { pseudo, pseudoKey: pseudo.toLowerCase() });
+  },
+});
+
+/**
+ * Annonce de l'équipe : affichée en fenêtre à tous les joueurs concernés (à leur
+ * prochaine connexion ou tout de suite s'ils jouent) et mise en avant dans le chat.
+ * Sans langue : tout le monde ; avec une langue : les joueurs qui jouent dans cette langue.
+ */
+export const announce = mutation({
+  args: { token: v.string(), text: v.string(), language: v.optional(v.string()) },
+  handler: async (ctx, { token, text, language }) => {
+    const admin = await requireAdmin(ctx, token);
+    if (language !== undefined && !isLanguage(language)) fail('forbidden');
+    const clean = cleanChatText(text);
+    if (!clean) fail('invalidText');
+    await ctx.db.insert('chatMessages', {
+      channel: language ? `lang:${language}` : 'world',
+      playerId: admin._id,
+      pseudo: admin.pseudo,
+      role: 'admin',
+      level: admin.level,
+      text: clean,
+      createdAt: Date.now(),
+      kind: 'announcement',
+    });
+  },
+});
+
+/** Derniers messages du chat, tous salons confondus (modération). */
+export const recentChat = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    await requireAdmin(ctx, token);
+    const messages = await ctx.db.query('chatMessages').withIndex('by_createdAt').order('desc').take(CHAT.pageSize);
+    return messages.map((m) => ({
+      id: m._id,
+      channel: m.channel,
+      playerId: m.playerId,
+      pseudo: m.pseudo,
+      role: m.role ?? null,
+      text: m.text,
+      createdAt: m.createdAt,
+      kind: m.kind,
+      deleted: m.deleted === true,
+    }));
   },
 });

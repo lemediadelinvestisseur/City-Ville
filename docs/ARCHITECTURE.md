@@ -11,11 +11,12 @@
             │                    │                               │   │   │               │
             │          actions ──┴───────────────────────────────┘   └───┴── bus (app/)   │
             │                                                                              │
-            │   src/services : paiement · stockage · sons · en ligne (Backend) · natif      │
+            │   src/services : paiement · stockage · sons · en ligne · natif · notifications │
+            │   src/i18n : traductions (11 langues, chargées à la demande)                 │
             └──────────────────────────────────────────────────┬───────────────────────────┘
                                                                │ (si VITE_CONVEX_URL)
                                                     convex/ : serveur (comptes, sauvegarde,
-                                                    voisins, marché, statistiques, admin)
+                                                    voisins, marché, chat, rôles, admin)
 ```
 
 ### `src/core` — le moteur de règles (pur)
@@ -31,6 +32,13 @@
   naturelle et les tests utilisent une horloge factice.
 - Aucune dépendance à Phaser ni au DOM (règle ESLint). Ce code pourra tourner côté serveur pour valider les
   actions (anti-triche) le jour où la sauvegarde passera en ligne.
+- **Défis du jour** (`daily.ts`, modèles dans `data/daily.ts`) : trois tâches tirées chaque jour (minuit
+  local) selon le niveau et les constructions, récompenses à réclamer et bonus (`claimDaily`,
+  `claimDailyBonus`).
+- **Attentes terminées** : `tick()` émet `ready` (culture mûre, chantier fini, bateau rentré, clients servis) ;
+  `readySince()` sert au résumé « pendant votre absence ».
+- **Rappels** (`reminders.ts`) : liste des notifications à programmer (regroupées, heures calmes 22 h – 8 h).
+- `chat.ts` : règles du chat partagées avec le serveur (longueur, cadence, liens et insultes masqués).
 
 ### `src/data` — contenu et équilibrage
 
@@ -53,7 +61,22 @@ Tout ce qui se règle sans toucher au code : `buildings.ts`, `crops.ts`, `quests
 
 Interface en DOM (et non dans le canevas) : texte net, mise en page fluide, accessibilité, défilement natif.
 `UI.ts` orchestre les composants : `Hud`, `QuestTracker`, `BuildMenu`, `CropPicker`, `Bubble`, `Shop`,
-`Modals`, `Toasts`, `FlyingRewards`.
+`Modals`, `Toasts`, `FlyingRewards`, et à droite les raccourcis `SideButtons` : `DailyPanel` (défis du jour),
+`InboxPanel` (centre de notifications) et `ChatPanel` (chat). `Notices` transforme les évènements du jeu en
+messages en jeu (regroupés) rangés dans le centre de notifications ; `NotificationsUi` propose d'activer les
+notifications de l'appareil au bon moment et gère leurs réglages.
+
+### `src/i18n` — les langues
+
+- `fr.ts` : tous les textes de l'interface en français (langue source), `{paramètres}` et pluriels
+  (`clé#one` / `clé#other`). `t('clé', { … })`, `tn('clé', n)`, `tParts` (texte avec icônes).
+- `locales/<code>.ts` : une langue = un fichier (textes + contenu : bâtiments, cultures, objectifs, produits,
+  enseignes). TypeScript impose toutes les clés ; `i18n.test.ts` vérifie paramètres, pluriels et contenu.
+- `content.ts` : noms traduits du contenu (`buildingName`, `questTitle`…) ; les données restent en français.
+- La langue est choisie à la première ouverture (proposée d'après l'appareil), modifiable dans les
+  réglages ; elle est chargée avant l'interface (un changement recharge le jeu).
+- **Ajouter une langue** : une entrée dans `data/languages.ts` + `locales/<code>.ts`. **Ajouter un texte** : la
+  clé dans `fr.ts` puis dans chaque fichier de `locales/` (sinon `npm run check` échoue).
 
 ### `src/app` — la colle
 
@@ -71,7 +94,10 @@ Interface en DOM (et non dans le canevas) : texte net, mise en page fluide, acce
   villes sont générées par le joueur simulé). `app/online.ts` synchronise la sauvegarde (révisions, conflits),
   envoie les sessions et récupère les coups de main.
 - `native.ts` : intégrations Capacitor (copie de la sauvegarde dans le stockage natif, vibrations, barre d'état).
-- `preferences.ts` : préférences de l'appareil (cycle jour/nuit).
+- `notifications.ts` : notifications de l'appareil programmées à l'avance — locales iOS (plugin
+  `@capacitor/local-notifications`, même jeu fermé) ou API Notification du navigateur (tant que l'onglet reste
+  ouvert). `app/reminders.ts` les reprogramme à chaque changement de la partie.
+- `preferences.ts` : préférences de l'appareil (cycle jour/nuit, langue, notifications).
 
 ### `convex/` — le serveur
 
@@ -99,13 +125,15 @@ Sauvegarde 0,8 s après chaque changement, et quand l'onglet passe en arrière-p
   `decorations.ts`). `ArtLibrary` vérifie au démarrage que chaque bâtiment a un visuel.
 - **Culture** : `data/crops.ts` (+ un cas dans `cropOverlay` de `render/art/terrain.ts` pour l'aspect mûr).
 - **Objectif** : `data/quests.ts` (prérequis, tâches, libellés, récompense).
+- **Défi du jour** : un modèle dans `data/daily.ts` + son libellé `daily.task.<type>` dans les traductions.
+- Tout nouveau texte visible (contenu compris) se traduit dans `src/i18n/locales/*`.
 
 ## Qualité
 
 - `npm run check` : TypeScript strict, ESLint, Prettier, tests Vitest (logique de jeu).
 - CI GitHub Actions (`.github/workflows/ci.yml`) sur chaque push et pull request.
-- En développement, `window.__cityVille` expose `{ game, bus, scene, phaser, backend }` pour les tests de
-  bout en bout.
+- En développement, `window.__cityVille` expose `{ game, bus, scene, phaser, backend, inbox, reminders }` pour
+  les tests de bout en bout.
 - `src/core/balance.test.ts` fait jouer un joueur simulé (`core/simulation.ts`) pendant 25 jours et vérifie
   le rythme de progression (niveau 30 en deux à trois semaines).
 

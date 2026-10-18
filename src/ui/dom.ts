@@ -1,3 +1,5 @@
+import { tParts, type MessageKey } from '@/i18n';
+
 /** Micro-utilitaire de création d'éléments DOM (sans framework). */
 
 export type Child = Node | string | number | null | undefined | false;
@@ -46,4 +48,9 @@ export function clear(el: HTMLElement): void {
 /** Icône SVG interne (chaîne de confiance) dans un span. */
 export function icon(svg: string, className = 'ico'): HTMLSpanElement {
   return h('span', { class: className, html: svg, attrs: { 'aria-hidden': 'true' } });
+}
+
+/** Texte traduit dont certains paramètres sont des éléments (icônes, pseudo en gras…). */
+export function rich(key: MessageKey, params: Record<string, string | number | Node>): HTMLSpanElement {
+  return h('span', {}, ...tParts<Node>(key, params));
 }

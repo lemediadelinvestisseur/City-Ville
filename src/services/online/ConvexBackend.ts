@@ -7,9 +7,13 @@ import {
   BackendError,
   detectPlatform,
   newDeviceToken,
+  type Announcement,
   type Backend,
   type BackendErrorCode,
+  type ChatFeed,
+  type ChatPulse,
   type Leaderboard,
+  type Me,
   type NeighborProfile,
   type Profile,
   type PushResult,
@@ -32,6 +36,8 @@ const KNOWN_CODES: readonly BackendErrorCode[] = [
   'banned',
   'invalidCode',
   'forbidden',
+  'muted',
+  'invalidText',
 ];
 
 type PlayerId = Id<'players'>;
@@ -60,12 +66,7 @@ export class ConvexBackend implements Backend {
     try {
       return await run();
     } catch (error) {
-      if (error instanceof BackendError) throw error;
-      if (error instanceof ConvexError) {
-        const code = KNOWN_CODES.find((c) => c === error.data) ?? 'unknown';
-        throw new BackendError(code);
-      }
-      throw new BackendError('network');
+      throw toBackendError(error);
     }
   }
 
@@ -77,17 +78,21 @@ export class ConvexBackend implements Backend {
     return this.call(() => this.client.query(api.players.pseudoAvailable, { pseudo }));
   }
 
-  async register(pseudo: string, cityName: string): Promise<void> {
+  async register(pseudo: string, cityName: string, language: string): Promise<void> {
     const token = newDeviceToken();
     await this.call(() =>
-      this.client.mutation(api.players.register, { token, pseudo, cityName, platform: detectPlatform() }),
+      this.client.mutation(api.players.register, { token, pseudo, cityName, platform: detectPlatform(), language }),
     );
     this.token = token;
     this.storage.setItem(TOKEN_KEY, token);
   }
 
-  me() {
+  me(): Promise<Me> {
     return this.call(() => this.client.query(api.players.me, { token: this.auth }));
+  }
+
+  async setLanguage(language: string): Promise<void> {
+    await this.call(() => this.client.mutation(api.players.setLanguage, { token: this.auth, language }));
   }
 
   async rename(pseudo: string): Promise<string> {
@@ -208,4 +213,64 @@ export class ConvexBackend implements Backend {
       this.client.mutation(api.moderation.report, { token: this.auth, playerId: id as PlayerId, reason }),
     );
   }
+
+  watchChat(channel: string, onFeed: (feed: ChatFeed) => void, onError: (error: BackendError) => void): () => void {
+    if (!this.token) {
+      onError(new BackendError('unauthorized'));
+      return () => undefined;
+    }
+    const unsubscribe = this.client.onUpdate(
+      api.chat.list,
+      { token: this.token, channel },
+      (feed) => onFeed(feed),
+      (error) => onError(toBackendError(error)),
+    );
+    return () => unsubscribe();
+  }
+
+  watchPulse(channels: string[], onPulse: (pulse: ChatPulse) => void): () => void {
+    if (!this.token) return () => undefined;
+    const unsubscribe = this.client.onUpdate(
+      api.chat.pulse,
+      { token: this.token, channels },
+      (pulse) => onPulse(pulse),
+      () => undefined,
+    );
+    return () => unsubscribe();
+  }
+
+  async sendChat(channel: string, text: string): Promise<void> {
+    await this.call(() => this.client.mutation(api.chat.send, { token: this.auth, channel, text }));
+  }
+
+  async deleteChat(id: string): Promise<void> {
+    await this.call(() =>
+      this.client.mutation(api.chat.remove, { token: this.auth, messageId: id as Id<'chatMessages'> }),
+    );
+  }
+
+  async reportChat(id: string): Promise<void> {
+    await this.call(() =>
+      this.client.mutation(api.chat.report, { token: this.auth, messageId: id as Id<'chatMessages'> }),
+    );
+  }
+
+  async mute(playerId: string, minutes: number): Promise<void> {
+    await this.call(() =>
+      this.client.mutation(api.chat.mute, { token: this.auth, playerId: playerId as PlayerId, minutes }),
+    );
+  }
+
+  announcements(channels: string[]): Promise<Announcement[]> {
+    return this.call(() => this.client.query(api.chat.announcements, { token: this.auth, channels }));
+  }
+}
+
+/** Convertit une erreur Convex (code métier) ou réseau en BackendError. */
+function toBackendError(error: unknown): BackendError {
+  if (error instanceof BackendError) return error;
+  if (error instanceof ConvexError) {
+    return new BackendError(KNOWN_CODES.find((c) => c === error.data) ?? 'unknown');
+  }
+  return new BackendError('network');
 }

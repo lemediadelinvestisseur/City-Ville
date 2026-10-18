@@ -51,6 +51,30 @@ export const Icons = {
   trophy: svg(
     '<path d="M7 3h10v5a5 5 0 01-10 0z" fill="#ffc531" stroke="#b77900" stroke-width="1.5"/><path d="M7 5H3.5a3.5 3.5 0 003.8 4M17 5h3.5a3.5 3.5 0 01-3.8 4" fill="none" stroke="#b77900" stroke-width="1.5"/><path d="M10 13h4l.6 4h-5.2z" fill="#ffc531" stroke="#b77900" stroke-width="1.5"/><rect x="7.5" y="17" width="9" height="3.5" rx="1" fill="#8d6e63" stroke="#4e342e" stroke-width="1.3"/>',
   ),
+  calendar: svg(
+    '<rect x="3" y="5" width="18" height="16" rx="3" fill="#fff" stroke="#c62828" stroke-width="1.6"/><path d="M3 9.5h18V8a3 3 0 00-3-3H6a3 3 0 00-3 3z" fill="#e53935"/><path d="M8 3v4M16 3v4" stroke="#7f0000" stroke-width="2" stroke-linecap="round"/><path d="M8.2 15.2l2.4 2.3 5-5" fill="none" stroke="#43a047" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+  ),
+  bell: svg(
+    '<path d="M12 3a6 6 0 016 6v4l2 3H4l2-3V9a6 6 0 016-6z" fill="#ffc531" stroke="#b77900" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.5 18.5a2.5 2.5 0 005 0" fill="#ffc531" stroke="#b77900" stroke-width="1.6"/>',
+  ),
+  chat: svg(
+    '<path d="M4 5h16a2 2 0 012 2v9a2 2 0 01-2 2h-9l-5 4v-4H4a2 2 0 01-2-2V7a2 2 0 012-2z" fill="#fff" stroke="#1565c0" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8" cy="11.5" r="1.4" fill="#1565c0"/><circle cx="12" cy="11.5" r="1.4" fill="#1565c0"/><circle cx="16" cy="11.5" r="1.4" fill="#1565c0"/>',
+  ),
+  send: svg(
+    '<path d="M3 11.5L21 3l-6.5 18-3-7.5z" fill="currentColor"/><path d="M11.5 13.5L21 3" stroke="#fff" stroke-width="1.4"/>',
+  ),
+  globe: svg(
+    '<circle cx="12" cy="12" r="9" fill="#e3f2fd" stroke="#1565c0" stroke-width="1.6"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18" fill="none" stroke="#1565c0" stroke-width="1.4"/>',
+  ),
+  shield: svg(
+    '<path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6z" fill="#ffc531" stroke="#b77900" stroke-width="1.5"/><path d="M8.5 12l2.4 2.4 4.6-4.8" fill="none" stroke="#7a4f00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  ),
+  megaphone: svg(
+    '<path d="M3 10v4h3l9 5V5L6 10z" fill="#ff7043" stroke="#bf360c" stroke-width="1.5" stroke-linejoin="round"/><path d="M6 14l1.5 5h2.5l-1-4.5" fill="#ffab91" stroke="#bf360c" stroke-width="1.3"/><path d="M18 9.5a3.5 3.5 0 010 5" fill="none" stroke="#bf360c" stroke-width="1.8" stroke-linecap="round"/>',
+  ),
+  boat: svg(
+    '<path d="M3 14h18l-3 5H6z" fill="#1e88e5" stroke="#0d47a1" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 3v11M12 4l6 8h-6z" fill="#fff" stroke="#455a64" stroke-width="1.4" stroke-linejoin="round"/>',
+  ),
 };
 
 /** Portrait de Léa, l'adjointe au maire (personnage original). */

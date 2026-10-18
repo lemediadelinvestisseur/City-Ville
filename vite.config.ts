@@ -29,5 +29,8 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'convex/**/*.test.ts'],
     server: { deps: { inline: ['convex-test'] } },
     environment: 'node',
+    // Les tests des traductions listent src/i18n/locales/ (import.meta.glob) : un cache
+    // persistant les empêcherait de voir une langue ajoutée.
+    fsModuleCache: false,
   },
 });

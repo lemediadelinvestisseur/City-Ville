@@ -570,6 +570,8 @@ describe('sauvegarde', () => {
     file.state.entities.push({ id: 9999, defId: 'road', x: 31, y: 20, built: true });
     const restored = deserialize(JSON.stringify(file))!;
     expect(restored.version).toBe(SAVE_VERSION);
+    expect(restored.daily).toEqual({ day: '', tasks: [], bonus: {}, bonusClaimed: false });
+    expect(restored.loginStreak).toEqual({ lastDay: null, streak: 0 });
     const migrated = restored.entities.find((e) => e.id === placed.entity.id)!;
     expect(migrated).not.toHaveProperty('buildProgress');
     expect(migrated.construction?.endsAt).toBe(clock.now() + getBuildingDef('cottage').buildSec * 1000);
@@ -599,41 +601,41 @@ describe('sauvegarde', () => {
 describe('récompense quotidienne', () => {
   it('suit une série de 7 jours et repart au jour 1 après un jour manqué', () => {
     const { game } = setup();
-    expect(game.dailyStatus('2026-10-18')).toMatchObject({ available: true, day: 1 });
+    expect(game.loginRewardStatus('2026-10-18')).toMatchObject({ available: true, day: 1 });
     const coins = game.state.coins;
-    const first = game.claimDailyReward('2026-10-18');
+    const first = game.claimLoginReward('2026-10-18');
     expect(first.ok).toBe(true);
     expect(game.state.coins).toBeGreaterThan(coins);
-    expect(game.claimDailyReward('2026-10-18')).toMatchObject({ ok: false, reason: 'notReady' });
-    expect(game.dailyStatus('2026-10-18')).toMatchObject({ available: false, day: 1 });
+    expect(game.claimLoginReward('2026-10-18')).toMatchObject({ ok: false, reason: 'notReady' });
+    expect(game.loginRewardStatus('2026-10-18')).toMatchObject({ available: false, day: 1 });
 
     // Passage de mois et série complète : le 7e jour donne des billets.
     const days = ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24'];
-    for (const day of days) expect(game.claimDailyReward(day).ok).toBe(true);
-    expect(game.state.daily.streak).toBe(7);
-    expect(game.dailyStatus('2026-10-24').reward.cash).toBeGreaterThan(0);
-    expect(game.dailyStatus('2026-10-25')).toMatchObject({ available: true, day: 1 });
-    expect(game.claimDailyReward('2026-10-25').ok).toBe(true);
-    expect(game.dailyStatus('2026-10-26').day).toBe(2);
-    expect(game.dailyStatus('2026-10-28').day).toBe(1);
-    expect(game.dailyStatus('2026-11-01')).toMatchObject({ available: true, day: 1 });
+    for (const day of days) expect(game.claimLoginReward(day).ok).toBe(true);
+    expect(game.state.loginStreak.streak).toBe(7);
+    expect(game.loginRewardStatus('2026-10-24').reward.cash).toBeGreaterThan(0);
+    expect(game.loginRewardStatus('2026-10-25')).toMatchObject({ available: true, day: 1 });
+    expect(game.claimLoginReward('2026-10-25').ok).toBe(true);
+    expect(game.loginRewardStatus('2026-10-26').day).toBe(2);
+    expect(game.loginRewardStatus('2026-10-28').day).toBe(1);
+    expect(game.loginRewardStatus('2026-11-01')).toMatchObject({ available: true, day: 1 });
   });
 
   it('refuse une date antérieure ou mal formée', () => {
     const { game } = setup();
-    expect(game.claimDailyReward('2026-10-18').ok).toBe(true);
-    expect(game.claimDailyReward('2026-10-17')).toMatchObject({ ok: false, reason: 'notReady' });
-    expect(game.claimDailyReward('hier')).toMatchObject({ ok: false, reason: 'invalid' });
+    expect(game.claimLoginReward('2026-10-18').ok).toBe(true);
+    expect(game.claimLoginReward('2026-10-17')).toMatchObject({ ok: false, reason: 'notReady' });
+    expect(game.claimLoginReward('hier')).toMatchObject({ ok: false, reason: 'invalid' });
   });
 
-  it('migre une sauvegarde v4 et conserve la série', () => {
+  it('migre une sauvegarde v5 et conserve la série', () => {
     const { game, clock } = setup();
-    game.claimDailyReward('2026-03-30');
+    game.claimLoginReward('2026-03-30');
     const file = JSON.parse(serialize(game.state, clock.now()));
-    expect(deserialize(JSON.stringify(file))!.daily).toEqual({ lastDay: '2026-03-30', streak: 1 });
-    file.version = 4;
-    delete file.state.daily;
-    expect(deserialize(JSON.stringify(file))!.daily).toEqual({ lastDay: null, streak: 0 });
+    expect(deserialize(JSON.stringify(file))!.loginStreak).toEqual({ lastDay: '2026-03-30', streak: 1 });
+    file.version = 5;
+    delete file.state.loginStreak;
+    expect(deserialize(JSON.stringify(file))!.loginStreak).toEqual({ lastDay: null, streak: 0 });
   });
 });
 

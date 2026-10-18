@@ -3,7 +3,7 @@ import type { AppContext } from '@/app/context';
 import type { KeyValueStorage } from '@/core/save';
 
 /** Clés recopiées dans le stockage natif (iOS peut vider le stockage web de l'appli). */
-const MIRRORED = /^city-ville:(save|device|revision|dirty|local-pseudo|muted|dayNight)$/;
+const MIRRORED = /^city-ville:(save|device|revision|dirty|local-pseudo|muted|dayNight|lang|notifications)$/;
 
 export function isNativeApp(): boolean {
   return Capacitor.isNativePlatform();

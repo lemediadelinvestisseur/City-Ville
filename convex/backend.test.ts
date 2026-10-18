@@ -3,7 +3,7 @@ import { convexTest } from 'convex-test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNewGame } from '../src/core/newGame';
 import { serialize } from '../src/core/save';
-import { api } from './_generated/api';
+import { api, internal } from './_generated/api';
 import schema from './schema';
 
 const modules = import.meta.glob('./**/*.*s');
@@ -16,6 +16,7 @@ async function newPlayer(t: ReturnType<typeof convexTest>, n: number, pseudo: st
     pseudo,
     cityName: `Ville de ${pseudo}`,
     platform: 'web',
+    language: 'fr',
   });
   return { playerId, token: token(n) };
 }
@@ -177,18 +178,14 @@ describe('classement', () => {
 });
 
 describe('admin', () => {
-  beforeEach(() => {
-    vi.stubEnv('ADMIN_KEY', 'cle-admin-de-test-tres-longue');
-    vi.useFakeTimers({ toFake: ['Date'] });
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.useRealTimers();
-  });
+  beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
+  afterEach(() => vi.useRealTimers());
 
-  it('refuse l’accès sans la bonne clé', async () => {
+  it('refuse l’accès à tout autre compte que l’administrateur', async () => {
     const t = convexTest(schema, modules);
-    await expect(t.query(api.admin.dashboard, { key: 'mauvaise' })).rejects.toThrow(/forbidden/);
+    const lea = await newPlayer(t, 1, 'Léa');
+    await expect(t.query(api.admin.dashboard, { token: lea.token })).rejects.toThrow(/forbidden/);
+    await expect(t.query(api.admin.dashboard, { token: token(99) })).rejects.toThrow(/unauthorized/);
   });
 
   it('calcule audience, rétention et temps de jeu', async () => {
@@ -196,6 +193,7 @@ describe('admin', () => {
     const t = convexTest(schema, modules);
     const lea = await newPlayer(t, 1, 'Léa');
     const paul = await newPlayer(t, 2, 'Paul');
+    await t.mutation(internal.roles.setOwner, { pseudo: 'lea' });
     // Jour 0 : deux sessions de 10 min.
     for (const p of [lea, paul])
       await t.mutation(api.stats.ping, { token: p.token, clientSessionId: `s-${p.token}`, platform: 'web' });
@@ -211,7 +209,7 @@ describe('admin', () => {
     vi.setSystemTime(new Date('2026-10-11T20:00:00Z'));
     await t.mutation(api.stats.ping, { token: lea.token, clientSessionId: 'lendemain', platform: 'ios' });
     vi.setSystemTime(new Date('2026-10-12T08:00:00Z'));
-    const board = await t.query(api.admin.dashboard, { key: 'cle-admin-de-test-tres-longue', days: 7 });
+    const board = await t.query(api.admin.dashboard, { token: lea.token, days: 7 });
     expect(board.totals).toMatchObject({ players: 2, wau: 2, retentionD1: 0.5 });
     const day0 = board.daily.find((d) => d.day === '2026-10-10');
     expect(day0).toMatchObject({ newPlayers: 2, activePlayers: 2, sessions: 2 });
@@ -219,6 +217,153 @@ describe('admin', () => {
     expect(board.cohorts[0]).toMatchObject({ day: '2026-10-10', size: 2, d1: 0.5 });
     expect(board.questFunnel[0]).toMatchObject({ id: 'welcome', completed: 1, ratio: 0.5 });
     expect(board.platforms).toEqual(expect.arrayContaining([{ platform: 'ios', count: 1 }]));
+    expect(board.languages).toEqual([{ language: 'fr', count: 2 }]);
+  });
+});
+
+describe('rôles', () => {
+  it('un seul administrateur, désigné en ligne de commande', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await newPlayer(t, 1, 'Léa');
+    const paul = await newPlayer(t, 2, 'Paul');
+    await t.mutation(internal.roles.setOwner, { pseudo: 'Léa' });
+    expect(await t.query(api.admin.whoami, { token: lea.token })).toEqual({ pseudo: 'Léa', role: 'admin' });
+    expect(await t.query(api.players.me, { token: lea.token })).toMatchObject({ role: 'admin' });
+    // Désigner un autre compte retire le rôle au précédent.
+    const result = await t.mutation(internal.roles.setOwner, { pseudo: 'paul' });
+    expect(result).toEqual({ admin: 'Paul', demoted: ['Léa'] });
+    await expect(t.query(api.admin.whoami, { token: lea.token })).rejects.toThrow(/forbidden/);
+    expect(await t.query(api.admin.whoami, { token: paul.token })).toMatchObject({ pseudo: 'Paul' });
+    await t.mutation(internal.roles.clearOwner, {});
+    await expect(t.query(api.admin.whoami, { token: paul.token })).rejects.toThrow(/forbidden/);
+  });
+
+  it('les modérateurs n’ont pas accès aux données ; un compte banni perd ses droits', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await newPlayer(t, 1, 'Léa');
+    const paul = await newPlayer(t, 2, 'Paul');
+    await t.mutation(internal.roles.setOwner, { pseudo: 'Léa' });
+    await t.mutation(api.roles.setModerator, { token: lea.token, pseudo: 'paul', moderator: true });
+    expect((await t.query(api.roles.team, { token: lea.token })).map((p) => [p.pseudo, p.role])).toEqual([
+      ['Léa', 'admin'],
+      ['Paul', 'moderator'],
+    ]);
+    await expect(t.query(api.admin.dashboard, { token: paul.token })).rejects.toThrow(/forbidden/);
+    await expect(
+      t.mutation(api.roles.setModerator, { token: paul.token, pseudo: 'Léa', moderator: false }),
+    ).rejects.toThrow(/forbidden/);
+    await t.run(async (ctx) => ctx.db.patch(lea.playerId, { banned: true }));
+    await expect(t.query(api.admin.whoami, { token: lea.token })).rejects.toThrow(/forbidden/);
+  });
+
+  it('se déconnecter oublie la clé de l’appareil', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await newPlayer(t, 1, 'Léa');
+    await t.mutation(api.players.logout, { token: lea.token });
+    await expect(t.query(api.players.me, { token: lea.token })).rejects.toThrow(/unauthorized/);
+  });
+});
+
+describe('chat', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-18T10:00:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  async function chatter(t: ReturnType<typeof convexTest>, n: number, pseudo: string) {
+    const p = await newPlayer(t, n, pseudo);
+    await t.mutation(api.saves.push, { token: p.token, baseRevision: 0, data: saveWithXp(100, 3) });
+    return p;
+  }
+  const later = (ms: number) => vi.setSystemTime(new Date(Date.now() + ms));
+
+  it('envoie, nettoie et liste les messages d’un salon', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await chatter(t, 1, 'Léa');
+    const paul = await chatter(t, 2, 'Paul');
+    await t.mutation(api.chat.send, { token: lea.token, channel: 'world', text: '  Bonjour   tout le monde ! ' });
+    later(5000);
+    await t.mutation(api.chat.send, { token: paul.token, channel: 'world', text: 'Va sur www.arnaque.com connard' });
+    later(5000);
+    await t.mutation(api.chat.send, { token: paul.token, channel: 'lang:fr', text: 'Salut les francophones' });
+    const feed = await t.query(api.chat.list, { token: lea.token, channel: 'world' });
+    expect(feed.messages.map((m) => [m.pseudo, m.text, m.mine])).toEqual([
+      ['Léa', 'Bonjour tout le monde !', true],
+      ['Paul', 'Va sur *** *******', false],
+    ]);
+    expect(feed).toMatchObject({ canWrite: true, canModerate: false, mutedUntil: null });
+    const pulse = await t.query(api.chat.pulse, { token: lea.token, channels: ['world', 'lang:fr'] });
+    expect(pulse.latest.map((l) => l.at > 0)).toEqual([true, true]);
+    await expect(t.mutation(api.chat.send, { token: lea.token, channel: 'lang:xx', text: 'Salut' })).rejects.toThrow(
+      /forbidden/,
+    );
+  });
+
+  it('limite la cadence, exige le niveau 2 et masque les joueurs bloqués', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await chatter(t, 1, 'Léa');
+    const paul = await chatter(t, 2, 'Paul');
+    const novice = await newPlayer(t, 3, 'Novice');
+    await expect(t.mutation(api.chat.send, { token: novice.token, channel: 'world', text: 'Hello' })).rejects.toThrow(
+      /forbidden/,
+    );
+    await t.mutation(api.chat.send, { token: lea.token, channel: 'world', text: 'Un' });
+    await expect(t.mutation(api.chat.send, { token: lea.token, channel: 'world', text: 'Deux' })).rejects.toThrow(
+      /limit/,
+    );
+    later(4000);
+    await t.mutation(api.chat.send, { token: lea.token, channel: 'world', text: 'Deux' });
+    await t.mutation(api.moderation.block, { token: paul.token, playerId: lea.playerId });
+    expect((await t.query(api.chat.list, { token: paul.token, channel: 'world' })).messages).toEqual([]);
+  });
+
+  it('modération : suppression, mise en sourdine et signalement', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await chatter(t, 1, 'Léa');
+    const paul = await chatter(t, 2, 'Paul');
+    const zoe = await chatter(t, 3, 'Zoé');
+    await t.mutation(internal.roles.setOwner, { pseudo: 'Léa' });
+    await t.mutation(api.roles.setModerator, { token: lea.token, pseudo: 'Zoé', moderator: true });
+    const { id } = await t.mutation(api.chat.send, { token: paul.token, channel: 'world', text: 'Message gênant' });
+    await t.mutation(api.chat.report, { token: lea.token, messageId: id });
+    await expect(t.mutation(api.chat.remove, { token: lea.token, messageId: id })).resolves.toEqual({ ok: true });
+    expect((await t.query(api.chat.list, { token: paul.token, channel: 'world' })).messages).toEqual([]);
+    // Un joueur ne peut pas rendre muet ; une modératrice si.
+    await expect(t.mutation(api.chat.mute, { token: paul.token, playerId: zoe.playerId, minutes: 60 })).rejects.toThrow(
+      /forbidden/,
+    );
+    await t.mutation(api.chat.mute, { token: zoe.token, playerId: paul.playerId, minutes: 60 });
+    later(10_000);
+    await expect(t.mutation(api.chat.send, { token: paul.token, channel: 'world', text: 'Re' })).rejects.toThrow(
+      /muted/,
+    );
+    await expect(t.mutation(api.chat.mute, { token: zoe.token, playerId: lea.playerId, minutes: 60 })).rejects.toThrow(
+      /forbidden/,
+    );
+    later(3_600_000);
+    await t.mutation(api.chat.send, { token: paul.token, channel: 'world', text: 'Je serai sage' });
+    const board = await t.query(api.admin.dashboard, { token: lea.token });
+    expect(board.reports).toEqual([expect.objectContaining({ target: 'Paul', messageId: id })]);
+  });
+
+  it('annonces de l’équipe, ciblées par langue', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await chatter(t, 1, 'Léa');
+    const paul = await chatter(t, 2, 'Paul');
+    await expect(t.mutation(api.admin.announce, { token: paul.token, text: 'Faux message' })).rejects.toThrow(
+      /forbidden/,
+    );
+    await t.mutation(internal.roles.setOwner, { pseudo: 'Léa' });
+    await t.mutation(api.admin.announce, { token: lea.token, text: 'Mise à jour ce soir !' });
+    later(1000);
+    await t.mutation(api.admin.announce, { token: lea.token, text: 'Only in English', language: 'en' });
+    const forFrench = await t.query(api.chat.announcements, { token: paul.token, channels: ['world', 'lang:fr'] });
+    expect(forFrench.map((a) => a.text)).toEqual(['Mise à jour ce soir !']);
+    const forEnglish = await t.query(api.chat.announcements, { token: paul.token, channels: ['world', 'lang:en'] });
+    expect(forEnglish.map((a) => a.text)).toEqual(['Only in English', 'Mise à jour ce soir !']);
+    const pulse = await t.query(api.chat.pulse, { token: paul.token, channels: ['world', 'lang:fr'] });
+    expect(pulse.announcementAt).toBe(Date.parse('2026-10-18T10:00:00Z'));
   });
 });
 
@@ -264,30 +409,6 @@ describe('marché', () => {
     vi.setSystemTime(new Date('2026-10-21T10:00:00Z'));
     expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({ coins: 0, goods: 80, sold: 0 });
     vi.useRealTimers();
-  });
-});
-
-describe('compte testeur', () => {
-  beforeEach(() => vi.stubEnv('ADMIN_KEY', 'cle-admin-de-test-tres-longue'));
-  afterEach(() => vi.unstubAllEnvs());
-
-  it('n’ouvre les outils de test qu’au compte désigné dans l’admin', async () => {
-    const t = convexTest(schema, modules);
-    const owner = await newPlayer(t, 1, 'Proprio');
-    const other = await newPlayer(t, 2, 'Paul');
-    expect(await t.query(api.players.me, { token: owner.token })).toMatchObject({ tester: false });
-    const [found] = await t.query(api.admin.findPlayers, { key: 'cle-admin-de-test-tres-longue', text: 'prop' });
-    expect(found).toMatchObject({ pseudo: 'Proprio', tester: false });
-    await t.mutation(api.admin.setTester, {
-      key: 'cle-admin-de-test-tres-longue',
-      playerId: owner.playerId,
-      tester: true,
-    });
-    expect(await t.query(api.players.me, { token: owner.token })).toMatchObject({ tester: true });
-    expect(await t.query(api.players.me, { token: other.token })).toMatchObject({ tester: false });
-    await expect(
-      t.mutation(api.admin.setTester, { key: 'mauvaise', playerId: other.playerId, tester: true }),
-    ).rejects.toThrow(/forbidden/);
   });
 });
 

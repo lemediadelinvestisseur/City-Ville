@@ -1,7 +1,9 @@
-import { backendErrorMessage, type Visit } from '@/services/online/Backend';
+import { t } from '@/i18n';
+import type { Visit } from '@/services/online/Backend';
 import { clear, h, icon } from './dom';
 import { formatNumber } from './format';
 import { Icons } from './icons';
+import { backendErrorMessage } from './messages';
 import { avatar } from './NeighborsPanel';
 
 export interface VisitCallbacks {
@@ -48,18 +50,18 @@ export class VisitBar {
     };
     const help = visit.isNeighbor
       ? visit.helpedToday
-        ? h('button', { class: 'btn btn--small btn--secondary', text: 'Aidé ✓', attrs: { disabled: '' } })
-        : actionButton('Aider', 'btn--gold', this.callbacks.help, 'Aidé ✓')
-      : actionButton('Ajouter', 'btn--gold', this.callbacks.addNeighbor, 'Voisin ✓');
+        ? h('button', { class: 'btn btn--small btn--secondary', text: t('neighbors.helped'), attrs: { disabled: '' } })
+        : actionButton(t('neighbors.help'), 'btn--gold', this.callbacks.help, t('neighbors.helped'))
+      : actionButton(t('neighbors.add'), 'btn--gold', this.callbacks.addNeighbor, t('neighbors.added'));
     const more = h('details', { class: 'visit-bar__more' });
     more.append(
-      h('summary', { class: 'btn btn--small btn--secondary', text: '•••', attrs: { 'aria-label': 'Plus d’options' } }),
+      h('summary', { class: 'btn btn--small btn--secondary', text: '•••', attrs: { 'aria-label': t('visit.more') } }),
       h(
         'div',
         { class: 'visit-bar__menu' },
         h('button', {
           class: 'btn btn--small btn--secondary',
-          text: 'Signaler',
+          text: t('visit.report'),
           onClick: () => {
             more.open = false;
             this.callbacks.report();
@@ -67,7 +69,7 @@ export class VisitBar {
         }),
         h('button', {
           class: 'btn btn--small btn--danger',
-          text: 'Bloquer',
+          text: t('visit.block'),
           onClick: () => {
             more.open = false;
             this.callbacks.block();
@@ -86,7 +88,7 @@ export class VisitBar {
           { class: 'visit-bar__stats' },
           `${profile.pseudo} · `,
           icon(Icons.xp),
-          ` Niv. ${profile.level} · `,
+          ` ${t('common.levelShort', { level: profile.level })} · `,
           icon(Icons.population),
           ` ${formatNumber(profile.population)}`,
         ),
@@ -97,7 +99,7 @@ export class VisitBar {
     this.bottom.append(
       h('button', {
         class: 'btn btn--primary visit-bar__back',
-        text: '← Retour à ma ville',
+        text: t('visit.back'),
         onClick: this.callbacks.leave,
       }),
     );

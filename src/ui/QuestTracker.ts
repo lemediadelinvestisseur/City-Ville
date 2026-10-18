@@ -1,6 +1,8 @@
 import type { Game } from '@/core/game';
 import { findBuildingDef } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
+import { t } from '@/i18n';
+import { questTitle } from '@/i18n/content';
 import { ArtKey, type ArtLibrary } from '@/render/art/library';
 import { clear, h } from './dom';
 import { Icons, LEA_AVATAR } from './icons';
@@ -18,7 +20,7 @@ export function questIcon(art: ArtLibrary, iconId: string): HTMLElement {
 
 /** Colonne des objectifs actifs, à gauche de l'écran. */
 export class QuestTracker {
-  readonly el = h('div', { class: 'quests', attrs: { 'aria-label': 'Objectifs' } });
+  readonly el = h('div', { class: 'quests', attrs: { 'aria-label': t('quest.listAria') } });
   private seen = new Set<string>();
 
   constructor(
@@ -54,7 +56,7 @@ export class QuestTracker {
         'button',
         {
           class: `quest${isNew ? ' is-new' : ''}`,
-          attrs: { 'aria-label': `Objectif : ${def.title}` },
+          attrs: { 'aria-label': t('quest.aria', { title: questTitle(def) }) },
           onClick: () => {
             this.markSeen(def.id);
             this.onOpen(def.id);
@@ -62,7 +64,7 @@ export class QuestTracker {
         },
         h('span', { class: 'quest__icon' }, questIcon(this.art, def.icon)),
         h('span', { class: 'quest__progress', text: label }),
-        isNew ? h('span', { class: 'quest__new', text: 'Nouveau' }) : null,
+        isNew ? h('span', { class: 'quest__new', text: t('quest.new') }) : null,
       );
       this.el.append(button);
     }

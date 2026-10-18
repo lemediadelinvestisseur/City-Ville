@@ -1,10 +1,11 @@
 import type { Game } from '@/core/game';
 import { MARKET, checkListing, sellerIncome } from '@/data/market';
-import { backendErrorMessage, type Backend } from '@/services/online/Backend';
+import { t, tn } from '@/i18n';
+import type { Backend } from '@/services/online/Backend';
 import { h, icon } from './dom';
 import { formatDuration, formatNumber } from './format';
 import { Icons } from './icons';
-import { failMessage } from './messages';
+import { backendErrorMessage, failMessage, listingProblemMessage } from './messages';
 
 /** Onglet « Marché » : vendre ses marchandises et acheter celles des autres joueurs. */
 export class MarketView {
@@ -20,14 +21,11 @@ export class MarketView {
     const { coins, goods, sold } = await this.backend.marketSettle();
     if (coins > 0) {
       this.game.marketIncome(coins);
-      this.toast(
-        `${sold} lot${sold > 1 ? 's' : ''} vendu${sold > 1 ? 's' : ''} : +${formatNumber(coins)} pièces !`,
-        'success',
-      );
+      this.toast(tn('market.sold', sold, { coins }), 'success');
     }
     if (goods > 0) {
       this.game.marketReturn(goods);
-      this.toast(`Lots invendus récupérés : +${formatNumber(goods)} marchandises.`, 'info');
+      this.toast(t('market.returned', { n: goods }), 'info');
     }
   }
 
@@ -37,7 +35,7 @@ export class MarketView {
       wrap.append(
         h('p', {
           class: 'neighbors__empty',
-          text: `Le marché ouvre au niveau ${MARKET.minLevel}. Vous pourrez y vendre vos récoltes et votre pêche aux autres joueurs !`,
+          text: t('market.opensAt', { level: MARKET.minLevel }),
         }),
       );
       return wrap;
@@ -48,11 +46,11 @@ export class MarketView {
 
     const open = mine.filter((l) => l.status === 'open');
     if (open.length > 0) {
-      wrap.append(h('div', { class: 'market__title', text: 'Mes lots en vente' }));
+      wrap.append(h('div', { class: 'market__title', text: t('market.mine') }));
       for (const listing of open) {
         const button = h('button', {
           class: 'btn btn--secondary btn--small',
-          text: 'Retirer',
+          text: t('market.withdraw'),
           onClick: () => {
             button.setAttribute('disabled', '');
             this.backend
@@ -75,10 +73,12 @@ export class MarketView {
             h(
               'div',
               { class: 'person__info' },
-              h('span', { class: 'person__name', text: `${formatNumber(listing.qty)} marchandises` }),
+              h('span', { class: 'person__name', text: t('market.goods', { n: listing.qty }) }),
               h('span', {
                 class: 'person__city',
-                text: `${listing.unitPrice} pièce${listing.unitPrice > 1 ? 's' : ''} l’unité · reste ${formatDuration((listing.expiresAt - Date.now()) / 1000)}`,
+                text: tn('market.priceLeft', listing.unitPrice, {
+                  duration: formatDuration((listing.expiresAt - Date.now()) / 1000),
+                }),
               }),
             ),
             h('div', { class: 'person__actions' }, button),
@@ -87,8 +87,8 @@ export class MarketView {
       }
     }
 
-    wrap.append(h('div', { class: 'market__title', text: 'Offres des autres joueurs' }));
-    if (offers.length === 0) wrap.append(h('p', { class: 'neighbors__empty', text: 'Aucune offre pour le moment.' }));
+    wrap.append(h('div', { class: 'market__title', text: t('market.offers') }));
+    if (offers.length === 0) wrap.append(h('p', { class: 'neighbors__empty', text: t('market.noOffers') }));
     for (const offer of offers) {
       const total = offer.qty * offer.unitPrice;
       const check = this.game.checkMarketPurchase(offer.qty, total);
@@ -107,7 +107,7 @@ export class MarketView {
               .marketBuy(offer.id)
               .then(({ qty, total: paid }) => {
                 const result = this.game.marketBuy(qty, paid);
-                if (result.ok) this.toast(`+${formatNumber(qty)} marchandises achetées à ${offer.seller} !`, 'success');
+                if (result.ok) this.toast(t('market.bought', { n: qty, seller: offer.seller }), 'success');
                 this.rerender();
               })
               .catch((e: unknown) => {
@@ -127,10 +127,10 @@ export class MarketView {
           h(
             'div',
             { class: 'person__info' },
-            h('span', { class: 'person__name', text: `${formatNumber(offer.qty)} marchandises` }),
+            h('span', { class: 'person__name', text: t('market.goods', { n: offer.qty }) }),
             h('span', {
               class: 'person__city',
-              text: `${offer.seller} · ${offer.unitPrice} pièce${offer.unitPrice > 1 ? 's' : ''} l’unité`,
+              text: tn('market.offerFrom', offer.unitPrice, { seller: offer.seller }),
             }),
           ),
           h('div', { class: 'person__actions' }, button),
@@ -169,11 +169,11 @@ export class MarketView {
       const q = Number(qty.value);
       const p = Number(price.value);
       const problem = checkListing(q, p);
-      summary.textContent =
-        problem ??
-        `Vous recevrez ${formatNumber(sellerIncome(q, p))} pièces après la taxe du marché (${MARKET.taxPercent} %).`;
+      summary.textContent = problem
+        ? listingProblemMessage(problem)
+        : t('market.youGet', { coins: sellerIncome(q, p), tax: MARKET.taxPercent });
       summary.classList.toggle('is-bad', problem !== null || q > this.game.state.goods);
-      if (!problem && q > this.game.state.goods) summary.textContent = 'Vous n’avez pas assez de marchandises.';
+      if (!problem && q > this.game.state.goods) summary.textContent = t('market.notEnough');
     };
     qty.addEventListener('input', update);
     price.addEventListener('input', update);
@@ -181,13 +181,13 @@ export class MarketView {
     const full = openCount >= MARKET.maxListings;
     const submit = h('button', {
       class: 'btn btn--primary',
-      text: full ? `${MARKET.maxListings} lots maximum en vente` : 'Mettre en vente',
+      text: full ? t('market.maxListings', { n: MARKET.maxListings }) : t('market.sell'),
       onClick: () => {
         const q = Number(qty.value);
         const p = Number(price.value);
         const problem = checkListing(q, p);
         if (problem) {
-          this.toast(problem, 'error');
+          this.toast(listingProblemMessage(problem), 'error');
           return;
         }
         const reserve = this.game.marketReserve(q);
@@ -200,7 +200,7 @@ export class MarketView {
           .marketCreate(q, p)
           .then(() => {
             this.game.marketListed();
-            this.toast('Lot mis en vente !', 'success');
+            this.toast(t('market.listed'), 'success');
             this.rerender();
           })
           .catch((e: unknown) => {
@@ -217,14 +217,14 @@ export class MarketView {
       h(
         'div',
         { class: 'market__title' },
-        'Vendre mes marchandises ',
+        `${t('market.sellTitle')} `,
         h('span', { class: 'market__have' }, icon(Icons.goods), ` ${formatNumber(goods)}`),
       ),
       h(
         'div',
         { class: 'market__fields' },
-        h('label', { class: 'field' }, h('span', { class: 'field__label', text: 'Quantité' }), qty),
-        h('label', { class: 'field' }, h('span', { class: 'field__label', text: 'Prix à l’unité' }), price),
+        h('label', { class: 'field' }, h('span', { class: 'field__label', text: t('market.qty') }), qty),
+        h('label', { class: 'field' }, h('span', { class: 'field__label', text: t('market.unitPrice') }), price),
       ),
       summary,
       submit,

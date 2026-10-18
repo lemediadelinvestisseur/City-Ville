@@ -7,11 +7,15 @@ import { createNewGame } from './core/newGame';
 import { deserialize, saveGame, type KeyValueStorage } from './core/save';
 import { ArtLibrary } from './render/art/library';
 import { createPhaserGame, type PhaserHandle } from './render/createPhaserGame';
+import { InboxStore } from './app/inbox';
 import { OnlineSync } from './app/online';
+import { ReminderScheduler } from './app/reminders';
 import { bindSounds } from './app/sounds';
+import { detectLanguage, language, loadLanguage, t, type Language } from './i18n';
 import type { Backend } from './services/online/Backend';
 import { ConvexBackend } from './services/online/ConvexBackend';
 import { LocalBackend } from './services/online/LocalBackend';
+import { createNotifier } from './services/notifications';
 import { MockPaymentProvider } from './services/payments/MockPaymentProvider';
 import { SoundFx } from './services/sound';
 import { Preferences } from './services/preferences';
@@ -50,12 +54,26 @@ function loadOrCreate(storage: KeyValueStorage): Game {
   return new Game(createNewGame(Date.now()));
 }
 
-function boot(): void {
+/** Charge la langue choisie (ou celle de l'appareil) avant de construire l'interface. */
+async function setupLanguage(prefs: Preferences, storage: KeyValueStorage): Promise<void> {
+  // Compte créé avant l'arrivée des langues : le jeu était en français, il le reste.
+  const registered =
+    storage.getItem('city-ville:device') !== null || storage.getItem('city-ville:local-pseudo') !== null;
+  if (prefs.language === null && registered) prefs.setLanguage('fr');
+  await loadLanguage(prefs.language ?? detectLanguage(navigator.languages ?? [navigator.language]));
+  document.documentElement.lang = language();
+  const text = document.querySelector('.loading__text');
+  if (text) text.textContent = t('boot.loading');
+}
+
+async function boot(): Promise<void> {
   const gameRoot = document.getElementById('game');
   const uiRoot = document.getElementById('ui');
   if (!gameRoot || !uiRoot) throw new Error('Conteneurs #game et #ui introuvables');
 
   const storage = mirroredStorage(safeStorage());
+  const prefs = new Preferences(storage);
+  await setupLanguage(prefs, storage);
   const game = loadOrCreate(storage);
   const bus = new Emitter<AppEvents>();
   const art = ArtLibrary.build();
@@ -64,8 +82,10 @@ function boot(): void {
   let ui: UI | null = null;
   const payments = new MockPaymentProvider((product) => ui?.confirmTestPurchase(product) ?? Promise.resolve(false));
   const sound = new SoundFx(storage);
-  const prefs = new Preferences(storage);
   const ctx: AppContext = { game, bus, art, payments, sound, prefs };
+  const inbox = new InboxStore(storage);
+  const notifier = createNotifier();
+  const reminders = new ReminderScheduler(game, notifier, prefs);
 
   // ——— Sauvegarde automatique ———
   let resetting = false;
@@ -115,6 +135,10 @@ function boot(): void {
   let phaser: PhaserHandle | null = null;
 
   ui = new UI(uiRoot, ctx, {
+    storage,
+    inbox,
+    notifier,
+    reminders,
     onReset: () => {
       resetting = true;
       storage.removeItem(SAVE_KEY);
@@ -137,7 +161,17 @@ function boot(): void {
       },
       wipeLocal: () => {
         resetting = true;
-        for (const key of [SAVE_KEY, 'city-ville:revision', 'city-ville:dirty']) storage.removeItem(key);
+        for (const key of [SAVE_KEY, 'city-ville:revision', 'city-ville:dirty', 'city-ville:inbox']) {
+          storage.removeItem(key);
+        }
+        window.location.reload();
+      },
+      setLanguage: (code: Language) => {
+        prefs.setLanguage(code);
+        if (code === language()) return;
+        // Les messages déjà rangés sont dans l'ancienne langue.
+        inbox.clear();
+        persist();
         window.location.reload();
       },
     },
@@ -156,16 +190,16 @@ function boot(): void {
   const { scene } = phaser;
   persist();
   // Accès de débogage (tests de bout en bout) uniquement en développement.
-  if (import.meta.env.DEV) Object.assign(window, { __cityVille: { game, bus, scene, phaser, backend } });
+  if (import.meta.env.DEV) {
+    Object.assign(window, { __cityVille: { game, bus, scene, phaser, backend, inbox, reminders } });
+  }
 }
 
 // Dans l'appli native, on restaure d'abord la sauvegarde si iOS a vidé le stockage web.
-void restoreNativeBackup().then(() => {
-  try {
-    boot();
-  } catch (error) {
+void restoreNativeBackup()
+  .then(boot)
+  .catch((error: unknown) => {
     console.error(error);
     const loading = document.getElementById('loading');
-    if (loading) loading.textContent = 'Impossible de démarrer le jeu sur cet appareil.';
-  }
-});
+    if (loading) loading.textContent = t('boot.failed');
+  });
