@@ -95,6 +95,23 @@ export default defineSchema({
     .index('by_reporter', ['reporterId'])
     .index('by_target', ['targetId']),
 
+  /** Lots de marchandises mis en vente sur le marché. */
+  listings: defineTable({
+    sellerId: v.id('players'),
+    qty: v.number(),
+    unitPrice: v.number(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    status: v.union(v.literal('open'), v.literal('sold'), v.literal('cancelled'), v.literal('expired')),
+    buyerId: v.optional(v.id('players')),
+    soldAt: v.optional(v.number()),
+    /** Le vendeur a récupéré ses pièces (ou ses marchandises si invendu). */
+    settled: v.boolean(),
+  })
+    .index('by_status_price', ['status', 'unitPrice'])
+    .index('by_seller', ['sellerId', 'settled'])
+    .index('by_buyer', ['buyerId']),
+
   /** Sessions de jeu (prolongées par un signal régulier de l'appli). */
   sessions: defineTable({
     playerId: v.id('players'),

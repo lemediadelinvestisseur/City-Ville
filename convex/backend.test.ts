@@ -221,3 +221,48 @@ describe('admin', () => {
     expect(board.platforms).toEqual(expect.arrayContaining([{ platform: 'ios', count: 1 }]));
   });
 });
+
+describe('marché', () => {
+  async function seller(t: ReturnType<typeof convexTest>, n: number, pseudo: string, level: number) {
+    const p = await newPlayer(t, n, pseudo);
+    await t.mutation(api.saves.push, { token: p.token, baseRevision: 0, data: saveWithXp(level * 100, level) });
+    return p;
+  }
+
+  it('vend un lot une seule fois et verse la recette moins la taxe', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await seller(t, 1, 'Léa', 6);
+    const paul = await seller(t, 2, 'Paul', 6);
+    const zoe = await seller(t, 3, 'Zoé', 6);
+    const { id } = await t.mutation(api.market.create, { token: lea.token, qty: 100, unitPrice: 4 });
+    const seen = await t.query(api.market.overview, { token: paul.token });
+    expect(seen.offers).toEqual([expect.objectContaining({ qty: 100, unitPrice: 4, seller: 'Léa' })]);
+    expect(await t.mutation(api.market.buy, { token: paul.token, listingId: id })).toEqual({ qty: 100, total: 400 });
+    await expect(t.mutation(api.market.buy, { token: zoe.token, listingId: id })).rejects.toThrow(/notFound/);
+    expect((await t.query(api.market.overview, { token: lea.token })).mine[0]).toMatchObject({
+      status: 'sold',
+      income: 360,
+    });
+    expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({ coins: 360, goods: 0, sold: 1 });
+    expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({ coins: 0, goods: 0, sold: 0 });
+  });
+
+  it('applique les limites (niveau, lot, nombre de lots) et rend les invendus', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-18T10:00:00Z'));
+    const t = convexTest(schema, modules);
+    const novice = await seller(t, 1, 'Novice', 2);
+    const lea = await seller(t, 2, 'Léa', 8);
+    await expect(t.mutation(api.market.create, { token: novice.token, qty: 50, unitPrice: 2 })).rejects.toThrow(
+      /forbidden/,
+    );
+    await expect(t.mutation(api.market.create, { token: lea.token, qty: 5, unitPrice: 2 })).rejects.toThrow();
+    for (let i = 0; i < 5; i++) await t.mutation(api.market.create, { token: lea.token, qty: 20, unitPrice: 2 });
+    await expect(t.mutation(api.market.create, { token: lea.token, qty: 20, unitPrice: 2 })).rejects.toThrow(/limit/);
+    const [first] = (await t.query(api.market.overview, { token: lea.token })).mine;
+    expect(await t.mutation(api.market.cancel, { token: lea.token, listingId: first!.id })).toEqual({ goods: 20 });
+    vi.setSystemTime(new Date('2026-10-21T10:00:00Z'));
+    expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({ coins: 0, goods: 80, sold: 0 });
+    vi.useRealTimers();
+  });
+});

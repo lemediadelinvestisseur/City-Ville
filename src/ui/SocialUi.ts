@@ -6,6 +6,7 @@ import { h, icon } from './dom';
 import { formatDuration, formatNumber } from './format';
 import { Icons } from './icons';
 import type { Modals } from './Modals';
+import { MarketView } from './MarketView';
 import { NeighborsPanel } from './NeighborsPanel';
 import { showPseudoForm } from './Onboarding';
 import type { Toasts } from './Toasts';
@@ -50,7 +51,14 @@ export class SocialUi {
       help: (profile) => this.help(profile),
       toast: (text, kind) => toasts.show(text, kind),
       onToggle: () => deps.onLayoutChange(),
+      market: () => market.render(),
     });
+    const market = new MarketView(
+      deps.ctx.game,
+      social.backend,
+      (text, kind) => toasts.show(text, kind),
+      () => this.panel.refresh(),
+    );
     this.visitBar = new VisitBar({
       help: async () => {
         if (this.visiting) await this.help(this.visiting.profile);

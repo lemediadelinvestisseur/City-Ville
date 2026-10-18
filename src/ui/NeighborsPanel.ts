@@ -3,13 +3,15 @@ import { clear, h, icon } from './dom';
 import { formatNumber } from './format';
 import { Icons } from './icons';
 
-type Tab = 'neighbors' | 'find' | 'ranking';
+type Tab = 'neighbors' | 'find' | 'ranking' | 'market';
 
 export interface NeighborsCallbacks {
   visit: (profile: Profile) => void;
   help: (profile: Profile) => Promise<void>;
   toast: (text: string, kind: 'info' | 'success' | 'error') => void;
   onToggle: () => void;
+  /** Contenu de l'onglet Marché. */
+  market: () => Promise<HTMLElement>;
 }
 
 const AVATAR_COLORS = ['#e57373', '#64b5f6', '#81c784', '#ffb74d', '#ba68c8', '#4db6ac', '#f06292', '#7986cb'];
@@ -67,6 +69,11 @@ export class NeighborsPanel {
     );
   }
 
+  /** Rafraîchit l'onglet courant (après une action). */
+  refresh(): void {
+    if (this.isOpen) void this.render();
+  }
+
   open(tab: Tab = 'neighbors'): void {
     this.tab = tab;
     this.isOpen = true;
@@ -88,6 +95,7 @@ export class NeighborsPanel {
       ['neighbors', 'Voisins'],
       ['find', 'Trouver'],
       ['ranking', 'Classement'],
+      ['market', 'Marché'],
     ];
     for (const [id, label] of tabs) {
       this.tabs.append(
@@ -115,7 +123,9 @@ export class NeighborsPanel {
           ? await this.neighbors()
           : this.tab === 'find'
             ? await this.find()
-            : await this.ranking();
+            : this.tab === 'market'
+              ? await this.callbacks.market()
+              : await this.ranking();
       if (id !== this.renderId) return;
       clear(this.body);
       this.body.append(content);

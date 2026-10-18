@@ -181,6 +181,28 @@ export class ConvexBackend implements Backend {
     await this.call(() => this.client.mutation(api.moderation.block, { token: this.auth, playerId: id as PlayerId }));
   }
 
+  marketOverview() {
+    return this.call(() => this.client.query(api.market.overview, { token: this.auth }));
+  }
+
+  async marketCreate(qty: number, unitPrice: number): Promise<void> {
+    await this.call(() => this.client.mutation(api.market.create, { token: this.auth, qty, unitPrice }));
+  }
+
+  marketBuy(id: string) {
+    return this.call(() => this.client.mutation(api.market.buy, { token: this.auth, listingId: id as Id<'listings'> }));
+  }
+
+  marketCancel(id: string) {
+    return this.call(() =>
+      this.client.mutation(api.market.cancel, { token: this.auth, listingId: id as Id<'listings'> }),
+    );
+  }
+
+  marketSettle() {
+    return this.call(() => this.client.mutation(api.market.settle, { token: this.auth }));
+  }
+
   async report(id: string, reason: string): Promise<void> {
     await this.call(() =>
       this.client.mutation(api.moderation.report, { token: this.auth, playerId: id as PlayerId, reason }),

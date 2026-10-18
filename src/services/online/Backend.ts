@@ -61,6 +61,24 @@ export interface Leaderboard {
   me: Profile;
 }
 
+export interface MarketOffer {
+  id: string;
+  qty: number;
+  unitPrice: number;
+  seller: string;
+  expiresAt: number;
+}
+
+export interface MyListing {
+  id: string;
+  qty: number;
+  unitPrice: number;
+  createdAt: number;
+  expiresAt: number;
+  status: 'open' | 'sold' | 'cancelled' | 'expired';
+  income: number;
+}
+
 export interface TrackedEvent {
   type: 'quest' | 'level';
   name: string;
@@ -97,6 +115,13 @@ export interface Backend {
   leaderboard(by: 'level' | 'population'): Promise<Leaderboard>;
   block(id: string): Promise<void>;
   report(id: string, reason: string): Promise<void>;
+
+  marketOverview(): Promise<{ offers: MarketOffer[]; mine: MyListing[] }>;
+  marketCreate(qty: number, unitPrice: number): Promise<void>;
+  marketBuy(id: string): Promise<{ qty: number; total: number }>;
+  marketCancel(id: string): Promise<{ goods: number }>;
+  /** Encaisse les ventes et récupère les invendus. */
+  marketSettle(): Promise<{ coins: number; goods: number; sold: number }>;
 }
 
 /** Plateforme de l'appareil, pour les statistiques. */

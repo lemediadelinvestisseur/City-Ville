@@ -17,6 +17,7 @@ import {
 } from '@/data/balance';
 import { BUILDINGS, getBuildingDef } from '@/data/buildings';
 import { CROPS, TRIPS, getCropDef, getTripDef } from '@/data/crops';
+import { MARKET } from '@/data/market';
 import { findCashOffer, findStoreProduct } from '@/data/products';
 import { QUESTS, getQuestDef } from '@/data/quests';
 import { chunkHasLand, isEastChunk, isWater } from '@/data/terrain';
@@ -898,6 +899,52 @@ export class Game {
     this.give(reward, null);
     this.changed();
     return reward;
+  }
+
+  // ———————————————————————————— Marché ————————————————————————————
+
+  /** Met de côté des marchandises pour un lot mis en vente. */
+  marketReserve(qty: number): Result<object> {
+    if (this.state.level < MARKET.minLevel) return fail('levelLocked');
+    if (!Number.isInteger(qty) || qty <= 0) return fail('invalid');
+    if (this.state.goods < qty) return fail('notEnoughGoods', qty - this.state.goods);
+    this.state.goods -= qty;
+    this.changed();
+    return { ok: true };
+  }
+
+  /** Rend des marchandises (lot retiré ou expiré), même au-delà de la capacité. */
+  marketReturn(qty: number): void {
+    if (qty <= 0) return;
+    this.state.goods += qty;
+    this.events.emit('reward', { entityId: null, reward: { goods: qty } });
+    this.changed();
+  }
+
+  /** Vérifie qu'un achat est possible (pièces et place dans l'entrepôt). */
+  checkMarketPurchase(qty: number, total: number): Result<object> {
+    if (this.state.level < MARKET.minLevel) return fail('levelLocked');
+    if (this.state.coins < total) return fail('notEnoughCoins', total - this.state.coins);
+    if (this.state.goods + qty > this.derived().goodsCap) return fail('storageFull');
+    return { ok: true };
+  }
+
+  /** Achat confirmé par le serveur : paie et reçoit les marchandises. */
+  marketBuy(qty: number, total: number): Result<object> {
+    const check = this.checkMarketPurchase(qty, total);
+    if (!check.ok) return check;
+    this.spend({ coins: total });
+    this.state.goods += qty;
+    this.events.emit('reward', { entityId: null, reward: { goods: qty } });
+    this.changed();
+    return { ok: true };
+  }
+
+  /** Recettes des ventes encaissées. */
+  marketIncome(coins: number): void {
+    if (coins <= 0) return;
+    this.give({ coins }, null);
+    this.changed();
   }
 
   // ———————————————————————————— Outils de test ————————————————————————————

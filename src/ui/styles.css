@@ -2130,3 +2130,70 @@ body.is-visiting .bubble,
 body.is-visiting .placebar {
   display: none;
 }
+
+/* ——— Marché ——— */
+.market__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-weight: 900;
+}
+
+.market__have {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.market__have svg,
+.market__crate svg {
+  width: 18px;
+  height: 18px;
+}
+
+.market__crate {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #fff3e0;
+}
+
+.market__sell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.market__fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.market__input {
+  padding: 8px 10px;
+  font-size: 16px;
+}
+
+.market__summary {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.market__summary.is-bad {
+  color: var(--red);
+}
+
+.btn.is-short {
+  opacity: 0.6;
+}

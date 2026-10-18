@@ -188,6 +188,10 @@ export async function deletePlayerData(ctx: MutationCtx, playerId: Id<'players'>
       .query('neighbors')
       .withIndex('by_neighbor', (q) => q.eq('neighborId', playerId))
       .collect()),
+    ...(await ctx.db
+      .query('listings')
+      .withIndex('by_seller', (q) => q.eq('sellerId', playerId))
+      .collect()),
   ];
   for (const doc of docs) await ctx.db.delete(doc._id);
   await ctx.db.delete(playerId);

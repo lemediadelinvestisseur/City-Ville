@@ -1,10 +1,13 @@
 import { serialize, type KeyValueStorage } from '@/core/save';
 import { simulate } from '@/core/simulation';
 import { normalizePseudo, validatePseudo } from '@/core/pseudo';
+import { MARKET, sellerIncome } from '@/data/market';
 import {
   BackendError,
   type Backend,
   type Leaderboard,
+  type MarketOffer,
+  type MyListing,
   type NeighborProfile,
   type Profile,
   type PushResult,
@@ -16,6 +19,10 @@ const PSEUDO_KEY = 'city-ville:local-pseudo';
 const NEIGHBORS_KEY = 'city-ville:local-neighbors';
 const HELPED_KEY = 'city-ville:local-helped';
 const CLAIMED_KEY = 'city-ville:local-claimed';
+const LISTINGS_KEY = 'city-ville:local-listings';
+const BOUGHT_KEY = 'city-ville:local-bought';
+/** Dans la démo, un lot trouve preneur au bout de quelques minutes s'il n'est pas trop cher. */
+const DEMO_SALE_MS = 3 * 60_000;
 
 interface DemoPlayer {
   id: string;
@@ -134,7 +141,9 @@ export class LocalBackend implements Backend {
   }
 
   forget(): void {
-    for (const key of [PSEUDO_KEY, NEIGHBORS_KEY, HELPED_KEY, CLAIMED_KEY]) this.storage.removeItem(key);
+    for (const key of [PSEUDO_KEY, NEIGHBORS_KEY, HELPED_KEY, CLAIMED_KEY, LISTINGS_KEY, BOUGHT_KEY]) {
+      this.storage.removeItem(key);
+    }
   }
 
   async pullSave(): Promise<RemoteSave | null> {
@@ -223,4 +232,85 @@ export class LocalBackend implements Backend {
   }
 
   async report(): Promise<void> {}
+
+  private listings(): MyListing[] {
+    const now = Date.now();
+    return this.read<MyListing[]>(LISTINGS_KEY, []).map((l) => {
+      if (l.status !== 'open') return l;
+      // Les voisins fictifs achètent les lots au prix raisonnable.
+      if (l.unitPrice <= 6 && now - l.createdAt > DEMO_SALE_MS) {
+        return { ...l, status: 'sold', income: sellerIncome(l.qty, l.unitPrice) };
+      }
+      return now >= l.expiresAt ? { ...l, status: 'expired' } : l;
+    });
+  }
+
+  async marketOverview(): Promise<{ offers: MarketOffer[]; mine: MyListing[] }> {
+    const bought = new Set(this.read<string[]>(BOUGHT_KEY, []));
+    const day = Math.floor(Date.now() / 86_400_000);
+    const offers: MarketOffer[] = DEMO.flatMap((d, i) =>
+      [0, 1].map((k) => ({
+        id: `${d.id}-${day}-${k}`,
+        qty: 30 + ((i * 37 + k * 53 + day) % 8) * 20,
+        unitPrice: 2 + ((i * 3 + k * 5 + day) % 6),
+        seller: d.pseudo,
+        expiresAt: (day + 1) * 86_400_000,
+      })),
+    )
+      .filter((o) => !bought.has(o.id))
+      .sort((a, b) => a.unitPrice - b.unitPrice);
+    return { offers, mine: this.listings() };
+  }
+
+  async marketCreate(qty: number, unitPrice: number): Promise<void> {
+    const all = this.listings();
+    if (all.filter((l) => l.status === 'open').length >= MARKET.maxListings) throw new BackendError('limit');
+    const now = Date.now();
+    all.push({
+      id: `mine-${now}`,
+      qty,
+      unitPrice,
+      createdAt: now,
+      expiresAt: now + MARKET.durationMs,
+      status: 'open',
+      income: 0,
+    });
+    this.write(LISTINGS_KEY, all);
+  }
+
+  async marketBuy(id: string): Promise<{ qty: number; total: number }> {
+    const offer = (await this.marketOverview()).offers.find((o) => o.id === id);
+    if (!offer) throw new BackendError('notFound');
+    this.write(BOUGHT_KEY, [...this.read<string[]>(BOUGHT_KEY, []), id].slice(-50));
+    return { qty: offer.qty, total: offer.qty * offer.unitPrice };
+  }
+
+  async marketCancel(id: string): Promise<{ goods: number }> {
+    const all = this.listings();
+    const listing = all.find((l) => l.id === id && l.status === 'open');
+    if (!listing) throw new BackendError('notFound');
+    this.write(
+      LISTINGS_KEY,
+      all.filter((l) => l.id !== id),
+    );
+    return { goods: listing.qty };
+  }
+
+  async marketSettle(): Promise<{ coins: number; goods: number; sold: number }> {
+    const all = this.listings();
+    let coins = 0;
+    let goods = 0;
+    let sold = 0;
+    for (const l of all) {
+      if (l.status === 'sold') {
+        coins += l.income;
+        sold++;
+      } else if (l.status === 'expired') goods += l.qty;
+    }
+    this.write(
+      LISTINGS_KEY,
+      all.filter((l) => l.status === 'open'),
+    );
+    return { coins, goods, sold };
+  }
 }

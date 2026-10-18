@@ -235,6 +235,26 @@ describe('les deux rives', () => {
   });
 });
 
+describe('marché', () => {
+  it('met de côté, rend, achète et encaisse', () => {
+    const { game } = setup();
+    expect(game.marketReserve(10)).toMatchObject({ ok: false, reason: 'levelLocked' });
+    game.state.level = 5;
+    game.state.goods = 100;
+    expect(game.marketReserve(150)).toMatchObject({ ok: false, reason: 'notEnoughGoods', missing: 50 });
+    expect(game.marketReserve(60).ok).toBe(true);
+    expect(game.state.goods).toBe(40);
+    game.marketReturn(60);
+    expect(game.state.goods).toBe(100);
+    const coins = game.state.coins;
+    expect(game.marketBuy(50, 200).ok).toBe(true);
+    expect(game.state).toMatchObject({ goods: 150, coins: coins - 200 });
+    expect(game.marketBuy(500, 10)).toMatchObject({ ok: false, reason: 'storageFull' });
+    game.marketIncome(90);
+    expect(game.state.coins).toBe(coins - 110);
+  });
+});
+
 describe('boucle économique', () => {
   let game: Game;
   let clock: FakeClock;
