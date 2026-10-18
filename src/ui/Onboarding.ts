@@ -186,7 +186,9 @@ export function showPseudoForm(
     ],
     buttons: [],
   });
-  setTimeout(() => pseudo.focus(), 250);
+  // Sur écran tactile (iPhone), un focus sans geste du joueur n'ouvre pas le clavier et peut empêcher le
+  // toucher suivant de l'ouvrir : on laisse le joueur toucher le champ.
+  if (window.matchMedia('(pointer: fine)').matches) setTimeout(() => pseudo.focus(), 250);
 }
 
 function showTransferForm(
