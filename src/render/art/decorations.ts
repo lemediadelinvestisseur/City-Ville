@@ -1,63 +1,5 @@
-import { shade } from './color';
-import { boxColors, isoCanvas, type ArtPiece, type IsoPainter } from './IsoPainter';
-
-function blob(p: IsoPainter, x: number, y: number, z: number, r: number, color: string): void {
-  const [sx, sy] = p.p(x, y, z);
-  const { ctx } = p;
-  const g = ctx.createRadialGradient(sx - r * 0.35, sy - r * 0.4, r * 0.15, sx, sy, r);
-  g.addColorStop(0, shade(color, 0.3));
-  g.addColorStop(0.7, color);
-  g.addColorStop(1, shade(color, -0.25));
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(sx, sy, r, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function oak(): ArtPiece {
-  const { painter: p, finish } = isoCanvas(1, 1, 92);
-  p.groundEllipse(0.6, 0.6, 0, 0.32, 'rgba(20,40,10,0.25)');
-  p.box(0.45, 0.45, 0.55, 0.55, 0, 34, boxColors('#7b5130'));
-  const green = '#4d9a3a';
-  blob(p, 0.38, 0.5, 52, 21, shade(green, -0.1));
-  blob(p, 0.62, 0.42, 54, 20, shade(green, -0.05));
-  blob(p, 0.55, 0.6, 46, 22, green);
-  blob(p, 0.45, 0.45, 70, 19, shade(green, 0.05));
-  blob(p, 0.6, 0.6, 66, 16, shade(green, 0.12));
-  return finish();
-}
-
-function pine(): ArtPiece {
-  const { painter: p, finish } = isoCanvas(1, 1, 100);
-  p.groundEllipse(0.6, 0.6, 0, 0.28, 'rgba(20,40,10,0.25)');
-  p.box(0.46, 0.46, 0.54, 0.54, 0, 20, boxColors('#6d4426'));
-  const [sx, sy] = p.p(0.5, 0.5, 0);
-  const { ctx } = p;
-  const layers = [
-    { y: 18, w: 26, h: 34, c: '#2f7d44' },
-    { y: 40, w: 21, h: 30, c: '#358a4b' },
-    { y: 60, w: 15, h: 28, c: '#3d9a55' },
-  ];
-  for (const layer of layers) {
-    const top = sy - layer.y - layer.h;
-    const base = sy - layer.y;
-    ctx.fillStyle = shade(layer.c, -0.2);
-    ctx.beginPath();
-    ctx.moveTo(sx, top);
-    ctx.lineTo(sx + layer.w, base);
-    ctx.lineTo(sx, base + 5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = layer.c;
-    ctx.beginPath();
-    ctx.moveTo(sx, top);
-    ctx.lineTo(sx, base + 5);
-    ctx.lineTo(sx - layer.w, base);
-    ctx.closePath();
-    ctx.fill();
-  }
-  return finish();
-}
+import { boxColors, isoCanvas, type ArtPiece } from './IsoPainter';
+import { broadleafTree, coniferTree } from './nature';
 
 function flowerBed(): ArtPiece {
   const { painter: p, finish } = isoCanvas(1, 1, 24);
@@ -448,8 +390,8 @@ function triumphArch(): ArtPiece {
 }
 
 const DECORATIONS: Record<string, () => ArtPiece> = {
-  tree_oak: oak,
-  tree_pine: pine,
+  tree_oak: () => broadleafTree(0),
+  tree_pine: () => coniferTree(0),
   flower_bed: flowerBed,
   bench,
   lamp,

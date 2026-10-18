@@ -102,16 +102,14 @@ export function isBuildableTerrain(x: number, y: number): boolean {
   return t === 'grass' || t === 'sand';
 }
 
-/** Eau peu profonde (près d'un rivage), pour le rendu. */
-export function isShallow(x: number, y: number): boolean {
-  for (let dy = -2; dy <= 2; dy++) {
-    for (let dx = -2; dx <= 2; dx++) {
-      if (Math.abs(dx) + Math.abs(dy) > 2) continue;
-      const t = terrainAt(x + dx, y + dy);
-      if (t !== 'water') return true;
-    }
-  }
-  return false;
+/**
+ * Paysage au-delà des limites de la carte (purement visuel) : les montagnes du
+ * nord se prolongent, la mer entoure le reste.
+ */
+export function visualTerrainAt(x: number, y: number): Terrain {
+  if (x >= 0 && y >= 0 && x < MAP_W && y < MAP_H) return terrainAt(x, y);
+  if (y < 0) return x <= westSeaX(y) ? 'water' : 'rock';
+  return 'water';
 }
 
 /** Une zone d'agrandissement est-elle sur la rive est ? */
