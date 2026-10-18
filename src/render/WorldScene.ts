@@ -11,6 +11,7 @@ import type { BadgeKind } from './art/sprites';
 import { CameraController } from './CameraController';
 import { HALF_W, TILE_H, depthOf, footprintCenter, tileToWorld, worldToTile } from './iso';
 import { DEPTH_FX, Effects } from './Effects';
+import { formatClock } from '@/ui/format';
 import { WalkerSystem } from './WalkerSystem';
 
 const DEPTH_GROUND = 0;
@@ -34,6 +35,8 @@ interface View {
   badgeBaseY: number;
   bar: Phaser.GameObjects.Graphics | null;
   barKey: string;
+  /** Compte à rebours affiché en permanence (chantier, bateau en mer). */
+  timer: Phaser.GameObjects.Text | null;
   /** Bateau amarré (ou parti en mer) d'un port. */
   boat: Phaser.GameObjects.Image | null;
   boatHome: { x: number; y: number } | null;
@@ -325,6 +328,7 @@ export class WorldScene extends Phaser.Scene {
       badgeBaseY: 0,
       bar: null,
       barKey: '',
+      timer: null,
       boat: null,
       boatHome: null,
     };
@@ -339,6 +343,7 @@ export class WorldScene extends Phaser.Scene {
     view.crop?.destroy();
     view.badge?.destroy();
     view.bar?.destroy();
+    view.timer?.destroy();
     view.boat?.destroy();
     this.views.delete(id);
     if (this.selectedId === id) this.select(null);
@@ -403,6 +408,47 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     this.syncBoat(view);
+    this.syncTimer(view);
+  }
+
+  /** Fin de l'attente à afficher en direct, ou null. */
+  private timerEnd(entity: Entity): number | null {
+    const now = this.game_.now();
+    if (!entity.built && entity.construction && now < entity.construction.endsAt) return entity.construction.endsAt;
+    if (entity.port?.tripId && now < entity.port.readyAt) return entity.port.readyAt;
+    return null;
+  }
+
+  private syncTimer(view: View): void {
+    const end = this.game_.isTileUnlocked(view.entity.x, view.entity.y) ? this.timerEnd(view.entity) : null;
+    if (end === null) {
+      view.timer?.destroy();
+      view.timer = null;
+      return;
+    }
+    if (!view.timer) {
+      view.timer = this.add
+        .text(0, 0, '', {
+          fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+          fontStyle: '800',
+          fontSize: '22px',
+          color: '#ffffff',
+          stroke: '#0b2a4a',
+          strokeThickness: 6,
+        })
+        .setOrigin(0.5, 1)
+        .setResolution(Math.min(2, this.dpr * 1.5));
+    }
+    const def = getBuildingDef(view.entity.defId);
+    const center = footprintCenter(view.entity.x, view.entity.y, def.size.w, def.size.d);
+    const s = this.overlayScale;
+    // Sous le bâtiment pour un chantier (au-dessus de la barre), au-dessus du port pour un bateau.
+    const y = view.entity.built ? this.topOf(view) - 4 * s : center.y + 14 * s;
+    view.timer
+      .setText(formatClock((end - this.game_.now()) / 1000))
+      .setPosition(center.x, y)
+      .setScale(s)
+      .setDepth(DEPTH_OVERLAY + view.main.depth + 0.6);
   }
 
   /** Avancement du chantier en vingtièmes (null : pas de chantier en cours). */
@@ -489,6 +535,8 @@ export class WorldScene extends Phaser.Scene {
   /** Rafraîchit les états qui dépendent du temps (cultures, loyers…) et l'aide visuelle. */
   private refreshDynamic(): void {
     for (const view of this.views.values()) {
+      if (view.timer || (view.entity.construction && !view.entity.built) || view.entity.port?.tripId)
+        this.syncTimer(view);
       const e = view.entity;
       if (e.house || e.business || e.farm || e.port || !e.built) {
         const badge = this.badgeFor(e);
@@ -538,7 +586,7 @@ export class WorldScene extends Phaser.Scene {
     const scale = Math.max(0.8, Math.min(1.7, 0.55 / this.camCtl.userZoom));
     if (Math.abs(scale - this.overlayScale) < 0.02) return;
     this.overlayScale = scale;
-    for (const view of this.views.values()) if (view.badge || view.bar) this.syncView(view);
+    for (const view of this.views.values()) if (view.badge || view.bar || view.timer) this.syncView(view);
   }
 
   // ———————————————————————————— Évènements ————————————————————————————
