@@ -20,12 +20,14 @@ export class Hud {
   readonly el = h('div', { class: 'hud' });
   private pills = new Map<HudTarget, HTMLElement>();
   private values = new Map<HudTarget, HTMLElement>();
-  private xpFill = h('div', { class: 'xpbar__fill' });
-  private xpText = h('span', { class: 'xpbar__text' });
+  private xpFill = h('div', { class: 'gauge__fill xpbar__fill' });
+  private xpText = h('span', { class: 'gauge__text xpbar__text' });
   private levelNum = h('span', { class: 'level__num' });
   private energyTimer = h('span', { class: 'pill__sub' });
   /** Humeur de la ville, à côté des habitants. */
   private mood = h('span', { class: 'pill__mood', attrs: { 'aria-hidden': 'true' } });
+  /** Jauge d'énergie (même rendu que la barre d'XP). */
+  private energyFill = h('div', { class: 'gauge__fill gauge__fill--energy' });
   private lastEnergy: number | null = null;
   /** Récompenses tombées au sol, pas encore ramassées (déjà créditées par le jeu). */
   private pending = { coins: 0, xp: 0 };
@@ -40,15 +42,25 @@ export class Hud {
       'div',
       { class: 'pill pill--level', attrs: { 'aria-label': t('hud.levelAria') } },
       h('span', { class: 'level' }, icon(Icons.xp, 'level__star'), this.levelNum),
-      h('div', { class: 'xpbar' }, this.xpFill, this.xpText),
+      h('div', { class: 'gauge xpbar' }, this.xpFill, this.xpText),
     );
     this.pills.set('level', level);
 
     const plusLabels = { coins: t('hud.getCoins'), cash: t('hud.getCash'), energy: t('hud.getEnergy') };
     const pill = (target: HudTarget, svg: string, label: string, plus?: 'coins' | 'cash' | 'energy') => {
-      const value = h('span', { class: 'pill__value' });
+      const isEnergy = target === 'energy';
+      const value = h('span', { class: isEnergy ? 'pill__value gauge__text' : 'pill__value' });
       this.values.set(target, value);
       const opens = target === 'goods' || target === 'population' || target === 'workers';
+      // L'énergie s'affiche dans une jauge, avec le minuteur de recharge en dessous.
+      const text = isEnergy
+        ? h(
+            'span',
+            { class: 'pill__text' },
+            h('span', { class: 'gauge gauge--energy' }, this.energyFill, value),
+            this.energyTimer,
+          )
+        : h('span', { class: 'pill__text' }, value);
       const el = h(
         opens ? 'button' : 'div',
         {
@@ -57,7 +69,7 @@ export class Hud {
           onClick: opens ? () => onOpen(target) : undefined,
         },
         icon(svg, 'pill__icon'),
-        h('span', { class: 'pill__text' }, value, target === 'energy' ? this.energyTimer : null),
+        text,
         target === 'population' ? this.mood : null,
         plus
           ? h(
@@ -121,6 +133,8 @@ export class Hud {
     this.set('coins', formatNumber(Math.max(0, state.coins - this.pending.coins)));
     this.set('cash', formatNumber(state.cash));
     this.set('energy', `${state.energy}/${derived.energyMax}`);
+    const energyRatio = derived.energyMax ? Math.min(1, state.energy / derived.energyMax) : 1;
+    this.energyFill.style.width = `${Math.round(energyRatio * 100)}%`;
     if (this.lastEnergy !== null && state.energy < this.lastEnergy) this.bump('energy');
     this.lastEnergy = state.energy;
     const stock = this.game.stock();

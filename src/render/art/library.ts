@@ -1,10 +1,11 @@
 import { BUILDINGS } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
 import { CAR_COLORS, boatArt, bridgeArt, carArt, movingTruckArt, BOAT_TIERS } from './boats';
-import { buildingArt } from './buildings';
-import { decorationArt } from './decorations';
+import { BUILDING_ART_IDS, buildingArt } from './buildings';
+import { DECORATION_ART_IDS, decorationArt } from './decorations';
 import type { ShoreKind } from './ground';
 import { createCanvas, type ArtPiece } from './IsoPainter';
+import { outlined } from './toon';
 import { BROADLEAF_VARIANTS, CONIFER_VARIANTS, broadleafTree, coniferTree, type PlantKind } from './nature';
 import {
   BADGE_KINDS,
@@ -24,6 +25,9 @@ import { railTile, trainArt } from './rail';
 import { constructionSite, cropOverlay, forSaleSign, plotTile, roadTile } from './terrain';
 
 export const WALKER_VARIANTS = 8;
+/** Tailles de chantier disponibles (côté de l'emprise, en cases). */
+export const CONSTRUCTION_SIZES = [1, 2, 3, 4, 5, 6] as const;
+export const MAX_CONSTRUCTION_SIZE = 6;
 export const CLOUD_VARIANTS = 2;
 
 export type TreeKind = 'broadleaf' | 'conifer';
@@ -81,16 +85,32 @@ function compose(base: ArtPiece, overlay: ArtPiece): ArtPiece {
 
 export class ArtLibrary {
   readonly pieces = new Map<string, ArtPiece>();
+  /** Visuels détaillés (bâtiments) dessinés seulement à leur premier usage : démarrage plus rapide. */
+  private readonly lazy = new Map<string, () => ArtPiece | null>();
   private iconCache = new Map<string, string>();
 
   get(key: string): ArtPiece {
-    const piece = this.pieces.get(key);
+    const piece = this.pieces.get(key) ?? this.draw(key);
     if (!piece) throw new Error(`Texture inconnue : ${key}`);
     return piece;
   }
 
   has(key: string): boolean {
-    return this.pieces.has(key);
+    return this.pieces.has(key) || this.lazy.has(key);
+  }
+
+  /** Dessine tout de suite les visuels encore en attente (planche de contrôle). */
+  drawAll(): void {
+    for (const key of [...this.lazy.keys()]) this.draw(key);
+  }
+
+  private draw(key: string): ArtPiece | undefined {
+    const make = this.lazy.get(key);
+    if (!make) return undefined;
+    this.lazy.delete(key);
+    const piece = make();
+    if (piece) this.pieces.set(key, piece);
+    return piece ?? undefined;
   }
 
   /** Visuel dessiné à la première demande, puis conservé. */
@@ -108,7 +128,7 @@ export class ArtLibrary {
     const cacheKey = `${key}@${max}`;
     const cached = this.iconCache.get(cacheKey);
     if (cached) return cached;
-    const piece = this.pieces.get(key);
+    const piece = this.pieces.get(key) ?? this.draw(key);
     if (!piece) return '';
     const { width, height } = piece.canvas;
     const scale = Math.min(1, max / Math.max(width, height));
@@ -127,8 +147,9 @@ export class ArtLibrary {
   static build(): ArtLibrary {
     const lib = new ArtLibrary();
     // Sols, plantes et montagnes sont dessinés à la demande par la carte (MapLayer).
-    for (let i = 0; i < BROADLEAF_VARIANTS; i++) lib.add(ArtKey.tree('broadleaf', i), broadleafTree(i));
-    for (let i = 0; i < CONIFER_VARIANTS; i++) lib.add(ArtKey.tree('conifer', i), coniferTree(i));
+    // Arbres et décors reçoivent un contour fin, assorti à celui des bâtiments.
+    for (let i = 0; i < BROADLEAF_VARIANTS; i++) lib.add(ArtKey.tree('broadleaf', i), outlined(broadleafTree(i), 1.4));
+    for (let i = 0; i < CONIFER_VARIANTS; i++) lib.add(ArtKey.tree('conifer', i), outlined(coniferTree(i), 1.4));
     for (const tier of BOAT_TIERS) lib.add(ArtKey.boat(tier), boatArt(tier));
     lib.add(ArtKey.worker, worker());
     lib.add(ArtKey.hammerTool, hammerTool());
@@ -147,8 +168,13 @@ export class ArtLibrary {
         continue;
       }
       if (def.category === 'farm') lib.add(ArtKey.building(def.id), plot);
-      else if (def.category === 'decoration') lib.add(ArtKey.building(def.id), decorationArt(def.id));
-      else lib.add(ArtKey.building(def.id), buildingArt(def.id));
+      else if (def.category === 'decoration') {
+        if (DECORATION_ART_IDS.includes(def.id))
+          lib.lazy.set(ArtKey.building(def.id), () => {
+            const art = decorationArt(def.id);
+            return art && outlined(art, 1.6);
+          });
+      } else if (BUILDING_ART_IDS.includes(def.id)) lib.lazy.set(ArtKey.building(def.id), () => buildingArt(def.id));
     }
     lib.add(ArtKey.building('road'), roadTile(5));
     for (const crop of CROPS) {
@@ -157,7 +183,7 @@ export class ArtLibrary {
       }
       lib.add(ArtKey.cropIcon(crop.id), compose(plot, lib.get(ArtKey.crop(crop.id, 'ripe'))));
     }
-    for (const size of [1, 2, 3, 4]) lib.add(ArtKey.construction(size), constructionSite(size));
+    for (const size of CONSTRUCTION_SIZES) lib.add(ArtKey.construction(size), constructionSite(size));
     for (const kind of BADGE_KINDS) lib.add(ArtKey.badge(kind), badge(kind));
     lib.add(ArtKey.rail(false), railTile(false));
     lib.add(ArtKey.rail(true), railTile(true));

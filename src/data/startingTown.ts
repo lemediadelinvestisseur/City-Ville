@@ -28,7 +28,7 @@ function roads(): StartingPlacement[] {
 export const STARTING_TOWN: readonly StartingPlacement[] = [
   ...roads(),
   // Bâtiments reliés aux routes (sinon ils ne fonctionnent pas).
-  { defId: 'town_hall', x: 20, y: 17 },
+  { defId: 'town_hall', x: 20, y: 16 },
   { defId: 'barn', x: 17, y: 11 },
   { defId: 'plot', x: 13, y: 15, preset: 'ripeWheat' },
   { defId: 'plot', x: 14, y: 15, preset: 'ripeWheat' },
@@ -36,8 +36,8 @@ export const STARTING_TOWN: readonly StartingPlacement[] = [
   { defId: 'plot', x: 14, y: 16, preset: 'ripeWheat' },
   { defId: 'cottage', x: 17, y: 21, preset: 'rentReady' },
   { defId: 'cottage', x: 14, y: 21, preset: 'rentReady' },
-  { defId: 'flower_bed', x: 23, y: 19 },
-  { defId: 'flower_bed', x: 23, y: 17 },
+  { defId: 'flower_bed', x: 24, y: 19 },
+  { defId: 'flower_bed', x: 24, y: 17 },
   { defId: 'tree_oak', x: 9, y: 9 },
   { defId: 'tree_pine', x: 10, y: 11 },
   { defId: 'tree_oak', x: 8, y: 13 },

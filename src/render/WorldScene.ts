@@ -9,7 +9,7 @@ import { findItemDef } from '@/data/items';
 import { RAIL_END_Y } from '@/data/scenery';
 import { forestDensity } from '@/data/scenery';
 import { isWater, visualTerrainAt } from '@/data/terrain';
-import { ArtKey, CLOUD_VARIANTS } from './art/library';
+import { ArtKey, CLOUD_VARIANTS, MAX_CONSTRUCTION_SIZE } from './art/library';
 import { DEEP_SEA } from './groundStyle';
 import { LOCKED_TINT, MapLayer } from './MapLayer';
 import type { BadgeKind } from './art/sprites';
@@ -319,13 +319,23 @@ export class WorldScene extends Phaser.Scene {
 
   // ———————————————————————————— Vues des constructions ————————————————————————————
 
+  /** Clé de texture, ajoutée à Phaser au premier usage (les bâtiments sont dessinés à la demande). */
+  private texture(key: string): string {
+    if (!this.textures.exists(key)) this.textures.addCanvas(key, this.ctx.art.get(key).canvas);
+    return key;
+  }
+
   private textureFor(entity: Entity): string {
+    return this.texture(this.baseTextureFor(entity));
+  }
+
+  private baseTextureFor(entity: Entity): string {
     const def = getBuildingDef(entity.defId);
     if (def.id === 'road') {
       return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y) || this.map.isWildRoad(x, y), entity.x, entity.y));
     }
     if (def.id === 'rail') return ArtKey.rail(entity.y === RAIL_END_Y);
-    if (!entity.built) return ArtKey.construction(Math.min(4, Math.max(def.size.w, def.size.d)));
+    if (!entity.built) return ArtKey.construction(Math.min(MAX_CONSTRUCTION_SIZE, Math.max(def.size.w, def.size.d)));
     return treeLook(def.id, entity.x, entity.y)?.key ?? ArtKey.building(def.id);
   }
 
@@ -1437,7 +1447,7 @@ export class WorldScene extends Phaser.Scene {
       x = spot.x;
       y = spot.y;
     }
-    const key = defId === 'road' ? ArtKey.road(0) : ArtKey.building(defId);
+    const key = this.texture(defId === 'road' ? ArtKey.road(0) : ArtKey.building(defId));
     const piece = this.ctx.art.get(key);
     const ghost = this.add
       .image(0, 0, key)

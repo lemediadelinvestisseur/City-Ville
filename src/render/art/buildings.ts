@@ -1,5 +1,7 @@
 import { shade } from './color';
-import { boxColors, isoCanvas, type ArtPiece, type IsoPainter } from './IsoPainter';
+import { boxColors, isoCanvas, type ArtPiece, type IsoPainter, type V3 } from './IsoPainter';
+import { HEROES } from './heroes';
+import { drawCottage, layered, roofProp, type RoofProp } from './toon';
 import { signText } from '@/i18n/content';
 
 type Side = 'left' | 'right';
@@ -32,6 +34,10 @@ interface BuildingSpec {
   before?: (p: IsoPainter, g: Geo) => void;
   /** Dessiné après le bâtiment (colonnes, clocher, terrasse…). */
   after?: (p: IsoPainter, g: Geo) => void;
+  /** Objet géant posé sur le toit (enseigne ludique des commerces). */
+  prop?: { kind: RoofProp; scale?: number; x?: number; y?: number };
+  /** Dessin entièrement personnalisé : sol (sans contour) puis objets (contourés). */
+  custom?: (ground: IsoPainter, p: IsoPainter) => void;
 }
 
 const GLASS = '#8fd3f4';
@@ -64,18 +70,26 @@ function drawBuilding(spec: BuildingSpec): ArtPiece {
   const { size } = spec;
   const inset = spec.body.inset;
   const g: Geo = { size, x0: inset, y0: inset, x1: size - inset, y1: size - inset, h: spec.body.h };
-  const height = spec.body.h + spec.roof.h + (spec.extraHeight ?? 0) + 12;
+  const propHeight = spec.prop ? 64 * (spec.prop.scale ?? 1) : 0;
+  const height = spec.body.h + spec.roof.h + Math.max(spec.extraHeight ?? 0, propHeight) + 12;
+  // Deux calques : le sol de la parcelle, puis les volumes, qui reçoivent un contour épais.
+  const ground = isoCanvas(size, size, height);
   const { painter: p, finish } = isoCanvas(size, size, height);
+  const gp = ground.painter;
+  if (spec.custom) {
+    spec.custom(gp, p);
+    return layered(ground.finish(), finish());
+  }
 
   if (spec.lot) {
-    p.flat(0.02, 0.02, size - 0.02, size - 0.02, 0, spec.lot, shade(spec.lot, -0.18));
+    gp.flat(0.02, 0.02, size - 0.02, size - 0.02, 0, spec.lot, shade(spec.lot, -0.18));
   }
+  gp.shadow(g.x0, g.y0, g.x1, g.y1, 0.28);
   if (spec.fence) {
     p.fence([0.06, 0.06], [size - 0.06, 0.06], spec.fence);
     p.fence([0.06, 0.06], [0.06, size - 0.06], spec.fence);
   }
   spec.before?.(p, g);
-  p.shadow(g.x0, g.y0, g.x1, g.y1);
   p.box(g.x0, g.y0, g.x1, g.y1, 0, g.h, boxColors(spec.body.wall));
 
   // Bandeaux entre les étages et en haut des murs.
@@ -162,13 +176,23 @@ function drawBuilding(spec: BuildingSpec): ArtPiece {
 
   spec.after?.(p, g);
 
+  if (spec.prop) {
+    const { kind, scale = 1 } = spec.prop;
+    const x = spec.prop.x ?? (g.x0 + g.x1) / 2;
+    const y = spec.prop.y ?? (g.y0 + g.y1) / 2;
+    // Sur un toit en pente, l'objet est posé sur un mât au-dessus du faîtage.
+    const z = type === 'flat' ? roofZ + h : roofZ + h * 0.75;
+    if (type !== 'flat') p.line([x, y, roofZ], [x, y, z + 4], '#5d4037', 3);
+    roofProp(p, kind, x, y, z, scale);
+  }
+
   if (spec.fence) {
     // Clôture avant, avec un portillon face à la porte.
     p.fence([0.06, size - 0.06], [size * 0.42, size - 0.06], spec.fence);
     p.fence([size * 0.62, size - 0.06], [size - 0.06, size - 0.06], spec.fence);
     p.fence([size - 0.06, 0.06], [size - 0.06, size - 0.06], spec.fence);
   }
-  return finish();
+  return layered(ground.finish(), finish());
 }
 
 // ——— Détails réutilisables ———
@@ -245,6 +269,7 @@ const SPECS: Record<string, BuildingSpec> = {
       bush(p, 0.35, 1.7, 7);
       bush(p, 1.7, 0.4, 6, '#66bb6a');
     },
+    custom: drawCottage,
   },
   bungalow: {
     size: 2,
@@ -342,29 +367,7 @@ const SPECS: Record<string, BuildingSpec> = {
     awning: { side: 'left', colors: ['#e84d84', '#ffffff'] },
     sign: { side: 'left', text: 'BOULANGERIE', bg: '#5d4037', fg: '#ffe0b2' },
     extraHeight: 26,
-    after: (p, g) => {
-      // Gros pain décoratif sur le toit.
-      const [sx, sy] = p.p((g.x0 + g.x1) / 2, (g.y0 + g.y1) / 2, g.h + 18);
-      const { ctx } = p;
-      const grad = ctx.createLinearGradient(sx, sy - 10, sx, sy + 10);
-      grad.addColorStop(0, '#f6c66b');
-      grad.addColorStop(1, '#c9822c');
-      ctx.fillStyle = grad;
-      ctx.strokeStyle = '#8d5a1f';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.ellipse(sx, sy, 22, 10, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.strokeStyle = '#fff2c9';
-      ctx.lineWidth = 2;
-      for (const dx of [-10, 0, 10]) {
-        ctx.beginPath();
-        ctx.moveTo(sx + dx - 3, sy + 3);
-        ctx.lineTo(sx + dx + 4, sy - 5);
-        ctx.stroke();
-      }
-    },
+    prop: { kind: 'cupcake' },
   },
   flower_shop: {
     size: 2,
@@ -376,6 +379,7 @@ const SPECS: Record<string, BuildingSpec> = {
     awning: { side: 'left', colors: ['#3d9a44', '#ffffff'] },
     sign: { side: 'right', text: 'FLEURS', bg: '#2e7d32', fg: '#ffffff' },
     after: (p) => flowerPots(p, 0.75, 1.65, 1.85),
+    prop: { kind: 'flower', scale: 0.9 },
   },
   cafe: {
     size: 2,
@@ -405,6 +409,7 @@ const SPECS: Record<string, BuildingSpec> = {
         p.ctx.fill();
       }
     },
+    prop: { kind: 'coffee', scale: 0.9 },
   },
   pizzeria: {
     size: 2,
@@ -416,27 +421,28 @@ const SPECS: Record<string, BuildingSpec> = {
     awning: { side: 'left', colors: ['#e53935', '#ffffff'] },
     sign: { side: 'right', text: 'PIZZA', bg: '#2e7d32', fg: '#ffffff' },
     chimney: '#8d6e63',
+    prop: { kind: 'pizza', scale: 0.9 },
   },
   grocery: {
-    size: 3,
+    size: 2,
     lot: '#ded8cc',
-    body: { inset: 0.35, h: 60, wall: '#ffe083', floors: 1 },
+    body: { inset: 0.25, h: 58, wall: '#ffe083', floors: 1 },
     roof: { type: 'flat', color: '#9e9e9e', h: 8 },
-    windows: { glass: '#e3f2fd', frame: '#1565c0', perTile: 1.4, big: true },
-    door: { side: 'left', at: 0.5, color: '#1565c0', width: 0.45 },
+    windows: { glass: '#e3f2fd', frame: '#1565c0', perTile: 1.6, big: true },
+    door: { side: 'left', at: 0.5, color: '#1565c0', width: 0.36 },
     awning: { side: 'left', colors: ['#1e88e5', '#ffffff'] },
     sign: { side: 'right', text: 'ÉPICERIE', bg: '#1565c0', fg: '#ffffff' },
-    extraHeight: 20,
-    after: (p, g) => {
-      roofUnits(p, g, g.h + 8);
+    prop: { kind: 'apple', scale: 0.9 },
+    before: (p) => {
+      // Étals de fruits devant la vitrine.
       for (const [x, color] of [
-        [0.6, '#e53935'],
-        [0.95, '#ff9800'],
-        [2.15, '#7cb342'],
-        [2.5, '#fdd835'],
+        [0.4, '#e53935'],
+        [0.66, '#ff9800'],
+        [1.34, '#7cb342'],
+        [1.6, '#fdd835'],
       ] as const) {
-        p.box(x - 0.13, 2.72, x + 0.13, 2.9, 0, 9, boxColors('#a1673f'));
-        for (const dx of [-0.07, 0, 0.07]) p.dot(x + dx, 2.8, 11, 3.2, color);
+        p.box(x - 0.11, 1.8, x + 0.11, 1.95, 0, 9, boxColors('#a1673f'));
+        for (const dx of [-0.06, 0, 0.06]) p.dot(x + dx, 1.87, 11, 3, color);
       }
     },
   },
@@ -462,12 +468,13 @@ const SPECS: Record<string, BuildingSpec> = {
         p.rightQuad(y + 0.04, y + 0.36, 22, 52, g.x1 + 0.015, y < 1.2 ? '#e53935' : '#29b6f6');
       }
     },
+    prop: { kind: 'popcorn', scale: 1.1, x: 1.1, y: 1.6 },
   },
 
   town_hall: {
-    size: 3,
+    size: 4,
     lot: '#e3ded3',
-    body: { inset: 0.42, h: 70, wall: '#f2efe8', floors: 2 },
+    body: { inset: 0.55, h: 84, wall: '#f2efe8', floors: 2 },
     roof: { type: 'gableY', color: '#6f8a99', h: 34 },
     trim: '#d7cfc0',
     windows: { glass: '#b3d9ef', frame: '#ffffff', perTile: 1.3 },
@@ -488,9 +495,9 @@ const SPECS: Record<string, BuildingSpec> = {
     },
   },
   school: {
-    size: 3,
+    size: 4,
     lot: '#d8d2c6',
-    body: { inset: 0.4, h: 62, wall: '#c8603e', floors: 2 },
+    body: { inset: 0.45, h: 74, wall: '#c8603e', floors: 2 },
     roof: { type: 'gableX', color: '#4f5f69', h: 32 },
     trim: '#f3ede3',
     windows: { glass: '#cfe8f7', frame: '#ffffff', perTile: 1.4 },
@@ -645,9 +652,9 @@ const SPECS: Record<string, BuildingSpec> = {
     after: (p, g) => roofUnits(p, g, g.h + 8),
   },
   skyscraper: {
-    size: 3,
+    size: 4,
     lot: '#b0bec5',
-    body: { inset: 0.45, h: 300, wall: '#5c7a99', floors: 12 },
+    body: { inset: 0.6, h: 390, wall: '#5c7a99', floors: 15 },
     roof: { type: 'flat', color: '#37474f', h: 10 },
     trim: '#cfd8dc',
     windows: { glass: '#b3e5fc', frame: '#263238', perTile: 1.8 },
@@ -693,6 +700,7 @@ const SPECS: Record<string, BuildingSpec> = {
     door: { side: 'left', at: 0.8, color: '#880e4f' },
     awning: { side: 'left', colors: ['#212121', '#ffffff'] },
     sign: { side: 'right', text: 'MODE', bg: '#212121', fg: '#f8bbd0' },
+    prop: { kind: 'handbag', scale: 0.9 },
   },
   bookshop: {
     size: 2,
@@ -703,6 +711,7 @@ const SPECS: Record<string, BuildingSpec> = {
     door: { side: 'left', at: 0.2, color: '#1b5e20' },
     awning: { side: 'left', colors: ['#2e7d32', '#fff8e1'] },
     sign: { side: 'right', text: 'LIVRES', bg: '#1b5e20', fg: '#fff8e1' },
+    prop: { kind: 'books', scale: 0.85 },
   },
   restaurant: {
     size: 3,
@@ -721,11 +730,12 @@ const SPECS: Record<string, BuildingSpec> = {
         p.groundEllipse(x, 2.8, 12, 0.11, '#ffffff', '#bdbdbd');
       }
     },
+    prop: { kind: 'burger', scale: 1.1 },
   },
   supermarket: {
-    size: 3,
+    size: 4,
     lot: '#cfcac0',
-    body: { inset: 0.25, h: 64, wall: '#eceff1', floors: 1 },
+    body: { inset: 0.3, h: 70, wall: '#eceff1', floors: 1 },
     roof: { type: 'flat', color: '#9e9e9e', h: 8 },
     trim: '#e53935',
     windows: { glass: '#e3f2fd', frame: '#c62828', perTile: 1.5, big: true },
@@ -759,9 +769,9 @@ const SPECS: Record<string, BuildingSpec> = {
     },
   },
   mall: {
-    size: 4,
+    size: 5,
     lot: '#cfcac0',
-    body: { inset: 0.3, h: 84, wall: '#e1f5fe', floors: 2 },
+    body: { inset: 0.35, h: 96, wall: '#e1f5fe', floors: 2 },
     roof: { type: 'flat', color: '#90a4ae', h: 8 },
     trim: '#0288d1',
     windows: { glass: '#b3e5fc', frame: '#0277bd', perTile: 1.5, big: true },
@@ -804,17 +814,17 @@ const SPECS: Record<string, BuildingSpec> = {
     },
   },
   amusement_park: {
-    size: 4,
+    size: 5,
     lot: '#c5e1a5',
     fence: '#ffffff',
-    body: { inset: 1.4, h: 40, wall: '#ffcc80', floors: 1 },
+    body: { inset: 1.8, h: 40, wall: '#ffcc80', floors: 1 },
     roof: { type: 'pyramid', color: '#e53935', h: 30 },
     windows: { glass: '#fff8e1', frame: '#ffffff', perTile: 1.2 },
     door: { side: 'left', at: 0.5, color: '#bf360c' },
     extraHeight: 110,
     before: (p) => {
       // Grande roue à l'arrière.
-      const [sx, sy] = p.p(0.9, 0.9, 80);
+      const [sx, sy] = p.p(1.1, 1.1, 80);
       const { ctx } = p;
       ctx.strokeStyle = '#9e9e9e';
       ctx.lineWidth = 3;
@@ -843,9 +853,9 @@ const SPECS: Record<string, BuildingSpec> = {
     },
     after: (p) => {
       // Manège.
-      p.groundEllipse(3.0, 3.0, 0, 0.55, '#fff59d', '#f9a825');
-      p.line([3.0, 3.0, 0], [3.0, 3.0, 32], '#fdd835', 3);
-      const [sx, sy] = p.p(3.0, 3.0, 32);
+      p.groundEllipse(3.9, 3.9, 0, 0.6, '#fff59d', '#f9a825');
+      p.line([3.9, 3.9, 0], [3.9, 3.9, 32], '#fdd835', 3);
+      const [sx, sy] = p.p(3.9, 3.9, 32);
       p.ctx.fillStyle = '#ec407a';
       p.ctx.beginPath();
       p.ctx.moveTo(sx - 30, sy + 12);
@@ -853,14 +863,50 @@ const SPECS: Record<string, BuildingSpec> = {
       p.ctx.lineTo(sx + 30, sy + 12);
       p.ctx.closePath();
       p.ctx.fill();
-      bush(p, 0.4, 3.6, 8);
-      bush(p, 3.6, 0.4, 8);
+      // Montagnes russes le long du côté droit : rail rouge sur piliers.
+      const track: V3[] = [];
+      for (let i = 0; i <= 24; i++) {
+        const t = i / 24;
+        track.push([4.45, 0.5 + t * 3.0, 14 + 34 * Math.abs(Math.sin(t * Math.PI * 2.2))]);
+      }
+      for (let i = 0; i < track.length; i += 3) {
+        const [x, y, z] = track[i]!;
+        p.line([x, y, 0], [x, y, z], '#90a4ae', 2);
+      }
+      for (let i = 1; i < track.length; i++) p.line(track[i - 1]!, track[i]!, '#e53935', 4);
+      // Stands de barbe à papa et ballons.
+      for (const [x, y, color] of [
+        [1.2, 4.3, '#f48fb1'],
+        [2.0, 4.4, '#4fc3f7'],
+      ] as const) {
+        p.box(x - 0.15, y - 0.15, x + 0.15, y + 0.15, 0, 16, boxColors(color));
+        p.pyramidRoof(x - 0.15, y - 0.15, x + 0.15, y + 0.15, 16, 12, '#ffffff', 0.05);
+      }
+      for (const [dx, color] of [
+        [0, '#e53935'],
+        [6, '#fdd835'],
+        [-6, '#43a047'],
+      ] as const) {
+        const [sx, sy] = p.p(2.6, 4.4, 30);
+        p.ctx.strokeStyle = '#757575';
+        p.ctx.lineWidth = 1;
+        p.ctx.beginPath();
+        p.ctx.moveTo(sx, sy + 30);
+        p.ctx.lineTo(sx + dx, sy);
+        p.ctx.stroke();
+        p.ctx.fillStyle = color;
+        p.ctx.beginPath();
+        p.ctx.ellipse(sx + dx, sy - 5, 5, 6.5, 0, 0, Math.PI * 2);
+        p.ctx.fill();
+      }
+      bush(p, 0.4, 4.6, 8);
+      bush(p, 4.6, 0.4, 8);
     },
   },
   stadium: {
-    size: 4,
+    size: 6,
     lot: '#cfcac0',
-    body: { inset: 0.15, h: 50, wall: '#eceff1', floors: 2 },
+    body: { inset: 0.2, h: 70, wall: '#eceff1', floors: 2 },
     roof: { type: 'flat', color: '#b0bec5', h: 6 },
     trim: '#1e88e5',
     door: { side: 'left', at: 0.5, color: '#1565c0', width: 0.5 },
@@ -884,18 +930,18 @@ const SPECS: Record<string, BuildingSpec> = {
 
   // ——— Services (suite) ———
   library: {
-    size: 2,
+    size: 3,
     lot: '#e3ded3',
-    body: { inset: 0.3, h: 60, wall: '#efe6d2', floors: 1 },
+    body: { inset: 0.4, h: 72, wall: '#efe6d2', floors: 2 },
     roof: { type: 'gableY', color: '#6d4c41', h: 28 },
     windows: { glass: '#fff8e1', frame: '#8d6e63', perTile: 1.4 },
     door: { side: 'left', at: 0.5, color: '#5d4037' },
     sign: { side: 'left', text: 'BIBLIOTHÈQUE', bg: '#5d4037', fg: '#fff8e1' },
   },
   hospital: {
-    size: 3,
+    size: 4,
     lot: '#e0e0e0',
-    body: { inset: 0.3, h: 110, wall: '#fafafa', floors: 4 },
+    body: { inset: 0.35, h: 150, wall: '#fafafa', floors: 5 },
     roof: { type: 'flat', color: '#b0bec5', h: 8 },
     trim: '#4caf50',
     windows: { glass: '#b2ebf2', frame: '#ffffff', perTile: 1.6 },
@@ -926,9 +972,9 @@ const SPECS: Record<string, BuildingSpec> = {
     },
   },
   university: {
-    size: 3,
+    size: 5,
     lot: '#a8d672',
-    body: { inset: 0.4, h: 84, wall: '#b0412e', floors: 3 },
+    body: { inset: 0.6, h: 110, wall: '#b0412e', floors: 3 },
     roof: { type: 'gableY', color: '#37474f', h: 34 },
     trim: '#f5f0e6',
     windows: { glass: '#cfe8f7', frame: '#ffffff', perTile: 1.4 },
@@ -940,9 +986,9 @@ const SPECS: Record<string, BuildingSpec> = {
     },
   },
   museum: {
-    size: 3,
+    size: 4,
     lot: '#e8e2d4',
-    body: { inset: 0.4, h: 70, wall: '#f5f0e6', floors: 1 },
+    body: { inset: 0.5, h: 82, wall: '#f5f0e6', floors: 1 },
     roof: { type: 'gableY', color: '#bdb6a8', h: 26 },
     door: { side: 'left', at: 0.5, color: '#5d4037', width: 0.4 },
     sign: { side: 'left', text: 'MUSÉE', bg: '#f5f0e6', fg: '#5d4037' },
@@ -956,9 +1002,9 @@ const SPECS: Record<string, BuildingSpec> = {
     },
   },
   convention_center: {
-    size: 3,
+    size: 4,
     lot: '#cfd8dc',
-    body: { inset: 0.25, h: 70, wall: '#80cbc4', floors: 2 },
+    body: { inset: 0.3, h: 80, wall: '#80cbc4', floors: 2 },
     roof: { type: 'flat', color: '#00695c', h: 8 },
     trim: '#e0f2f1',
     windows: { glass: '#e0f7fa', frame: '#004d40', perTile: 1.8, big: true },
@@ -968,9 +1014,9 @@ const SPECS: Record<string, BuildingSpec> = {
     after: (p, g) => roofUnits(p, g, g.h + 8),
   },
   airport: {
-    size: 4,
+    size: 6,
     lot: '#9e9e9e',
-    body: { inset: 0.25, h: 56, wall: '#eceff1', floors: 1 },
+    body: { inset: 0.3, h: 64, wall: '#eceff1', floors: 1 },
     roof: { type: 'flat', color: '#cfd8dc', h: 6 },
     trim: '#1565c0',
     windows: { glass: '#b3e5fc', frame: '#1565c0', perTile: 1.8, big: true },
@@ -1268,7 +1314,13 @@ const SPECS: Record<string, BuildingSpec> = {
 
 export function buildingArt(defId: string): ArtPiece | null {
   const spec = SPECS[defId];
-  return spec ? drawBuilding(spec) : null;
+  if (!spec) return null;
+  const hero = HEROES[defId];
+  if (!hero) return drawBuilding(spec);
+  const ground = isoCanvas(spec.size, spec.size, hero.height + 12);
+  const objects = isoCanvas(spec.size, spec.size, hero.height + 12);
+  hero.draw(ground.painter, objects.painter);
+  return layered(ground.finish(), objects.finish());
 }
 
 export const BUILDING_ART_IDS = Object.keys(SPECS);

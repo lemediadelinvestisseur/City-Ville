@@ -57,12 +57,14 @@ export const CONTENT_LEVEL = 30;
  * XP cumulée pour atteindre chaque niveau (index = niveau). Calibrée avec le
  * joueur simulé (src/core/simulation.ts, 4 connexions par jour, un seul ouvrier) : niveau 10
  * vers le 3e jour, niveau 20 vers le 13e, niveau 30 vers le 23e. Un vrai joueur,
- * moins assidu, y arrive en trois semaines environ. Au-delà de la table,
+ * moins assidu, y arrive en trois semaines environ. Depuis les emprises agrandies (plus de
+ * terrain à acheter), l'XP demandée baisse progressivement à partir du niveau 17, puis de
+ * 5 % de plus à partir du niveau 19 (produits à fabriquer, commerces plus exigeants). Au-delà de la table,
  * chaque niveau coûte 12 % de plus.
  */
 const XP_TABLE: readonly number[] = [
-  0, 0, 15, 55, 120, 210, 400, 570, 760, 1000, 1250, 1600, 2200, 2950, 4000, 5300, 6750, 8150, 9650, 10400, 12000,
-  13700, 15900, 18000, 20100, 22350, 24700, 27250, 29900, 32950, 36500,
+  0, 0, 15, 55, 120, 210, 400, 570, 760, 1000, 1250, 1600, 2200, 2950, 4000, 5300, 6750, 8000, 9350, 10000, 11300,
+  12750, 14450, 16400, 18300, 20350, 22450, 24800, 27150, 29950, 33200,
 ];
 
 export function xpForLevel(level: number): number {

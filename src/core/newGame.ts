@@ -6,7 +6,7 @@ import { chunkKey } from './grid';
 import { emptyOrders } from './orders';
 import type { DailyState, Entity, GameState } from './types';
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 /** Ouvriers au début de la partie (un deuxième s'achète dans la boutique). */
 export const START_WORKERS = 1;

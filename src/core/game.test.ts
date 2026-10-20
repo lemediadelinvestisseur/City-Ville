@@ -971,12 +971,12 @@ describe('produits et vie de la ville', () => {
     expect(game.claimOrdersBonus().ok).toBe(true);
   });
 
-  it('migre une sauvegarde v7 : les marchandises deviennent du blé', () => {
+  it('migre une sauvegarde v8 : les marchandises deviennent du blé', () => {
     const { game } = setup();
     const state = JSON.parse(JSON.stringify(game.state)) as Record<string, unknown>;
     for (const key of ['inventory', 'meals', 'orders', 'chest', 'visitor', 'nextVisitorAt', 'wheel']) delete state[key];
     state.goods = 75;
-    const restored = deserialize(JSON.stringify({ version: 7, savedAt: game.now(), state }));
+    const restored = deserialize(JSON.stringify({ version: 8, savedAt: game.now(), state }));
     expect(restored?.inventory).toEqual({ wheat: 75 });
     expect(restored?.meals.fedUntil).toBeGreaterThan(game.now());
     expect(restored?.visitor).toBeNull();
