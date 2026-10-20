@@ -412,6 +412,44 @@ describe('marché', () => {
   });
 });
 
+describe('notifications Web Push', () => {
+  const subscription = { endpoint: 'https://web.push.apple.com/abc123', p256dh: 'p'.repeat(87), auth: 'a'.repeat(22) };
+
+  it('programme les rappels de l’appareil et remplace la liste précédente', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await newPlayer(t, 1, 'Léa');
+    const soon = Date.now() + 60_000;
+    const items = [
+      { at: soon, title: 'City Ville', body: 'Vos fraises sont prêtes !' },
+      { at: soon + 60_000, title: 'City Ville', body: 'Le train est rentré !' },
+      { at: Date.now() - 1000, title: 'City Ville', body: 'Déjà passé' },
+    ];
+    expect(await t.mutation(api.push.schedule, { token: lea.token, subscription, items })).toEqual({ scheduled: 2 });
+    expect(await t.mutation(api.push.schedule, { token: lea.token, subscription, items: items.slice(0, 1) })).toEqual({
+      scheduled: 1,
+    });
+    const jobs = await t.run((ctx) => ctx.db.query('pushJobs').collect());
+    expect(jobs.map((j) => j.body)).toEqual(['Vos fraises sont prêtes !']);
+    const scheduled = await t.run((ctx) => ctx.db.system.query('_scheduled_functions').collect());
+    expect(scheduled.filter((f) => f.state.kind === 'pending')).toHaveLength(1);
+    expect(await t.run((ctx) => ctx.db.query('pushSubscriptions').collect())).toHaveLength(1);
+    await t.mutation(api.push.unsubscribe, { token: lea.token, endpoint: subscription.endpoint });
+    expect(await t.run((ctx) => ctx.db.query('pushJobs').collect())).toHaveLength(0);
+  });
+
+  it('refuse une adresse qui n’est pas un service d’envoi de notifications', async () => {
+    const t = convexTest(schema, modules);
+    const lea = await newPlayer(t, 1, 'Léa');
+    await expect(
+      t.mutation(api.push.schedule, {
+        token: lea.token,
+        subscription: { ...subscription, endpoint: 'https://exemple.fr/piege' },
+        items: [],
+      }),
+    ).rejects.toThrow(/invalidText/);
+  });
+});
+
 describe('page de confidentialité', () => {
   it('est servie en HTML sur /confidentialite', async () => {
     const t = convexTest(schema, modules);

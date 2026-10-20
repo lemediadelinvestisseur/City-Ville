@@ -176,6 +176,25 @@ export interface Backend {
   reportChat(id: string): Promise<void>;
   mute(playerId: string, minutes: number): Promise<void>;
   announcements(channels: string[]): Promise<Announcement[]>;
+
+  /** Clé publique Web Push du serveur (null : pas de serveur ou pas de compte). */
+  pushPublicKey(): Promise<string | null>;
+  /** Remplace les rappels programmés sur le serveur pour cet appareil. */
+  pushSchedule(subscription: PushKeys, items: PushItem[]): Promise<void>;
+  pushUnsubscribe(endpoint: string): Promise<void>;
+}
+
+/** Abonnement Web Push d'un appareil (adresse du service d'envoi et clés de chiffrement). */
+export interface PushKeys {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+export interface PushItem {
+  at: number;
+  title: string;
+  body: string;
 }
 
 /** Plateforme de l'appareil, pour les statistiques. */

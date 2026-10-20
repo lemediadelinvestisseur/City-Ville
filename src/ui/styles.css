@@ -1273,6 +1273,14 @@ button:focus-visible {
   color: var(--green-dark);
 }
 
+.bubble__warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 800;
+  color: #c62828;
+}
+
 .bubble__timer {
   display: flex;
   align-items: center;

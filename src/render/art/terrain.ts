@@ -88,28 +88,28 @@ export function roadTile(mask: number): ArtPiece {
 
 const SOIL = '#8b6240';
 
-/** Champ labouré 2 × 2. */
+/** Champ labouré 1 × 1. */
 export function plotTile(): ArtPiece {
-  const { painter, finish } = isoCanvas(2, 2, 8);
-  painter.flat(0.02, 0.02, 1.98, 1.98, 0, shade(SOIL, -0.25));
-  painter.box(0.06, 0.06, 1.94, 1.94, 0, 4, { top: SOIL, left: shade(SOIL, -0.15), right: shade(SOIL, -0.3) });
-  for (let i = 0; i < 6; i++) {
-    const y = 0.16 + i * 0.3;
+  const { painter, finish } = isoCanvas(1, 1, 6);
+  painter.flat(0.02, 0.02, 0.98, 0.98, 0, shade(SOIL, -0.25));
+  painter.box(0.05, 0.05, 0.95, 0.95, 0, 3, { top: SOIL, left: shade(SOIL, -0.15), right: shade(SOIL, -0.3) });
+  for (let i = 0; i < 3; i++) {
+    const y = 0.13 + i * 0.27;
     painter.fill(
       [
-        [0.12, y, 4],
-        [1.88, y, 4],
-        [1.88, y + 0.13, 4],
-        [0.12, y + 0.13, 4],
+        [0.1, y, 3],
+        [0.9, y, 3],
+        [0.9, y + 0.11, 3],
+        [0.1, y + 0.11, 3],
       ],
       shade(SOIL, -0.18),
     );
     painter.fill(
       [
-        [0.12, y + 0.13, 4],
-        [1.88, y + 0.13, 4],
-        [1.88, y + 0.16, 4],
-        [0.12, y + 0.16, 4],
+        [0.1, y + 0.11, 3],
+        [0.9, y + 0.11, 3],
+        [0.9, y + 0.14, 3],
+        [0.1, y + 0.14, 3],
       ],
       shade(SOIL, 0.12),
     );
@@ -122,23 +122,33 @@ type CropStage = 'sprout' | 'growing' | 'ripe';
 /** Positions des plants d'un champ, de l'arrière vers l'avant. */
 function plantPositions(): Array<[number, number]> {
   const list: Array<[number, number]> = [];
-  for (let row = 0; row < 6; row++) {
-    for (let col = 0; col < 5; col++) {
-      list.push([0.3 + col * 0.35, 0.22 + row * 0.3]);
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      list.push([0.2 + col * 0.3, 0.19 + row * 0.27]);
     }
   }
   return list.sort((a, b) => a[0] + a[1] - (b[0] + b[1]));
 }
 
+const PLANT_SCALE = 0.72;
+
 /** Cultures posées sur un champ (même cadrage que `plotTile`). */
 export function cropOverlay(cropId: string, stage: CropStage): ArtPiece {
-  const { painter, finish } = isoCanvas(2, 2, 40);
+  const { painter, finish } = isoCanvas(1, 1, 30);
   const { ctx } = painter;
   const rand = seeded(cropId.length * 31 + stage.length);
   const leaf = '#4caf50';
   const leafDark = '#2e7d32';
+  ctx.save();
   for (const [x, y] of plantPositions()) {
-    const [sx, sy] = painter.p(x, y, 4);
+    const [px, py] = painter.p(x, y, 3);
+    // Plants à l'échelle d'un champ d'une case (dessinés autour de leur pied).
+    ctx.restore();
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.scale(PLANT_SCALE, PLANT_SCALE);
+    const sx = 0;
+    const sy = 0;
     const j = (rand() - 0.5) * 3;
     if (stage === 'sprout') {
       ctx.fillStyle = '#7cd16b';
@@ -348,6 +358,7 @@ export function cropOverlay(cropId: string, stage: CropStage): ArtPiece {
         break;
     }
   }
+  ctx.restore();
   return finish();
 }
 

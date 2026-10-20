@@ -5,7 +5,17 @@ const INBOX_KEY = 'city-ville:inbox';
 const MAX_ITEMS = 50;
 
 export type InboxKind =
-  'crop' | 'build' | 'boat' | 'business' | 'quest' | 'level' | 'daily' | 'neighbor' | 'market' | 'announcement';
+  | 'crop'
+  | 'build'
+  | 'boat'
+  | 'train'
+  | 'business'
+  | 'quest'
+  | 'level'
+  | 'daily'
+  | 'neighbor'
+  | 'market'
+  | 'announcement';
 
 /** Où mène un message quand on le touche. */
 export type InboxTarget =

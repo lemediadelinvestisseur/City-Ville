@@ -5,6 +5,7 @@ import { CHUNKS_X, CHUNKS_Y, chunkOf, roadMask } from '@/core/grid';
 import type { Entity, FailReason, Reward } from '@/core/types';
 import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
+import { RAIL_END_Y } from '@/data/scenery';
 import { isWater } from '@/data/terrain';
 import { ArtKey, CLOUD_VARIANTS, MAX_CONSTRUCTION_SIZE } from './art/library';
 import { DEEP_SEA } from './groundStyle';
@@ -47,6 +48,8 @@ interface View {
   /** Bateau amarré (ou parti en mer) d'un port. */
   boat: Phaser.GameObjects.Image | null;
   boatHome: { x: number; y: number } | null;
+  /** Train à quai d'une gare (caché pendant une livraison). */
+  train: Phaser.GameObjects.Image | null;
   /** Étoiles d'amélioration, au pied du bâtiment. */
   stars: Phaser.GameObjects.Text | null;
 }
@@ -301,6 +304,7 @@ export class WorldScene extends Phaser.Scene {
     if (def.id === 'road') {
       return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y) || this.map.isWildRoad(x, y), entity.x, entity.y));
     }
+    if (def.id === 'rail') return ArtKey.rail(entity.y === RAIL_END_Y);
     if (!entity.built) return ArtKey.construction(Math.min(MAX_CONSTRUCTION_SIZE, Math.max(def.size.w, def.size.d)));
     return treeLook(def.id, entity.x, entity.y)?.key ?? ArtKey.building(def.id);
   }
@@ -321,6 +325,10 @@ export class WorldScene extends Phaser.Scene {
         return 'build';
       case 'unloadBoat':
         return 'fish';
+      case 'unloadTrain':
+        return 'train';
+      case 'needsRoad':
+        return 'road';
       case 'collectRent':
       case 'collectBusiness':
         return 'coin';
@@ -334,7 +342,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private isFlat(entity: Entity): boolean {
-    return entity.defId === 'road';
+    return entity.defId === 'road' || entity.defId === 'rail';
   }
 
   private addView(entity: Entity): void {
@@ -355,6 +363,7 @@ export class WorldScene extends Phaser.Scene {
       crew: null,
       boat: null,
       boatHome: null,
+      train: null,
       stars: null,
     };
     this.views.set(entity.id, view);
@@ -372,6 +381,7 @@ export class WorldScene extends Phaser.Scene {
     view.crew?.worker.destroy();
     view.crew?.hammer.destroy();
     view.boat?.destroy();
+    view.train?.destroy();
     view.stars?.destroy();
     this.views.delete(id);
     if (this.selectedId === id) this.select(null);
@@ -442,6 +452,7 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     this.syncBoat(view);
+    this.syncTrain(view);
     this.syncTimer(view);
     this.syncCrew(view);
     this.syncStars(view);
@@ -554,6 +565,7 @@ export class WorldScene extends Phaser.Scene {
     const works = worksOf(entity);
     if (works && now < works.endsAt) return works.endsAt;
     if (entity.port?.tripId && now < entity.port.readyAt) return entity.port.readyAt;
+    if (entity.station?.shipmentId && now < entity.station.readyAt) return entity.station.readyAt;
     return null;
   }
 
@@ -661,6 +673,40 @@ export class WorldScene extends Phaser.Scene {
     else view.boat.clearTint();
   }
 
+  /** Première case de voie (au nord) où stationne le train d'une gare, ou null. */
+  private platform(entity: Entity): { x: number; y: number } | null {
+    const { w, d } = getBuildingDef(entity.defId).size;
+    for (const x of [entity.x - 1, entity.x + w]) {
+      for (let j = 0; j < d; j++) {
+        if (!this.game_.isRail(x, entity.y + j)) continue;
+        // Le train occupe trois cases : il s'arrête avant le butoir.
+        return { x, y: Math.max(0, Math.min(entity.y, RAIL_END_Y - 2)) };
+      }
+    }
+    return null;
+  }
+
+  /** Train à quai ; caché pendant une livraison (il part par le tunnel du nord). */
+  private syncTrain(view: View): void {
+    const { entity } = view;
+    const spot = entity.built && entity.station ? this.platform(entity) : null;
+    if (!spot) {
+      view.train?.destroy();
+      view.train = null;
+      return;
+    }
+    if (!view.train) {
+      const piece = this.ctx.art.get(ArtKey.train);
+      view.train = this.add.image(0, 0, ArtKey.train).setOrigin(piece.originX, piece.originY);
+    }
+    const pos = tileToWorld(spot.x, spot.y);
+    const away = !!entity.station?.shipmentId && this.game_.now() < (entity.station?.readyAt ?? 0);
+    view.train
+      .setPosition(pos.x, pos.y)
+      .setDepth(depthOf(spot.x, spot.y, 1, 3))
+      .setVisible(!away);
+  }
+
   /** Haut visuel d'une construction (en coordonnées monde). */
   private topOf(view: View): number {
     const { main } = view;
@@ -674,15 +720,25 @@ export class WorldScene extends Phaser.Scene {
   private refreshDynamic(): void {
     this.night.refresh(Date.now(), this.game_.state.entities, (e) => this.game_.isTileUnlocked(e.x, e.y));
     for (const view of this.views.values()) {
-      if (view.timer || worksOf(view.entity) || view.entity.port?.tripId) this.syncTimer(view);
+      if (view.timer || worksOf(view.entity) || view.entity.port?.tripId || view.entity.station?.shipmentId)
+        this.syncTimer(view);
       const e = view.entity;
-      if (e.house || e.business || e.farm || e.port || worksOf(e)) {
+      const roadIssue = view.badgeKind === 'road' || !this.game_.isConnected(e);
+      if (e.house || e.business || e.farm || e.port || e.station || worksOf(e) || roadIssue) {
         const badge = this.badgeFor(e);
         const progress = this.buildProgress(e);
         const barChanged = progress !== null && !view.barKey.startsWith(`${progress}@`);
         const atSea = !!e.port?.tripId && this.game_.now() < e.port.readyAt;
         const boatChanged = !!view.boat && view.boat.visible === atSea;
-        if (badge !== view.badgeKind || this.cropKeyFor(e) !== view.cropKey || barChanged || boatChanged)
+        const away = !!e.station?.shipmentId && this.game_.now() < e.station.readyAt;
+        const trainChanged = !!view.train && view.train.visible === away;
+        if (
+          badge !== view.badgeKind ||
+          this.cropKeyFor(e) !== view.cropKey ||
+          barChanged ||
+          boatChanged ||
+          trainChanged
+        )
           this.syncView(view);
       }
     }
@@ -1090,7 +1146,8 @@ export class WorldScene extends Phaser.Scene {
     }
     if (this.mode === 'edit') {
       const entity = this.pick(x, y, true);
-      if (entity && this.game_.isTileUnlocked(entity.x, entity.y)) this.select(entity.id);
+      // La voie ferrée fait partie de la carte : elle ne se déplace pas.
+      if (entity && entity.defId !== 'rail' && this.game_.isTileUnlocked(entity.x, entity.y)) this.select(entity.id);
       else this.select(null);
       return;
     }
@@ -1130,6 +1187,9 @@ export class WorldScene extends Phaser.Scene {
       case 'unloadBoat':
         result = game.unloadBoat(entity.id);
         if (result.ok && view) this.supplyFx(view);
+        break;
+      case 'unloadTrain':
+        result = game.unloadTrain(entity.id);
         break;
       case 'collectRent':
         result = game.collectRent(entity.id);
@@ -1247,11 +1307,17 @@ export class WorldScene extends Phaser.Scene {
   private nearestFreeSpot(cx: number, cy: number, defId: string): { x: number; y: number } {
     const def = getBuildingDef(defId);
     const radius = def.placement === 'bridge' ? 40 : 10;
-    for (let r = 0; r <= radius; r++) {
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          if (this.game_.checkPlacement(def, cx + dx, cy + dy) === null) return { x: cx + dx, y: cy + dy };
+    // D'abord une place au bord d'une route (le bâtiment y fonctionnera), sinon la plus proche.
+    for (const connected of [true, false]) {
+      for (let r = 0; r <= radius; r++) {
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const x = cx + dx;
+            const y = cy + dy;
+            if (connected && !this.game_.wouldConnect(def, x, y)) continue;
+            if (this.game_.checkPlacement(def, x, y) === null) return { x, y };
+          }
         }
       }
     }

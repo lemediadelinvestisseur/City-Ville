@@ -4,7 +4,8 @@ import { CHANNEL_WIDTH, CHUNK_SIZE, EAST_CHUNK_X, MAP_H, MAP_W } from './balance
 /**
  * Géographie fixe de la carte (identique pour tous les joueurs) :
  * - un bras de mer du nord au sud sépare la rive ouest (ville de départ) de la rive est ;
- * - la mer borde le sud et l'ouest, des montagnes ferment le nord, un massif se dresse au nord-est ;
+ * - la mer borde le sud et l'ouest ; au nord, une bande de forêt à acheter mène aux montagnes, qui
+ *   commencent au-delà de la carte ; un massif se dresse au nord-est (ses zones ne s'achètent pas) ;
  * - quelques lacs parsèment les deux rives.
  * Tout est calculé à partir de fonctions déterministes : rien n'est stocké dans la sauvegarde.
  */
@@ -52,12 +53,6 @@ function westSeaX(y: number): number {
   return Math.floor(smoothNoise(0, y, 7, 12) * 3) - 1;
 }
 
-/** Limite sud des montagnes du nord, pour une colonne donnée. */
-function northRockY(x: number): number {
-  // La ville de départ (rangées 8 et plus) reste dégagée.
-  return 2 + Math.floor(smoothNoise(x, 0, 6, 13) * 5);
-}
-
 const MASSIF = { x: 104, y: 22, r: 15 };
 
 const LAKES: ReadonlyArray<{ x: number; y: number; rx: number; ry: number }> = [
@@ -86,7 +81,7 @@ export function terrainAt(x: number, y: number): Terrain {
   const east = eastCoastX(y);
   if (x >= west && x < east) return 'water';
   if (y >= southSeaY(x) || x <= westSeaX(y) || inLake(x, y)) return 'water';
-  if (y < northRockY(x) || inMassif(x, y)) return 'rock';
+  if (inMassif(x, y)) return 'rock';
   if (x === west - 1 || x === east || y === southSeaY(x) - 1 || x === westSeaX(y) + 1) return 'sand';
   if (x === MAP_W - 1) return 'sand';
   return 'grass';
@@ -115,6 +110,29 @@ export function visualTerrainAt(x: number, y: number): Terrain {
 /** Une zone d'agrandissement est-elle sur la rive est ? */
 export function isEastChunk(cx: number): boolean {
   return cx >= EAST_CHUNK_X;
+}
+
+/** Une zone d'agrandissement touche-t-elle la montagne ? Les montagnes ne s'achètent pas. */
+export function chunkHasMountain(cx: number, cy: number): boolean {
+  const key = cy * 1000 + cx;
+  let known = MOUNTAIN_CHUNKS.get(key);
+  if (known === undefined) {
+    known = scanChunkForMountain(cx, cy);
+    MOUNTAIN_CHUNKS.set(key, known);
+  }
+  return known;
+}
+
+/** La géographie est fixe : le résultat par zone est gardé en mémoire. */
+const MOUNTAIN_CHUNKS = new Map<number, boolean>();
+
+function scanChunkForMountain(cx: number, cy: number): boolean {
+  for (let y = cy * CHUNK_SIZE; y < Math.min(MAP_H, (cy + 1) * CHUNK_SIZE); y++) {
+    for (let x = cx * CHUNK_SIZE; x < Math.min(MAP_W, (cx + 1) * CHUNK_SIZE); x++) {
+      if (terrainAt(x, y) === 'rock') return true;
+    }
+  }
+  return false;
 }
 
 /** Une zone d'agrandissement contient-elle au moins une case constructible ? */

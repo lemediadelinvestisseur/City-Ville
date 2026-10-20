@@ -19,6 +19,8 @@ export interface ContentTranslations {
   categories: Record<string, string>;
   crops: Record<string, string>;
   trips: Record<string, string>;
+  /** Livraisons par le train. */
+  shipments: Record<string, string>;
   quests: Record<string, { title: string; intro: string; labels: string[] }>;
   products: Record<string, { title: string; description: string; badge?: string }>;
   offers: Record<string, { title: string; description: string }>;

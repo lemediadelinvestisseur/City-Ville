@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import { normalizePseudo, pseudoKey, validatePseudo } from '../src/core/pseudo';
 import { isLanguage } from '../src/data/languages';
 import type { Id, TableNames } from './_generated/dataModel';
+import { cancelPushJobs } from './push';
 import { mutation, query, type MutationCtx } from './_generated/server';
 import { dayOf, fail, publicProfile, requirePlayer, sha256 } from './lib/util';
 
@@ -234,7 +235,12 @@ export async function deletePlayerData(ctx: MutationCtx, playerId: Id<'players'>
       .query('chatMessages')
       .withIndex('by_player', (q) => q.eq('playerId', playerId))
       .collect()),
+    ...(await ctx.db
+      .query('pushSubscriptions')
+      .withIndex('by_player', (q) => q.eq('playerId', playerId))
+      .collect()),
   ];
+  await cancelPushJobs(ctx, playerId);
   for (const doc of docs) await ctx.db.delete(doc._id);
   await ctx.db.delete(playerId);
 }

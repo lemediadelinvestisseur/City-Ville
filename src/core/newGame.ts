@@ -5,7 +5,10 @@ import { STARTING_TOWN, type StartingPlacement } from '@/data/startingTown';
 import { chunkKey } from './grid';
 import type { DailyState, Entity, GameState } from './types';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
+
+/** Ouvriers au début de la partie (un deuxième s'achète dans la boutique). */
+export const START_WORKERS = 1;
 
 export function emptyDaily(): DailyState {
   return { day: '', tasks: [], bonus: {}, bonusClaimed: false };
@@ -26,6 +29,9 @@ export function initBuiltState(entity: Entity, now: number): void {
       break;
     case 'port':
       entity.port = { tripId: null, startedAt: 0, readyAt: 0 };
+      break;
+    case 'station':
+      entity.station = { shipmentId: null, startedAt: 0, readyAt: 0 };
       break;
     default:
       break;
@@ -64,6 +70,7 @@ export function createNewGame(now: number, cityName = 'Ma ville'): GameState {
     level: 1,
     goods: START_RESOURCES.goods,
     energy: START_RESOURCES.energy,
+    workers: START_WORKERS,
     energyUpdatedAt: now,
     entities,
     nextEntityId: entities.length + 1,

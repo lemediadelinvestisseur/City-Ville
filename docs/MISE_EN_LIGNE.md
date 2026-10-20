@@ -26,6 +26,18 @@ Actions › CI › **Run workflow** sur `main`. Dans le tableau de bord Convex, 
 Le jeu compilé (`npm run build`, donc `npm run ios:sync`) se connecte à l'adresse de `.env.production`.
 `npm run dev` reste en **mode démo** tant qu'aucun déploiement de développement n'est configuré.
 
+## Version web (sans Xcode)
+
+À chaque fusion sur `main`, la CI publie aussi le jeu sur **GitHub Pages** :
+https://lemediadelinvestisseur.github.io/City-Ville/ (connecté au serveur de production).
+
+1. Une fois : GitHub › dépôt › **Settings › Pages › Build and deployment › Source : GitHub Actions**
+   (faisable depuis le téléphone, dans le navigateur).
+2. Sur l'iPhone : ouvre l'adresse dans Safari, puis Partager › « Sur l'écran d'accueil ». Le jeu s'ouvre en
+   plein écran, se met à jour tout seul à chaque fusion et reçoit les notifications (Web Push).
+3. Pour retrouver sa ville de l'appli : dans l'appli, Réglages › Compte › « Code de transfert », puis saisir
+   le code dans la version web.
+
 ## 3. Devenir l'administrateur (une fois)
 
 L'interface admin et les données sont réservées à **un seul compte**, le tien. Il n'y a pas de mot de passe
@@ -80,7 +92,21 @@ dans la démo hors ligne, tout reste visible.
 | `chat.ts`        | Chat (salon Monde + salon par langue), annonces, modération, purge à 30 jours (`crons.ts`)   |
 | `roles.ts`       | Rôles : administrateur unique (ligne de commande), modérateurs nommés depuis l'admin         |
 | `stats.ts`       | Sessions (signal chaque minute) et évènements de progression                                 |
+| `push.ts`        | Notifications Web Push : abonnements, rappels programmés (envoi par `pushNode.ts`)           |
 | `admin.ts`       | Tableau de bord (audience, rétention, langues, chat…), annonces, bannissements — admin seul  |
+
+## Notifications Web Push
+
+Dans le navigateur (et l'appli web ajoutée à l'écran d'accueil de l'iPhone), le jeu envoie au serveur la liste
+de ses prochains rappels ; `push.ts` les programme et `pushNode.ts` les envoie à l'heure dite, même jeu fermé.
+L'appli iOS (Capacitor) utilise, elle, les notifications locales du téléphone.
+
+- **Rien à configurer** : les clés VAPID sont créées par le serveur au premier besoin (table `pushKeys`, la clé
+  privée ne quitte jamais le serveur). Mets une vraie adresse dans `PRIVACY_CONTACT` (`convex/privacy.ts`) :
+  elle sert aussi de contact pour les services d'envoi (Apple, Google, Mozilla).
+- **iPhone (navigateur)** : Safari n'autorise les notifications que pour un site ajouté à l'écran d'accueil
+  (Partager › « Sur l'écran d'accueil », iOS 16.4 ou plus récent) ; le jeu l'explique dans Réglages.
+- Le serveur ne contacte que les services d'envoi connus (Apple, Google, Mozilla, Microsoft).
 
 ## Rôles
 

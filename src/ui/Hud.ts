@@ -4,7 +4,7 @@ import { h, icon } from './dom';
 import { formatClock, formatNumber } from './format';
 import { Icons } from './icons';
 
-export type HudTarget = 'level' | 'coins' | 'cash' | 'energy' | 'goods' | 'population';
+export type HudTarget = 'level' | 'coins' | 'cash' | 'energy' | 'goods' | 'population' | 'workers';
 
 /** Barre de ressources en haut de l'écran. */
 export class Hud {
@@ -71,6 +71,7 @@ export class Hud {
       pill('energy', Icons.energy, t('hud.energy'), 'energy'),
       pill('goods', Icons.goods, t('hud.goods')),
       pill('population', Icons.population, t('hud.population')),
+      pill('workers', Icons.worker, t('hud.workers')),
     );
     this.refresh();
   }
@@ -119,6 +120,10 @@ export class Hud {
     this.lastEnergy = state.energy;
     this.set('goods', `${formatNumber(state.goods)}/${formatNumber(derived.goodsCap)}`);
     this.set('population', `${formatNumber(derived.population)}/${formatNumber(derived.popCap)}`);
+    // Ouvriers disponibles : « 0/1 » quand le seul ouvrier est sur un chantier.
+    const workers = this.game.workersInfo();
+    this.set('workers', `${workers.total - workers.busy}/${workers.total}`);
+    this.pills.get('workers')?.classList.toggle('is-warn', workers.busy >= workers.total);
     const goodsFull = state.goods >= derived.goodsCap;
     this.pills.get('goods')?.classList.toggle('is-warn', goodsFull);
     this.pills.get('population')?.classList.toggle('is-warn', derived.populationProjected >= derived.popCap);

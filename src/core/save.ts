@@ -2,9 +2,10 @@ import { findBuildingDef } from '@/data/buildings';
 import { findCropDef } from '@/data/crops';
 import { findQuestDef } from '@/data/quests';
 import { CHUNK_SIZE } from '@/data/balance';
+import { isSceneryRail } from '@/data/scenery';
 import { isWater, terrainAt } from '@/data/terrain';
 import { OccupancyGrid, chunkKey, chunkOf, inBounds } from './grid';
-import { SAVE_VERSION, emptyDaily } from './newGame';
+import { SAVE_VERSION, START_WORKERS, emptyDaily } from './newGame';
 import type { GameState } from './types';
 
 /** Accès au stockage clé/valeur (localStorage en web, Preferences en natif…). */
@@ -34,8 +35,8 @@ function overlapsWater(entity: Record<string, unknown>): boolean {
   return false;
 }
 
-/** Bâtiments agrandis en v7 (emprises plus réalistes) ; l'épicerie, elle, rétrécit. */
-const GROWN_IN_V7: ReadonlySet<string> = new Set([
+/** Bâtiments agrandis en v8 (emprises plus réalistes) ; l'épicerie, elle, rétrécit. */
+const GROWN_IN_V8: ReadonlySet<string> = new Set([
   'library',
   'town_hall',
   'museum',
@@ -51,8 +52,8 @@ const GROWN_IN_V7: ReadonlySet<string> = new Set([
   'airport',
 ]);
 
-/** Distance maximale (en cases) d'un décalage lors de la migration v6 → v7. */
-const MAX_SHIFT_V7 = 6;
+/** Distance maximale (en cases) d'un décalage lors de la migration v7 → v8. */
+const MAX_SHIFT_V8 = 6;
 
 /** Décalages candidats, du plus proche au plus lointain (anneaux successifs). */
 function spiralOffsets(maxShift: number): Array<{ dx: number; dy: number }> {
@@ -68,12 +69,12 @@ function spiralOffsets(maxShift: number): Array<{ dx: number; dy: number }> {
 }
 
 /**
- * v6 → v7 : certaines constructions s'agrandissent. Celles dont la nouvelle emprise
+ * v7 → v8 : certaines constructions s'agrandissent. Celles dont la nouvelle emprise
  * déborde (autre construction, eau, montagne, zone non débloquée, bord de carte)
  * sont décalées vers l'emplacement libre le plus proche (mêmes règles que
  * `Game.checkPlacement`), sinon retirées et remboursées en pièces.
  */
-function migrateFootprintsV7(state: Record<string, unknown>): Record<string, unknown> {
+function migrateFootprintsV8(state: Record<string, unknown>): Record<string, unknown> {
   const unlocked = new Set(Array.isArray(state.unlockedChunks) ? (state.unlockedChunks as unknown[]) : []);
   const entities = Array.isArray(state.entities) ? (state.entities as unknown[]).filter(isObject) : [];
   const defOf = (entity: Record<string, unknown>) =>
@@ -82,7 +83,7 @@ function migrateFootprintsV7(state: Record<string, unknown>): Record<string, unk
     typeof entity.x === 'number' && typeof entity.y === 'number';
   const idOf = (entity: Record<string, unknown>): number => (typeof entity.id === 'number' ? entity.id : 0);
 
-  const grown = entities.filter((e) => typeof e.defId === 'string' && GROWN_IN_V7.has(e.defId) && placed(e));
+  const grown = entities.filter((e) => typeof e.defId === 'string' && GROWN_IN_V8.has(e.defId) && placed(e));
   const grownSet = new Set(grown);
 
   const grid = new OccupancyGrid();
@@ -105,17 +106,45 @@ function migrateFootprintsV7(state: Record<string, unknown>): Record<string, unk
     return grid.isFree(x, y, { w, d });
   };
 
-  // L'hôtel de ville de départ (21,16) recouvre désormais le massif de fleurs (24,18) :
-  // comme dans une nouvelle partie, les fleurs glissent d'une case vers l'est.
-  const hall = grown.find((e) => e.starter === true && e.defId === 'town_hall' && e.x === 21 && e.y === 16);
-  const flowers = entities.find((e) => e.starter === true && e.defId === 'flower_bed' && e.x === 24 && e.y === 18);
-  if (hall && flowers && fits(25, 18, 1, 1)) {
-    grid.fill(24, 18, one, 0);
-    flowers.x = 25;
-    grid.fill(25, 18, one, idOf(flowers) || -1);
+  // L'hôtel de ville de départ, passé en 4 × 4, recouvre des massifs de fleurs de départ :
+  // comme dans une nouvelle partie, ces fleurs glissent d'une case vers l'est.
+  // (21,16) : ville de départ d'avant les routes obligatoires ; (20,17) : celle d'après,
+  // où l'hôtel de ville remonte aussi d'une case pour ne pas mordre sur la route.
+  const starter = (defId: string, x: number, y: number) =>
+    entities.find((e) => e.starter === true && e.defId === defId && e.x === x && e.y === y);
+  const moveFlowers = (from: ReadonlyArray<readonly [number, number]>) => {
+    for (const [fx, fy] of from) {
+      const flowers = starter('flower_bed', fx, fy);
+      if (!flowers) continue;
+      grid.fill(fx, fy, one, 0);
+      if (fits(fx + 1, fy, 1, 1)) flowers.x = fx + 1;
+      grid.fill(flowers.x as number, fy, one, idOf(flowers) || -1);
+    }
+  };
+  const oldHall = starter('town_hall', 21, 16);
+  if (oldHall && grown.includes(oldHall)) moveFlowers([[24, 18]]);
+  const hall = starter('town_hall', 20, 17);
+  if (hall && grown.includes(hall)) {
+    moveFlowers([
+      [23, 17],
+      [23, 19],
+    ]);
+    if (fits(20, 16, 4, 4)) hall.y = 16;
   }
 
-  const offsets = spiralOffsets(MAX_SHIFT_V7);
+  // Une construction déplacée doit de préférence rester au bord d'une route.
+  const roads = new Set(entities.filter((e) => e.defId === 'road' && placed(e)).map((e) => `${e.x},${e.y}`));
+  const touchesRoad = (x: number, y: number, w: number, d: number): boolean => {
+    for (let i = -1; i <= w; i++) {
+      if (roads.has(`${x + i},${y - 1}`) || roads.has(`${x + i},${y + d}`)) return true;
+    }
+    for (let j = 0; j < d; j++) {
+      if (roads.has(`${x - 1},${y + j}`) || roads.has(`${x + w},${y + j}`)) return true;
+    }
+    return false;
+  };
+
+  const offsets = spiralOffsets(MAX_SHIFT_V8);
   const removed = new Set<Record<string, unknown>>();
   let refund = 0;
   for (const entity of [...grown].sort((a, b) => idOf(a) - idOf(b))) {
@@ -123,9 +152,14 @@ function migrateFootprintsV7(state: Record<string, unknown>): Record<string, unk
     if (!def || !placed(entity)) continue;
     const { w, d } = def.size;
     let spot: { x: number; y: number } | null = fits(entity.x, entity.y, w, d) ? { x: entity.x, y: entity.y } : null;
-    for (const { dx, dy } of spot ? [] : offsets) {
-      if (fits(entity.x + dx, entity.y + dy, w, d)) {
-        spot = { x: entity.x + dx, y: entity.y + dy };
+    // Deux passes : d'abord une place au bord d'une route, sinon n'importe quelle place libre.
+    for (const needRoad of spot ? [] : [true, false]) {
+      const found = offsets.find(
+        ({ dx, dy }) =>
+          fits(entity.x + dx, entity.y + dy, w, d) && (!needRoad || touchesRoad(entity.x + dx, entity.y + dy, w, d)),
+      );
+      if (found) {
+        spot = { x: entity.x + found.dx, y: entity.y + found.dy };
         break;
       }
     }
@@ -200,8 +234,48 @@ const MIGRATIONS: Record<number, Migration> = {
     state.loginStreak = { lastDay: null, streak: 0 };
     return state;
   },
-  /** v6 → v7 : emprises plus réalistes (voir `migrateFootprintsV7`). */
-  6: migrateFootprintsV7,
+  /**
+   * v6 → v7 : ouvriers, champs 1 × 1 (même case d'origine), la gare devient un
+   * terminus de trains et la voie ferrée apparaît dans les zones déjà achetées
+   * (à la place des arbres sauvages, sans toucher aux constructions du joueur).
+   */
+  6: (state) => {
+    state.workers = START_WORKERS;
+    const unlocked = new Set(Array.isArray(state.unlockedChunks) ? (state.unlockedChunks as unknown[]) : []);
+    let entities = Array.isArray(state.entities) ? (state.entities as unknown[]).filter(isObject) : [];
+    const onRail = (e: Record<string, unknown>) =>
+      typeof e.x === 'number' && typeof e.y === 'number' && isSceneryRail(e.x, e.y);
+    entities = entities.filter(
+      (e) => !(onRail(e) && e.starter === true && typeof e.defId === 'string' && e.defId.startsWith('tree_')),
+    );
+    const occupied = new Set<string>();
+    for (const entity of entities) {
+      const def = typeof entity.defId === 'string' ? findBuildingDef(entity.defId) : undefined;
+      if (entity.defId === 'train_station' && entity.built === true) {
+        entity.station = { shipmentId: null, startedAt: 0, readyAt: 0 };
+      }
+      if (!def || typeof entity.x !== 'number' || typeof entity.y !== 'number') continue;
+      for (let dy = 0; dy < def.size.d; dy++) {
+        for (let dx = 0; dx < def.size.w; dx++) occupied.add(`${entity.x + dx},${entity.y + dy}`);
+      }
+    }
+    let nextId = typeof state.nextEntityId === 'number' ? state.nextEntityId : entities.length + 1;
+    for (const key of unlocked) {
+      if (typeof key !== 'string') continue;
+      const [cx = 0, cy = 0] = key.split(',').map(Number);
+      for (let y = cy * CHUNK_SIZE; y < (cy + 1) * CHUNK_SIZE; y++) {
+        for (let x = cx * CHUNK_SIZE; x < (cx + 1) * CHUNK_SIZE; x++) {
+          if (!isSceneryRail(x, y) || occupied.has(`${x},${y}`)) continue;
+          entities.push({ id: nextId++, defId: 'rail', x, y, built: true, starter: true });
+        }
+      }
+    }
+    state.entities = entities;
+    state.nextEntityId = nextId;
+    return state;
+  },
+  /** v7 → v8 : emprises plus réalistes (voir `migrateFootprintsV8`). */
+  7: migrateFootprintsV8,
 };
 
 export function serialize(state: GameState, now: number): string {
@@ -238,7 +312,7 @@ export function deserialize(raw: string | null): GameState | null {
 }
 
 function validate(state: Record<string, unknown>): boolean {
-  const numbers = ['coins', 'cash', 'xp', 'level', 'goods', 'energy', 'energyUpdatedAt', 'nextEntityId'];
+  const numbers = ['coins', 'cash', 'xp', 'level', 'goods', 'energy', 'workers', 'energyUpdatedAt', 'nextEntityId'];
   if (!numbers.every((key) => typeof state[key] === 'number' && Number.isFinite(state[key]))) return false;
   if (!Array.isArray(state.entities) || !Array.isArray(state.unlockedChunks)) return false;
   if (!isObject(state.quests) || !isObject(state.tutorial) || !isObject(state.stats)) return false;

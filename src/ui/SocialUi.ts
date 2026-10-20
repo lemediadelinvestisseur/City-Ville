@@ -173,11 +173,17 @@ export class SocialUi {
         return;
       }
       this.deps.closeTransient();
+      // Le bandeau (et son bouton de retour) s'affiche avant tout : on peut toujours rentrer chez soi.
       this.visiting = visit;
-      social.openVisit(visit);
-      this.deps.ctx.game.visitedNeighbor();
       this.visitBar.show(visit);
       document.body.classList.add('is-visiting');
+      try {
+        social.openVisit(visit);
+      } catch (error) {
+        this.leaveVisit();
+        throw error;
+      }
+      this.deps.ctx.game.visitedNeighbor();
       this.edgePill.classList.remove('is-visible');
       this.deps.onLayoutChange();
     } catch (error) {

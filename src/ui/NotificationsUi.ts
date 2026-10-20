@@ -36,7 +36,7 @@ export class NotificationsUi {
       let wait = 0;
       if (event.type === 'plant') wait = getCropDef(event.cropId).growSec;
       else if (event.type === 'place') wait = getBuildingDef(event.defId).buildSec;
-      else if (event.type === 'sendBoat') wait = LONG_WAIT_SEC;
+      else if (event.type === 'sendBoat' || event.type === 'sendTrain') wait = LONG_WAIT_SEC;
       if (wait >= LONG_WAIT_SEC) void this.maybeAsk();
     });
   }
@@ -102,7 +102,11 @@ export class NotificationsUi {
       });
       section.append(h('div', { class: 'modal__section-title' }, icon(Icons.bell), ` ${t('notif.section')}`));
       if (notifier.kind === 'none') {
-        section.append(h('p', { class: 'muted settings__hint', text: t('notif.unsupported') }));
+        // Safari sur iPhone : les notifications n'existent que pour le jeu ajouté à l'écran d'accueil.
+        const iosTab = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        section.append(
+          h('p', { class: 'muted settings__hint', text: t(iosTab ? 'notif.iosInstall' : 'notif.unsupported') }),
+        );
         return;
       }
       section.append(toggle);

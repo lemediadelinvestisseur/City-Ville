@@ -6,6 +6,8 @@ import type {
   DecorationDef,
   HouseDef,
   PortDef,
+  RailDef,
+  StationDef,
   StorageDef,
 } from '@/core/types';
 
@@ -14,7 +16,8 @@ import type {
  * (src/render/art/) pour garder ces données purement « gameplay ».
  *
  * Durées en secondes. L'XP de construction est gagnée à l'inauguration ;
- * elle vaut environ 1/50e du prix en pièces.
+ * elle vaut environ 1/50e du prix en pièces. Commerces et services
+ * demandent aussi des marchandises (matériaux) : les récoltes trouvent un usage.
  */
 
 const MIN = 60;
@@ -24,10 +27,29 @@ type HouseInput = Omit<HouseDef, 'category' | 'xp'> & { xp?: number };
 const house = (d: HouseInput): HouseDef => ({ category: 'house', xp: xpFor(d.cost.coins), ...d });
 
 type BusinessInput = Omit<BusinessDef, 'category' | 'xp'> & { xp?: number };
-const business = (d: BusinessInput): BusinessDef => ({ category: 'business', xp: xpFor(d.cost.coins), ...d });
+const business = (d: BusinessInput): BusinessDef => ({
+  category: 'business',
+  xp: xpFor(d.cost.coins),
+  ...d,
+  cost: withMaterials(d.cost),
+});
 
 type CommunityInput = Omit<CommunityDef, 'category' | 'xp'> & { xp?: number };
-const community = (d: CommunityInput): CommunityDef => ({ category: 'community', xp: xpFor(d.cost.coins), ...d });
+const community = (d: CommunityInput): CommunityDef => ({
+  category: 'community',
+  xp: xpFor(d.cost.coins),
+  ...d,
+  cost: withMaterials(d.cost),
+});
+
+type StationInput = Omit<StationDef, 'category' | 'xp'> & { xp?: number };
+const station = (d: StationInput): StationDef => ({
+  category: 'station',
+  xp: xpFor(d.cost.coins),
+  placement: 'rail',
+  ...d,
+  cost: withMaterials(d.cost),
+});
 
 type StorageInput = Omit<StorageDef, 'category' | 'xp'> & { xp?: number };
 const storage = (d: StorageInput): StorageDef => ({ category: 'storage', xp: xpFor(d.cost.coins), ...d });
@@ -46,6 +68,25 @@ const decoration = (d: DecorationInput): DecorationDef => ({
 
 function xpFor(coins: number | undefined): number {
   return Math.round((coins ?? 0) / 50);
+}
+
+/** Matériaux (marchandises) d'un chantier : 1 pour 40 pièces, arrondi à 5, au plus 400. */
+function withMaterials(cost: { coins?: number; goods?: number }): { coins?: number; goods?: number } {
+  if (cost.goods !== undefined || !cost.coins) return cost;
+  return { ...cost, goods: Math.min(400, Math.round(cost.coins / 200) * 5) };
+}
+
+/** Catégories qui ne fonctionnent qu'une fois reliées à une route. */
+const ROAD_CATEGORIES: ReadonlySet<BuildingCategory> = new Set([
+  'house',
+  'business',
+  'community',
+  'storage',
+  'station',
+]);
+
+export function needsRoad(def: BuildingDef): boolean {
+  return ROAD_CATEGORIES.has(def.category);
 }
 
 export const BUILDINGS: readonly BuildingDef[] = [
@@ -451,16 +492,6 @@ export const BUILDINGS: readonly BuildingDef[] = [
     popCap: 500,
   }),
   community({
-    id: 'train_station',
-    name: 'Gare',
-    description: 'Les trains relient votre ville au reste du pays.',
-    size: { w: 3, d: 3 },
-    cost: { coins: 30000 },
-    requires: { level: 16 },
-    buildSec: 4 * HOUR,
-    popCap: 600,
-  }),
-  community({
     id: 'university',
     name: 'Université',
     description: 'Les étudiants affluent de partout.',
@@ -558,7 +589,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     name: 'Champ',
     description: 'Plantez-y des cultures pour produire des marchandises.',
     category: 'farm',
-    size: { w: 2, d: 2 },
+    size: { w: 1, d: 1 },
     cost: { coins: 25 },
     xp: 1,
     buildSec: 0,
@@ -595,6 +626,17 @@ export const BUILDINGS: readonly BuildingDef[] = [
     requires: { level: 22 },
     buildSec: 8 * HOUR,
     boatTier: 3,
+  }),
+
+  // ——— Train : le long de la voie ferrée ———
+  station({
+    id: 'train_station',
+    name: 'Gare',
+    description: 'Le train emporte vos marchandises et rapporte des pièces. À poser le long de la voie ferrée.',
+    size: { w: 3, d: 3 },
+    cost: { coins: 6000 },
+    requires: { level: 10 },
+    buildSec: 30 * MIN,
   }),
 
   // ——— Décorations : bonus sur les bâtiments proches ———
@@ -770,6 +812,18 @@ export const BUILDINGS: readonly BuildingDef[] = [
     buildSec: 3 * 3600,
     placement: 'bridge',
   },
+  {
+    id: 'rail',
+    name: 'Voie ferrée',
+    description: 'La ligne qui relie la ville au reste du pays.',
+    category: 'rail',
+    size: { w: 1, d: 1 },
+    cost: {},
+    xp: 0,
+    buildSec: 0,
+    sellable: false,
+    inShop: false,
+  } satisfies RailDef,
 ];
 
 const BY_ID = new Map(BUILDINGS.map((def) => [def.id, def]));
@@ -791,6 +845,7 @@ export const SHOP_CATEGORIES: ReadonlyArray<{ id: BuildingCategory; label: strin
   { id: 'community', label: 'Services' },
   { id: 'farm', label: 'Agriculture' },
   { id: 'port', label: 'Pêche' },
+  { id: 'station', label: 'Train' },
   { id: 'storage', label: 'Stockage' },
   { id: 'decoration', label: 'Décorations' },
   { id: 'road', label: 'Routes' },

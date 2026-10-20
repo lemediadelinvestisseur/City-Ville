@@ -11,6 +11,8 @@ export interface StoreProduct {
   description: string;
   priceLabel: string;
   reward: Reward;
+  /** Ouvriers supplémentaires (chantiers menés en même temps). */
+  workers?: number;
   /** Achat possible une seule fois (pack de démarrage). */
   oneTime?: boolean;
   badge?: string;
@@ -23,6 +25,16 @@ export const STORE_PRODUCTS: readonly StoreProduct[] = [
     description: '30 cash + 5 000 pièces + 10 énergie',
     priceLabel: '2,99 €',
     reward: { cash: 30, coins: 5000, energy: 10 },
+    oneTime: true,
+    badge: 'Offre unique',
+  },
+  {
+    id: 'worker_2',
+    title: 'Deuxième ouvrier',
+    description: 'Deux chantiers en même temps, pour toujours',
+    priceLabel: '4,99 €',
+    reward: {},
+    workers: 1,
     oneTime: true,
     badge: 'Offre unique',
   },

@@ -75,6 +75,15 @@ export const Icons = {
   boat: svg(
     '<path d="M3 14h18l-3 5H6z" fill="#1e88e5" stroke="#0d47a1" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 3v11M12 4l6 8h-6z" fill="#fff" stroke="#455a64" stroke-width="1.4" stroke-linejoin="round"/>',
   ),
+  train: svg(
+    '<rect x="5" y="3" width="14" height="14" rx="3" fill="#e53935" stroke="#8e1b1b" stroke-width="1.5"/><rect x="7.5" y="5.5" width="9" height="5" rx="1" fill="#bbdefb"/><circle cx="8.5" cy="14" r="1.3" fill="#fff59d"/><circle cx="15.5" cy="14" r="1.3" fill="#fff59d"/><path d="M8 17l-3 4M16 17l3 4M6.5 19.5h11" stroke="#455a64" stroke-width="1.6" stroke-linecap="round"/>',
+  ),
+  worker: svg(
+    '<path d="M4 15a8 8 0 0116 0z" fill="#ffc107" stroke="#b77900" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 7.5h4V15h-4z" fill="#ffd54f" stroke="#b77900" stroke-width="1.2"/><rect x="2.5" y="15" width="19" height="3.5" rx="1.5" fill="#ffb300" stroke="#b77900" stroke-width="1.5"/>',
+  ),
+  road: svg(
+    '<path d="M12 2.5l9.5 17h-19z" fill="#ffca28" stroke="#c62828" stroke-width="2" stroke-linejoin="round"/><path d="M10.5 17.5l.8-9h1.4l.8 9z" fill="#424242"/><path d="M12 9.5v1.5M12 13v1.5" stroke="#fff" stroke-width="0.9"/>',
+  ),
 };
 
 /** Portrait de Léa, l'adjointe au maire (personnage original). */
