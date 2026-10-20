@@ -1,5 +1,6 @@
 import { shade } from './color';
 import { boxColors, isoCanvas, type ArtPiece, type IsoPainter, type V3 } from './IsoPainter';
+import { HEROES } from './heroes';
 import { drawCottage, layered, roofProp, type RoofProp } from './toon';
 import { signText } from '@/i18n/content';
 
@@ -1157,7 +1158,13 @@ const SPECS: Record<string, BuildingSpec> = {
 
 export function buildingArt(defId: string): ArtPiece | null {
   const spec = SPECS[defId];
-  return spec ? drawBuilding(spec) : null;
+  if (!spec) return null;
+  const hero = HEROES[defId];
+  if (!hero) return drawBuilding(spec);
+  const ground = isoCanvas(spec.size, spec.size, hero.height + 12);
+  const objects = isoCanvas(spec.size, spec.size, hero.height + 12);
+  hero.draw(ground.painter, objects.painter);
+  return layered(ground.finish(), objects.finish());
 }
 
 export const BUILDING_ART_IDS = Object.keys(SPECS);
