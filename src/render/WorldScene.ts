@@ -6,7 +6,7 @@ import type { Entity, FailReason, Reward } from '@/core/types';
 import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
 import { isWater } from '@/data/terrain';
-import { ArtKey, CLOUD_VARIANTS } from './art/library';
+import { ArtKey, CLOUD_VARIANTS, MAX_CONSTRUCTION_SIZE } from './art/library';
 import { DEEP_SEA } from './groundStyle';
 import { LOCKED_TINT, MapLayer } from './MapLayer';
 import type { BadgeKind } from './art/sprites';
@@ -301,7 +301,7 @@ export class WorldScene extends Phaser.Scene {
     if (def.id === 'road') {
       return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y) || this.map.isWildRoad(x, y), entity.x, entity.y));
     }
-    if (!entity.built) return ArtKey.construction(Math.min(4, Math.max(def.size.w, def.size.d)));
+    if (!entity.built) return ArtKey.construction(Math.min(MAX_CONSTRUCTION_SIZE, Math.max(def.size.w, def.size.d)));
     return treeLook(def.id, entity.x, entity.y)?.key ?? ArtKey.building(def.id);
   }
 

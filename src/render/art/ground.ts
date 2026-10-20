@@ -120,26 +120,27 @@ const tmp: Rgb = [0, 0, 0];
 
 // ——————————————————————————————— Herbe ———————————————————————————————
 
-const GRASS_RAMP: Rgb[] = ['#3f6a26', '#558530', '#6e9f3b', '#88b649', '#a0c65a'].map(rgb);
-const GRASS_DRY = rgb('#b3ae62');
+// Vert vif et peu contrasté, façon city-builder « cartoon ».
+const GRASS_RAMP: Rgb[] = ['#66b336', '#72bd3d', '#7cc443', '#86cb4b', '#92d156'].map(rgb);
+const GRASS_DRY = rgb('#a9cf55');
 
 function grassShade(U: number, V: number, out: Float32Array): void {
   const patches = fbm(U, V, 5 / 3, P, 11, 3);
   const clumps = noise(U, V, 7, P, 12);
   const grain = noise(U, V, 22, P, 13);
   const fine = noise(U, V, 44, P, 14);
-  ramp(GRASS_RAMP, 0.12 + patches * 0.48 + clumps * 0.25 + grain * 0.15, tmp);
-  mixRgb(tmp, GRASS_DRY, smoothstep(0.6, 0.82, fbm(U, V, 1, P, 15, 2)) * 0.4);
-  const k = 0.9 + fine * 0.16;
+  ramp(GRASS_RAMP, 0.2 + patches * 0.45 + clumps * 0.2 + grain * 0.1, tmp);
+  mixRgb(tmp, GRASS_DRY, smoothstep(0.6, 0.82, fbm(U, V, 1, P, 15, 2)) * 0.3);
+  const k = 0.97 + fine * 0.05;
   out[0] = tmp[0] * k;
   out[1] = tmp[1] * k;
   out[2] = tmp[2] * k;
 }
 
-const BLADES = scatter(240, 101);
+const BLADES = scatter(60, 101);
 const TUFTS = scatter(6, 102);
-const CLOVER = scatter(1.5, 103);
-const FLOWERS = scatter(0.5, 104);
+const CLOVER = scatter(0.4, 103);
+const FLOWERS = scatter(0.7, 104);
 const FLOWER_COLORS = ['#f6f3e8', '#f3d644', '#c7a3e6', '#f2a7c2'];
 
 /** Brins, touffes, trèfles et fleurs ; `keep` écarte les détails hors de l'herbe (bordures). */
@@ -152,7 +153,7 @@ function grassDetails(ctx: CanvasRenderingContext2D, i: number, j: number, keep?
     if (!ok(item)) continue;
     const [x, y, s] = item;
     const len = 2 + s.a * 3;
-    ctx.strokeStyle = s.b < 0.55 ? `rgba(186,222,112,${0.35 + s.c * 0.3})` : `rgba(34,62,18,${0.3 + s.c * 0.3})`;
+    ctx.strokeStyle = s.b < 0.55 ? `rgba(200,236,130,${0.3 + s.c * 0.25})` : `rgba(60,120,30,${0.25 + s.c * 0.25})`;
     ctx.lineWidth = 0.9;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -179,7 +180,7 @@ function grassDetails(ctx: CanvasRenderingContext2D, i: number, j: number, keep?
   for (const item of near(TUFTS, i, j, 0.12)) {
     if (!ok(item)) continue;
     const [x, y, s] = item;
-    ctx.fillStyle = 'rgba(30,52,16,0.28)';
+    ctx.fillStyle = 'rgba(40,90,20,0.2)';
     ctx.beginPath();
     ctx.ellipse(x + 1, y + 0.5, 5, 2, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -187,7 +188,7 @@ function grassDetails(ctx: CanvasRenderingContext2D, i: number, j: number, keep?
     for (let k = 0; k < blades; k++) {
       const spread = (k / (blades - 1) - 0.5) * 2;
       const h = 5 + s.b * 4 + (1 - Math.abs(spread)) * 3;
-      ctx.strokeStyle = k % 2 === 0 ? 'rgba(62,104,34,0.95)' : 'rgba(118,166,66,0.95)';
+      ctx.strokeStyle = k % 2 === 0 ? 'rgba(78,150,40,0.95)' : 'rgba(150,210,86,0.95)';
       ctx.lineWidth = 1.1;
       ctx.beginPath();
       ctx.moveTo(x + spread * 1.5, y);

@@ -36,7 +36,7 @@ export const STARTING_TOWN: readonly StartingPlacement[] = [
   { defId: 'cottage', x: 17, y: 22, preset: 'rentReady' },
   { defId: 'cottage', x: 14, y: 22, preset: 'rentReady' },
   { defId: 'flower_bed', x: 20, y: 18 },
-  { defId: 'flower_bed', x: 24, y: 18 },
+  { defId: 'flower_bed', x: 25, y: 18 },
   { defId: 'tree_oak', x: 9, y: 9 },
   { defId: 'tree_pine', x: 10, y: 11 },
   { defId: 'tree_oak', x: 8, y: 13 },

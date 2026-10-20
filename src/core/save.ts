@@ -2,7 +2,8 @@ import { findBuildingDef } from '@/data/buildings';
 import { findCropDef } from '@/data/crops';
 import { findQuestDef } from '@/data/quests';
 import { CHUNK_SIZE } from '@/data/balance';
-import { isWater } from '@/data/terrain';
+import { isWater, terrainAt } from '@/data/terrain';
+import { OccupancyGrid, chunkKey, chunkOf, inBounds } from './grid';
 import { SAVE_VERSION, emptyDaily } from './newGame';
 import type { GameState } from './types';
 
@@ -31,6 +32,116 @@ function overlapsWater(entity: Record<string, unknown>): boolean {
     }
   }
   return false;
+}
+
+/** Bâtiments agrandis en v7 (emprises plus réalistes) ; l'épicerie, elle, rétrécit. */
+const GROWN_IN_V7: ReadonlySet<string> = new Set([
+  'library',
+  'town_hall',
+  'museum',
+  'school',
+  'convention_center',
+  'hospital',
+  'supermarket',
+  'skyscraper',
+  'mall',
+  'amusement_park',
+  'university',
+  'stadium',
+  'airport',
+]);
+
+/** Distance maximale (en cases) d'un décalage lors de la migration v6 → v7. */
+const MAX_SHIFT_V7 = 6;
+
+/** Décalages candidats, du plus proche au plus lointain (anneaux successifs). */
+function spiralOffsets(maxShift: number): Array<{ dx: number; dy: number }> {
+  const offsets: Array<{ dx: number; dy: number }> = [];
+  for (let dy = -maxShift; dy <= maxShift; dy++) {
+    for (let dx = -maxShift; dx <= maxShift; dx++) {
+      if (dx !== 0 || dy !== 0) offsets.push({ dx, dy });
+    }
+  }
+  const ring = (o: { dx: number; dy: number }): number => Math.max(Math.abs(o.dx), Math.abs(o.dy));
+  // Tri stable : anneau, puis distance réelle, puis ordre de balayage.
+  return offsets.sort((a, b) => ring(a) - ring(b) || a.dx * a.dx + a.dy * a.dy - (b.dx * b.dx + b.dy * b.dy));
+}
+
+/**
+ * v6 → v7 : certaines constructions s'agrandissent. Celles dont la nouvelle emprise
+ * déborde (autre construction, eau, montagne, zone non débloquée, bord de carte)
+ * sont décalées vers l'emplacement libre le plus proche (mêmes règles que
+ * `Game.checkPlacement`), sinon retirées et remboursées en pièces.
+ */
+function migrateFootprintsV7(state: Record<string, unknown>): Record<string, unknown> {
+  const unlocked = new Set(Array.isArray(state.unlockedChunks) ? (state.unlockedChunks as unknown[]) : []);
+  const entities = Array.isArray(state.entities) ? (state.entities as unknown[]).filter(isObject) : [];
+  const defOf = (entity: Record<string, unknown>) =>
+    typeof entity.defId === 'string' ? findBuildingDef(entity.defId) : undefined;
+  const placed = (entity: Record<string, unknown>): entity is Record<string, unknown> & { x: number; y: number } =>
+    typeof entity.x === 'number' && typeof entity.y === 'number';
+  const idOf = (entity: Record<string, unknown>): number => (typeof entity.id === 'number' ? entity.id : 0);
+
+  const grown = entities.filter((e) => typeof e.defId === 'string' && GROWN_IN_V7.has(e.defId) && placed(e));
+  const grownSet = new Set(grown);
+
+  const grid = new OccupancyGrid();
+  for (const entity of entities) {
+    const def = defOf(entity);
+    if (def && placed(entity) && !grownSet.has(entity)) grid.fill(entity.x, entity.y, def.size, idOf(entity) || -1);
+  }
+
+  const one = { w: 1, d: 1 };
+  const fits = (x: number, y: number, w: number, d: number): boolean => {
+    if (!inBounds(x, y) || !inBounds(x + w - 1, y + d - 1)) return false;
+    for (let dy = 0; dy < d; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        const terrain = terrainAt(x + dx, y + dy);
+        if (terrain === 'water' || terrain === 'rock') return false;
+        const { cx, cy } = chunkOf(x + dx, y + dy);
+        if (!unlocked.has(chunkKey(cx, cy))) return false;
+      }
+    }
+    return grid.isFree(x, y, { w, d });
+  };
+
+  // L'hôtel de ville de départ (21,16) recouvre désormais le massif de fleurs (24,18) :
+  // comme dans une nouvelle partie, les fleurs glissent d'une case vers l'est.
+  const hall = grown.find((e) => e.starter === true && e.defId === 'town_hall' && e.x === 21 && e.y === 16);
+  const flowers = entities.find((e) => e.starter === true && e.defId === 'flower_bed' && e.x === 24 && e.y === 18);
+  if (hall && flowers && fits(25, 18, 1, 1)) {
+    grid.fill(24, 18, one, 0);
+    flowers.x = 25;
+    grid.fill(25, 18, one, idOf(flowers) || -1);
+  }
+
+  const offsets = spiralOffsets(MAX_SHIFT_V7);
+  const removed = new Set<Record<string, unknown>>();
+  let refund = 0;
+  for (const entity of [...grown].sort((a, b) => idOf(a) - idOf(b))) {
+    const def = defOf(entity);
+    if (!def || !placed(entity)) continue;
+    const { w, d } = def.size;
+    let spot: { x: number; y: number } | null = fits(entity.x, entity.y, w, d) ? { x: entity.x, y: entity.y } : null;
+    for (const { dx, dy } of spot ? [] : offsets) {
+      if (fits(entity.x + dx, entity.y + dy, w, d)) {
+        spot = { x: entity.x + dx, y: entity.y + dy };
+        break;
+      }
+    }
+    if (!spot) {
+      removed.add(entity);
+      if (entity.starter !== true) refund += def.cost.coins ?? 0;
+      continue;
+    }
+    // Seule la position change : loyer, chantier, amélioration… sont conservés.
+    entity.x = spot.x;
+    entity.y = spot.y;
+    grid.fill(spot.x, spot.y, def.size, idOf(entity) || -1);
+  }
+  state.entities = entities.filter((e) => !removed.has(e));
+  if (typeof state.coins === 'number') state.coins += refund;
+  return state;
 }
 
 /**
@@ -89,6 +200,8 @@ const MIGRATIONS: Record<number, Migration> = {
     state.loginStreak = { lastDay: null, streak: 0 };
     return state;
   },
+  /** v6 → v7 : emprises plus réalistes (voir `migrateFootprintsV7`). */
+  6: migrateFootprintsV7,
 };
 
 export function serialize(state: GameState, now: number): string {
