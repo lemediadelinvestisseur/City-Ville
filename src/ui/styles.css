@@ -3630,7 +3630,7 @@ body:not(.is-tester) .pill__plus {
 }
 
 .order__who {
-  font-size: 30px;
+  font-size: 26px;
   align-self: center;
 }
 
@@ -3638,14 +3638,22 @@ body:not(.is-tester) .pill__plus {
   justify-content: flex-start;
 }
 
-.order .chip {
-  padding: 2px 8px;
+/* Pastilles compactes dans les listes (défis, commandes) : tiennent sur une ligne. */
+.daily__info .chips {
+  gap: 4px;
+}
+
+.daily__info .chip {
+  gap: 3px;
+  padding: 1px 7px;
+  border-width: 2px;
+  box-shadow: 0 2px 0 0 var(--line);
   font-size: 13px;
 }
 
-.order .chip svg {
-  width: 16px;
-  height: 16px;
+.daily__info .chip svg {
+  width: 15px;
+  height: 15px;
 }
 
 .wheel {
@@ -3777,4 +3785,11 @@ body:not(.is-tester) .pill__plus {
 
 .field--wide {
   grid-column: 1 / -1;
+}
+
+/* Boutons des lignes de défis et de commandes : compacts pour laisser la place au texte. */
+.daily__task > .btn,
+.daily__bonus > .btn {
+  flex-shrink: 0;
+  padding-inline: 14px;
 }
