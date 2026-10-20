@@ -23,8 +23,9 @@ chantier, on revient plus tard.
 - **Énergie** : encaisser un loyer ou une recette, récolter, décharger un bateau coûtent 1 énergie.
   +1 toutes les 3 minutes, recharge complète à chaque niveau. C'est le rythme de la session… et un levier de
   monétisation.
-- **Grande carte** (128 × 96 cases, 192 zones) : mer au sud et à l'ouest, montagnes enneigées au nord et
-  massif au nord-est (non constructibles), lacs, forêts denses, grandes routes qui se prolongent au loin.
+- **Grande carte** (128 × 96 cases, 192 zones) : mer au sud et à l'ouest ; au nord, une bande de forêt à acheter
+  mène aux montagnes enneigées (au-delà de la carte) ; massif au nord-est (ses zones ne s'achètent pas), lacs,
+  forêts denses, grandes routes qui se prolongent au loin, voie ferrée à l'ouest de la ville.
   Acheter une zone offre ses routes et ses arbres (à défricher en mode édition).
 - **Deux rives** : la carte est coupée du nord au sud par un bras de mer. La rive est s'ouvre au
   niveau 15 : on y pose un **pont** (20 000 pièces, chantier de 3 h) d'une rive à l'autre, puis on achète ses
@@ -107,7 +108,6 @@ avance, plus les chantiers, les cultures et les sorties en mer sont longs, et pl
 | Caserne de pompiers       | 8 000 pièces   | niv. 8   | 1 h      | +300 hab. max   |
 | Bibliothèque              | 12 000 pièces  | niv. 11  | 1 h 30   | +350 hab. max   |
 | Hôpital                   | 20 000 pièces  | niv. 13  | 3 h      | +500 hab. max   |
-| Gare                      | 30 000 pièces  | niv. 16  | 4 h      | +600 hab. max   |
 | Université                | 45 000 pièces  | niv. 20  | 6 h      | +800 hab. max   |
 | Musée                     | 60 000 pièces  | niv. 23  | 8 h      | +900 hab. max   |
 | Palais des congrès        | 90 000 pièces  | niv. 26  | 12 h     | +1 200 hab. max |
@@ -229,6 +229,22 @@ pièces à ramasser à la fin) :
 Coût d'une étoile : 20 %, 30 % puis 40 % du prix d'achat (et 1 marchandise par 100 pièces, minimum 5). La 1re
 étoile est plus rentable que racheter le bâtiment, la 3e un peu moins : améliorer n'est jamais un piège, mais ne
 remplace pas totalement la construction.
+
+## Routes, ouvriers et train
+
+- **Routes** : habitations, commerces, services, entrepôts et gare ne fonctionnent que si une case de route
+  touche leur emprise (sinon : pas d'habitants, de loyer, de service ni de stockage ; bulle ⚠ au-dessus). La
+  ville de départ est raccordée d'office.
+- **Ouvriers** : un chantier à minuteur (construction ou amélioration) occupe un ouvrier jusqu'à son
+  inauguration. On commence avec un ouvrier ; un deuxième s'achète une fois dans la boutique. Routes, champs
+  et décorations (immédiats) n'en demandent pas.
+- **Matériaux** : commerces, services et gare coûtent aussi des marchandises (1 pour 40 pièces, au plus 400).
+- **Gare** (niveau 10, 6 000 pièces + 150 marchandises, 30 min) : se pose le long de la voie ferrée qui
+  descend des montagnes à l'ouest de la ville. Le train emporte des marchandises et revient avec des pièces
+  (5 à 7 pièces par marchandise, moins qu'un commerce, mais sans limite) : livraison locale (40 → 220, 30 min),
+  train régional (120 → 720, 2 h), train de marchandises (320 → 2 000, 6 h, niv. 14), grand convoi
+  (700 → 4 600, 12 h, niv. 20).
+- **Champs** : une case chacun (en proportion avec les bâtiments).
 
 Le nombre d'exemplaires d'un même bâtiment est limité selon le niveau : maisons 4 + niveau/3, commerces
 2 + niveau/8, services 1 + niveau/10, entrepôts 1 + niveau/6, ports 1 + niveau/10, champs 8 + niveau (routes et

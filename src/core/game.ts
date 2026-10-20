@@ -23,14 +23,14 @@ import {
   speedUpCashCost,
   xpForLevel,
 } from '@/data/balance';
-import { BUILDINGS, getBuildingDef } from '@/data/buildings';
-import { CROPS, TRIPS, getCropDef, getTripDef } from '@/data/crops';
+import { BUILDINGS, getBuildingDef, needsRoad } from '@/data/buildings';
+import { CROPS, SHIPMENTS, TRIPS, getCropDef, getShipmentDef, getTripDef } from '@/data/crops';
 import { DAILY_MIN_LEVEL } from '@/data/daily';
 import { MARKET } from '@/data/market';
 import { findCashOffer, findStoreProduct } from '@/data/products';
 import { QUESTS, getQuestDef } from '@/data/quests';
 import { sceneryOf } from '@/data/scenery';
-import { chunkHasLand, isEastChunk, isWater, terrainAt } from '@/data/terrain';
+import { chunkHasLand, chunkHasMountain, isEastChunk, isWater, terrainAt } from '@/data/terrain';
 import { dailyMatches, drawDaily, localDay, nextLocalMidnight } from './daily';
 import { Emitter } from './emitter';
 import { CHUNKS_X, CHUNKS_Y, OccupancyGrid, chunkKey, chunkOf, footprintDistance, inBounds } from './grid';
@@ -85,7 +85,7 @@ export interface GameEvents {
 }
 
 /** Ce qui peut devenir « prêt » avec le temps (notifications, messages en jeu). */
-export type ReadyKind = 'build' | 'crop' | 'boat' | 'business';
+export type ReadyKind = 'build' | 'crop' | 'boat' | 'train' | 'business';
 
 export interface ReadyItem {
   entityId: number;
@@ -151,6 +151,18 @@ export interface Derived {
   popCap: number;
   goodsCap: number;
   energyMax: number;
+  /** Chantiers en cours (constructions et améliorations) : un ouvrier chacun. */
+  busyWorkers: number;
+  /** Fin du chantier le plus proche, ou null. */
+  nextWorkerFreeAt: number | null;
+}
+
+/** Ouvriers : occupés (chantiers en cours) sur le total. */
+export interface WorkersInfo {
+  busy: number;
+  total: number;
+  /** Fin du chantier le plus proche (un ouvrier se libère), ou null. */
+  nextFreeAt: number | null;
 }
 
 export type ExpansionInfo =
@@ -217,15 +229,24 @@ export class Game {
     let populationProjected = 0;
     let popCap = BASE_POP_CAP;
     let goodsCap = BASE_GOODS_CAP;
+    let busyWorkers = 0;
+    let nextWorkerFreeAt: number | null = null;
     for (const entity of this.state.entities) {
       const def = getBuildingDef(entity.defId);
+      const worksEndAt = !entity.built ? entity.construction?.endsAt : entity.upgrade?.endsAt;
+      if (worksEndAt !== undefined) {
+        busyWorkers++;
+        if (nextWorkerFreeAt === null || worksEndAt < nextWorkerFreeAt) nextWorkerFreeAt = worksEndAt;
+      }
+      // Un bâtiment sans route ne fonctionne pas (ni habitants, ni service, ni stockage).
+      const active = entity.built && this.isConnected(entity);
       if (def.category === 'house') {
         // Une amélioration en cours compte déjà dans la population prévue.
         populationProjected += this.housePopulation(entity, entity.upgrade ? 1 : 0);
-        if (entity.built) population += this.housePopulation(entity);
-      } else if (entity.built && def.category === 'community') {
+        if (active) population += this.housePopulation(entity);
+      } else if (active && def.category === 'community') {
         popCap += Math.round(def.popCap * this.upgradeFactor(entity));
-      } else if (entity.built && def.category === 'storage') {
+      } else if (active && def.category === 'storage') {
         goodsCap += Math.round(def.goodsCap * this.upgradeFactor(entity));
       }
     }
@@ -235,6 +256,8 @@ export class Game {
       popCap,
       goodsCap,
       energyMax: energyMaxForLevel(this.state.level),
+      busyWorkers,
+      nextWorkerFreeAt,
     };
     return this.derivedCache;
   }
@@ -267,6 +290,43 @@ export class Game {
   isRoad(x: number, y: number): boolean {
     const entity = this.entityAt(x, y);
     return entity !== undefined && (entity.defId === 'road' || entity.defId === 'bridge');
+  }
+
+  isRail(x: number, y: number): boolean {
+    return this.entityAt(x, y)?.defId === 'rail';
+  }
+
+  /** Vrai si une case voisine (en croix) de l'emprise vérifie `test`. */
+  private touches(x: number, y: number, w: number, d: number, test: (x: number, y: number) => boolean): boolean {
+    for (let i = 0; i < w; i++) if (test(x + i, y - 1) || test(x + i, y + d)) return true;
+    for (let j = 0; j < d; j++) if (test(x - 1, y + j) || test(x + w, y + j)) return true;
+    return false;
+  }
+
+  /**
+   * Le bâtiment est-il relié à une route (une case de route contre son emprise) ?
+   * Toujours vrai pour ce qui n'en a pas besoin (champs, décorations…) et pour la
+   * ville de départ, raccordée d'office.
+   */
+  isConnected(entity: Entity): boolean {
+    const def = getBuildingDef(entity.defId);
+    if (!needsRoad(def) || entity.starter) return true;
+    return this.touches(entity.x, entity.y, def.size.w, def.size.d, (x, y) => this.isRoad(x, y));
+  }
+
+  /** Une construction de ce type serait-elle reliée à une route à cet endroit ? */
+  wouldConnect(def: BuildingDef, x: number, y: number): boolean {
+    return !needsRoad(def) || this.touches(x, y, def.size.w, def.size.d, (rx, ry) => this.isRoad(rx, ry));
+  }
+
+  workersInfo(): WorkersInfo {
+    const { busyWorkers, nextWorkerFreeAt } = this.derived();
+    return { busy: busyWorkers, total: this.state.workers, nextFreeAt: nextWorkerFreeAt };
+  }
+
+  private hasFreeWorker(): boolean {
+    const { busy, total } = this.workersInfo();
+    return busy < total;
   }
 
   /** Un pont terminé relie-t-il les deux rives ? */
@@ -319,6 +379,9 @@ export class Game {
     }
     if (!this.grid.isFree(x, y, def.size, ignoreId)) return 'blocked';
     if (def.placement === 'shore' && !this.touchesWater(x, y, def.size.w, def.size.d)) return 'needsWater';
+    if (def.placement === 'rail' && !this.touches(x, y, def.size.w, def.size.d, (rx, ry) => this.isRail(rx, ry))) {
+      return 'needsRail';
+    }
     return null;
   }
 
@@ -338,13 +401,7 @@ export class Game {
 
   /** Vrai si une case voisine (en croix) de l'emprise est de l'eau. */
   touchesWater(x: number, y: number, w: number, d: number): boolean {
-    for (let i = 0; i < w; i++) {
-      if (isWater(x + i, y - 1) || isWater(x + i, y + d)) return true;
-    }
-    for (let j = 0; j < d; j++) {
-      if (isWater(x - 1, y + j) || isWater(x + w, y + j)) return true;
-    }
-    return false;
+    return this.touches(x, y, w, d, isWater);
   }
 
   /** Raison pour laquelle un achat est impossible (hors emplacement), ou null. */
@@ -359,6 +416,8 @@ export class Game {
     }
     const missing = this.missingFor(def.cost);
     if (missing) return fail(CURRENCY_REASON[missing.currency], missing.missing);
+    // Un chantier à minuteur occupe un ouvrier jusqu'à l'inauguration.
+    if (def.buildSec > 0 && !this.hasFreeWorker()) return fail('noWorker');
     return { ok: true };
   }
 
@@ -413,6 +472,9 @@ export class Game {
       const { endsAt } = entity.upgrade;
       return now >= endsAt ? { type: 'finishUpgrade' } : { type: 'waitUpgrade', readyAt: endsAt };
     }
+    // Un commerce déjà approvisionné finit de servir ses clients ; le reste attend la route.
+    const serving = entity.business && entity.business.readyAt !== null;
+    if (!serving && !this.isConnected(entity)) return { type: 'needsRoad' };
     if (entity.house) {
       return now >= entity.house.readyAt
         ? { type: 'collectRent' }
@@ -433,6 +495,11 @@ export class Game {
       if (tripId === null) return { type: 'sendBoat' };
       return now >= readyAt ? { type: 'unloadBoat' } : { type: 'waitBoat', readyAt };
     }
+    if (entity.station) {
+      const { shipmentId, readyAt } = entity.station;
+      if (shipmentId === null) return { type: 'sendTrain' };
+      return now >= readyAt ? { type: 'unloadTrain' } : { type: 'waitTrain', readyAt };
+    }
     return { type: 'info' };
   }
 
@@ -446,6 +513,7 @@ export class Game {
       case 'waitCrop':
       case 'waitCustomers':
       case 'waitBoat':
+      case 'waitTrain':
         return speedUpCashCost((action.readyAt - this.now()) / 1000);
       default:
         return null;
@@ -455,7 +523,7 @@ export class Game {
   expansionInfo(cx: number, cy: number): ExpansionInfo {
     if (cx < 0 || cy < 0 || cx >= CHUNKS_X || cy >= CHUNKS_Y) return { status: 'unavailable' };
     if (this.isChunkUnlocked(cx, cy)) return { status: 'unlocked' };
-    if (!chunkHasLand(cx, cy)) return { status: 'unavailable' };
+    if (!chunkHasLand(cx, cy) || chunkHasMountain(cx, cy)) return { status: 'unavailable' };
     const adjacent =
       this.isChunkUnlocked(cx - 1, cy) ||
       this.isChunkUnlocked(cx + 1, cy) ||
@@ -478,6 +546,7 @@ export class Game {
     for (const def of BUILDINGS) if (def.inShop !== false && def.requires?.level === level) ids.push(def.id);
     for (const crop of CROPS) if (crop.requires?.level === level) ids.push(crop.id);
     for (const trip of TRIPS) if (trip.requires?.level === level) ids.push(trip.id);
+    for (const shipment of SHIPMENTS) if (shipment.requires?.level === level) ids.push(shipment.id);
     return ids;
   }
 
@@ -570,6 +639,7 @@ export class Game {
       if (!entity.built && entity.construction) push(entity, 'build', entity.construction.endsAt);
       if (entity.farm?.cropId) push(entity, 'crop', entity.farm.readyAt);
       if (entity.port?.tripId) push(entity, 'boat', entity.port.readyAt);
+      if (entity.station?.shipmentId) push(entity, 'train', entity.station.readyAt);
       if (entity.business && entity.business.readyAt !== null) push(entity, 'business', entity.business.readyAt);
     }
     return items.sort((a, b) => a.at - b.at);
@@ -621,12 +691,15 @@ export class Game {
     const entity = this.byId.get(id);
     if (!entity) return fail('invalid');
     const def = getBuildingDef(entity.defId);
+    if (def.category === 'rail') return fail('notSellable');
     const placement = this.checkPlacement(def, x, y, id);
     if (placement) return fail(placement);
     this.grid.fill(entity.x, entity.y, def.size, 0);
     entity.x = x;
     entity.y = y;
     this.grid.fill(x, y, def.size, id);
+    // Les raccordements aux routes ont pu changer.
+    this.derivedCache = null;
     this.events.emit('entityMoved', entity);
     this.changed();
     return { ok: true };
@@ -684,6 +757,7 @@ export class Game {
     const entity = this.byId.get(id);
     if (!entity?.house || !entity.built) return fail('invalid');
     if (this.now() < entity.house.readyAt) return fail('notReady');
+    if (!this.isConnected(entity)) return fail('needsRoad');
     const energy = this.useEnergy();
     if (!energy.ok) return energy;
     const def = getBuildingDef(entity.defId);
@@ -767,11 +841,46 @@ export class Game {
     return { ok: true, goods };
   }
 
+  /** Charge un train en gare : les marchandises partent, les pièces reviennent avec lui. */
+  sendTrain(id: number, shipmentId: string): Result<object> {
+    const entity = this.byId.get(id);
+    if (!entity?.station || !entity.built || entity.station.shipmentId !== null) return fail('invalid');
+    if (!this.isConnected(entity)) return fail('needsRoad');
+    const shipment = getShipmentDef(shipmentId);
+    const requirement = this.checkRequirements(shipment.requires);
+    if (requirement) return fail(requirement);
+    if (this.state.goods < shipment.goods) return fail('notEnoughGoods', shipment.goods - this.state.goods);
+    this.spend({ goods: shipment.goods });
+    const now = this.now();
+    entity.station = { shipmentId, startedAt: now, readyAt: now + shipment.durationSec * 1000 };
+    this.events.emit('entityUpdated', entity);
+    this.track({ type: 'sendTrain', shipmentId });
+    this.changed();
+    return { ok: true };
+  }
+
+  /** Encaisse la livraison d'un train revenu (1 énergie). */
+  unloadTrain(id: number): Result<{ coins: number }> {
+    const entity = this.byId.get(id);
+    if (!entity?.station || entity.station.shipmentId === null) return fail('invalid');
+    if (this.now() < entity.station.readyAt) return fail('notReady');
+    const energy = this.useEnergy();
+    if (!energy.ok) return energy;
+    const shipment = getShipmentDef(entity.station.shipmentId);
+    entity.station = { shipmentId: null, startedAt: 0, readyAt: 0 };
+    this.give({ coins: shipment.coins, xp: shipment.xp }, entity.id);
+    this.events.emit('entityUpdated', entity);
+    this.track({ type: 'unloadTrain', shipmentId: shipment.id });
+    this.changed();
+    return { ok: true, coins: shipment.coins };
+  }
+
   supply(id: number): Result<object> {
     const entity = this.byId.get(id);
     if (!entity?.business || !entity.built || entity.business.readyAt !== null) return fail('invalid');
     const def = getBuildingDef(entity.defId);
     if (def.category !== 'business') return fail('invalid');
+    if (!this.isConnected(entity)) return fail('needsRoad');
     if (this.state.goods < def.supplyGoods) return fail('notEnoughGoods', def.supplyGoods - this.state.goods);
     this.spend({ goods: def.supplyGoods });
     const now = this.now();
@@ -815,6 +924,7 @@ export class Game {
       if (entity.farm && entity.farm.cropId !== null) entity.farm.readyAt = now;
       if (entity.business && entity.business.readyAt !== null) entity.business.readyAt = now;
       if (entity.port && entity.port.tripId !== null) entity.port.readyAt = now;
+      if (entity.station && entity.station.shipmentId !== null) entity.station.readyAt = now;
       this.events.emit('entityUpdated', entity);
     }
     this.changed();
@@ -886,6 +996,7 @@ export class Game {
     if (product.oneTime && this.state.oneTimePurchases.includes(productId)) return fail('alreadyOwned');
     if (product.oneTime) this.state.oneTimePurchases.push(productId);
     this.state.stats.purchases = (this.state.stats.purchases ?? 0) + 1;
+    if (product.workers) this.state.workers += product.workers;
     this.give(product.reward, null);
     this.changed();
     return { ok: true };
@@ -972,6 +1083,8 @@ export class Game {
       }
       case 'sendBoat':
       case 'unloadBoat':
+      case 'sendTrain':
+      case 'unloadTrain':
         return true;
       case 'expand':
       case 'helpNeighbor':
@@ -1137,6 +1250,7 @@ export class Game {
       const extra = this.housePopulation(entity, 1) - this.housePopulation(entity);
       if (populationProjected + extra > popCap) reason = 'populationCap';
     }
+    if (!reason && !this.hasFreeWorker()) reason = 'noWorker';
     if (!reason && this.state.coins < cost.coins) {
       reason = 'notEnoughCoins';
       missing = cost.coins - this.state.coins;
@@ -1317,6 +1431,10 @@ export class Game {
       if (entity.port && entity.port.tripId !== null) {
         entity.port.readyAt -= ms;
         entity.port.startedAt -= ms;
+      }
+      if (entity.station && entity.station.shipmentId !== null) {
+        entity.station.readyAt -= ms;
+        entity.station.startedAt -= ms;
       }
       if (entity.house) entity.house.readyAt -= ms;
       if (entity.farm && entity.farm.cropId !== null) {

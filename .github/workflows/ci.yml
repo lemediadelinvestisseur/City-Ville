@@ -21,6 +21,31 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
+      # Le jeu compilé, publié ensuite sur GitHub Pages (version web jouable sur téléphone).
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          path: dist
+
+  # Version web : https://lemediadelinvestisseur.github.io/City-Ville/ (à ajouter à l'écran d'accueil).
+  # À activer une fois : GitHub › Settings › Pages › Source : « GitHub Actions ».
+  deploy-web:
+    name: Déploiement web (GitHub Pages)
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
 
   # Envoie le serveur (convex/) sur le déploiement de production, seulement depuis main et
   # après les vérifications. Clé : secret CONVEX_DEPLOY_KEY du dépôt (voir docs/MISE_EN_LIGNE.md).

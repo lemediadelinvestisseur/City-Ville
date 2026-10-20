@@ -23,10 +23,14 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
         break;
       case 'supply':
       case 'sendBoat':
+      case 'sendTrain':
         sound.play('supply');
         break;
       case 'unloadBoat':
         sound.play('harvest');
+        break;
+      case 'unloadTrain':
+        sound.play('coin');
         break;
       case 'expand':
         sound.play('complete');

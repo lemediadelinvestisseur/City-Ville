@@ -16,6 +16,8 @@ import {
   type Me,
   type NeighborProfile,
   type Profile,
+  type PushItem,
+  type PushKeys,
   type PushResult,
   type RemoteSave,
   type TrackedEvent,
@@ -263,6 +265,19 @@ export class ConvexBackend implements Backend {
 
   announcements(channels: string[]): Promise<Announcement[]> {
     return this.call(() => this.client.query(api.chat.announcements, { token: this.auth, channels }));
+  }
+
+  async pushPublicKey(): Promise<string | null> {
+    if (!this.token) return null;
+    return this.call(() => this.client.action(api.pushNode.publicKey, {}));
+  }
+
+  async pushSchedule(subscription: PushKeys, items: PushItem[]): Promise<void> {
+    await this.call(() => this.client.mutation(api.push.schedule, { token: this.auth, subscription, items }));
+  }
+
+  async pushUnsubscribe(endpoint: string): Promise<void> {
+    await this.call(() => this.client.mutation(api.push.unsubscribe, { token: this.auth, endpoint }));
   }
 }
 

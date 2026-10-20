@@ -15,7 +15,7 @@ import { detectLanguage, language, loadLanguage, t, type Language } from './i18n
 import type { Backend } from './services/online/Backend';
 import { ConvexBackend } from './services/online/ConvexBackend';
 import { LocalBackend } from './services/online/LocalBackend';
-import { createNotifier } from './services/notifications';
+import { createNotifier, registerServiceWorker } from './services/notifications';
 import { MockPaymentProvider } from './services/payments/MockPaymentProvider';
 import { SoundFx } from './services/sound';
 import { Preferences } from './services/preferences';
@@ -84,8 +84,6 @@ async function boot(): Promise<void> {
   const sound = new SoundFx(storage);
   const ctx: AppContext = { game, bus, art, payments, sound, prefs };
   const inbox = new InboxStore(storage);
-  const notifier = createNotifier();
-  const reminders = new ReminderScheduler(game, notifier, prefs);
 
   // ——— Sauvegarde automatique ———
   let resetting = false;
@@ -120,6 +118,10 @@ async function boot(): Promise<void> {
         population: game.derived().population,
         cityName: game.state.cityName,
       }));
+  // Notifications : locales dans l'appli iOS, Web Push (via le serveur) dans le navigateur.
+  registerServiceWorker();
+  const notifier = createNotifier(backend);
+  const reminders = new ReminderScheduler(game, notifier, prefs);
   /** Remplace la partie locale par une sauvegarde (autre appareil) et redémarre. */
   const adoptSave = (data: string, revision: number) => {
     resetting = true;

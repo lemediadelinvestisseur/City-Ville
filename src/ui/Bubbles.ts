@@ -2,9 +2,9 @@ import type { ScreenPoint } from '@/app/context';
 import type { Game, UpgradeInfo } from '@/core/game';
 import type { Entity } from '@/core/types';
 import { getBuildingDef } from '@/data/buildings';
-import { getCropDef, getTripDef } from '@/data/crops';
+import { getCropDef, getShipmentDef, getTripDef } from '@/data/crops';
 import { t } from '@/i18n';
-import { buildingName, cropName, tripName } from '@/i18n/content';
+import { buildingName, cropName, shipmentName, tripName } from '@/i18n/content';
 import { clear, h, icon, rich } from './dom';
 import { formatClock } from './format';
 import { Icons } from './icons';
@@ -104,10 +104,10 @@ export class Bubble {
     if (this.kind === 'edit') return `edit:${entity.id}`;
     const action = this.game.primaryAction(entity).type;
     const cost = this.game.speedUpCost(entity);
-    const content = entity.farm?.cropId ?? entity.port?.tripId ?? '';
+    const content = entity.farm?.cropId ?? entity.port?.tripId ?? entity.station?.shipmentId ?? '';
     const up = this.game.upgradeInfo(entity);
     const upKey = `${up.status}:${'stars' in up ? up.stars : ''}:${up.status === 'available' ? up.reason : ''}`;
-    return `info:${entity.id}:${action}:${cost}:${this.game.decorationBonus(entity)}:${content}:${upKey}`;
+    return `info:${entity.id}:${action}:${this.game.isConnected(entity)}:${cost}:${this.game.decorationBonus(entity)}:${content}:${upKey}`;
   }
 
   private timing(entity: Entity): Timing {
@@ -127,6 +127,14 @@ export class Bubble {
     if (action.type === 'waitBoat' && entity.port?.tripId) {
       const remaining = (action.readyAt - now) / 1000;
       return { remaining, progress: 1 - remaining / getTripDef(entity.port.tripId).durationSec, served: null };
+    }
+    if (action.type === 'waitTrain' && entity.station?.shipmentId) {
+      const remaining = (action.readyAt - now) / 1000;
+      return {
+        remaining,
+        progress: 1 - remaining / getShipmentDef(entity.station.shipmentId).durationSec,
+        served: null,
+      };
     }
     if (action.type === 'waitRent' && def.category === 'house') {
       const remaining = (action.readyAt - now) / 1000;
@@ -254,9 +262,22 @@ export class Bubble {
         case 'decoration':
           lines.push(t('bubble.decoration', { percent: def.bonus.percent, radius: def.bonus.radius }));
           break;
+        case 'station': {
+          if (entity.station?.shipmentId) {
+            const shipment = getShipmentDef(entity.station.shipmentId);
+            title = t('bubble.titleWith', { name, detail: shipmentName(shipment) });
+            lines.push(rich('bubble.delivery', { icon: icon(Icons.coin), coins: shipment.coins }));
+          } else {
+            lines.push(t('bubble.trainDocked'));
+          }
+          break;
+        }
         default:
           break;
       }
+    if (entity.built && !game.isConnected(entity)) {
+      lines.unshift(h('span', { class: 'bubble__warn' }, icon(Icons.road), ` ${t('bubble.needsRoad')}`));
+    }
     const bonus = game.decorationBonus(entity);
     if (bonus > 0) lines.push(h('span', { class: 'bubble__bonus', text: t('bubble.bonus', { percent: bonus }) }));
 

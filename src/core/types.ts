@@ -20,7 +20,8 @@ export interface Requirements {
   population?: number;
 }
 
-export type BuildingCategory = 'house' | 'business' | 'community' | 'storage' | 'farm' | 'port' | 'decoration' | 'road';
+export type BuildingCategory =
+  'house' | 'business' | 'community' | 'storage' | 'farm' | 'port' | 'station' | 'decoration' | 'road' | 'rail';
 
 /** Nature du sol d'une case. */
 export type Terrain = 'grass' | 'sand' | 'water' | 'rock';
@@ -45,9 +46,9 @@ interface BaseDef {
   repeatPlacement?: boolean;
   /**
    * 'shore' : doit toucher l'eau (ports, phare) ; 'bridge' : enjambe le bras de mer d'une rive à l'autre.
-   * Par défaut : terre ferme.
+   * 'rail' : doit longer la voie ferrée (gare). Par défaut : terre ferme.
    */
-  placement?: 'land' | 'shore' | 'bridge';
+  placement?: 'land' | 'shore' | 'bridge' | 'rail';
 }
 
 export interface HouseDef extends BaseDef {
@@ -85,6 +86,16 @@ export interface PortDef extends BaseDef {
   boatTier: number;
 }
 
+/** Gare : se pose le long de la voie ferrée et expédie des marchandises par le train. */
+export interface StationDef extends BaseDef {
+  category: 'station';
+}
+
+/** Voie ferrée (posée par la carte, ni achetée ni vendue). */
+export interface RailDef extends BaseDef {
+  category: 'rail';
+}
+
 export interface DecorationDef extends BaseDef {
   category: 'decoration';
   /** Bonus (%) appliqué aux loyers et recettes des bâtiments dans le rayon (en cases). */
@@ -96,7 +107,16 @@ export interface RoadDef extends BaseDef {
 }
 
 export type BuildingDef =
-  HouseDef | BusinessDef | CommunityDef | StorageDef | FarmDef | PortDef | DecorationDef | RoadDef;
+  | HouseDef
+  | BusinessDef
+  | CommunityDef
+  | StorageDef
+  | FarmDef
+  | PortDef
+  | StationDef
+  | DecorationDef
+  | RoadDef
+  | RailDef;
 
 export interface CropDef {
   id: string;
@@ -119,6 +139,19 @@ export interface TripDef {
   xp: number;
   /** Niveau de bateau minimal. */
   boatTier: number;
+  requires?: Requirements;
+}
+
+/** Livraison par le train : des marchandises partent, des pièces reviennent. */
+export interface ShipmentDef {
+  id: string;
+  name: string;
+  durationSec: number;
+  /** Marchandises chargées au départ. */
+  goods: number;
+  /** Pièces reçues au retour du train. */
+  coins: number;
+  xp: number;
   requires?: Requirements;
 }
 
@@ -145,6 +178,8 @@ export interface Entity {
   farm?: { cropId: string | null; plantedAt: number; readyAt: number };
   /** `tripId` nul : le bateau est à quai. */
   port?: { tripId: string | null; startedAt: number; readyAt: number };
+  /** `shipmentId` nul : le train attend en gare. */
+  station?: { shipmentId: string | null; startedAt: number; readyAt: number };
 }
 
 export interface QuestProgress {
@@ -181,6 +216,8 @@ export interface GameState {
   level: number;
   goods: number;
   energy: number;
+  /** Ouvriers : nombre de chantiers (constructions, améliorations) menés en même temps. */
+  workers: number;
   /** Instant de référence pour la régénération d'énergie. */
   energyUpdatedAt: number;
   entities: Entity[];
@@ -224,7 +261,10 @@ export type FailReason =
   | 'needsWater'
   | 'bridgeSpan'
   | 'needsBridge'
-  | 'onMountain';
+  | 'onMountain'
+  | 'needsRoad'
+  | 'needsRail'
+  | 'noWorker';
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; reason: FailReason; missing?: number };
 
@@ -245,6 +285,10 @@ export type PrimaryAction =
   | { type: 'sendBoat' }
   | { type: 'waitBoat'; readyAt: number }
   | { type: 'unloadBoat' }
+  | { type: 'sendTrain' }
+  | { type: 'waitTrain'; readyAt: number }
+  | { type: 'unloadTrain' }
+  | { type: 'needsRoad' }
   | { type: 'info' };
 
 /** Filtre sur un type de construction : identifiant précis ou catégorie. */
@@ -257,6 +301,7 @@ export type QuestTask =
   | ({ type: 'place' | 'build' | 'supply' | 'collectBusiness' | 'collectRent'; count: number } & DefFilter)
   | { type: 'plant' | 'harvest'; count: number; cropId?: string }
   | { type: 'sendBoat' | 'unloadBoat'; count: number }
+  | { type: 'sendTrain' | 'unloadTrain'; count: number }
   | { type: 'expand'; count: number }
   | ({ type: 'upgrade'; count: number } & DefFilter)
   | { type: 'helpNeighbor' | 'visitNeighbor' | 'marketSell' | 'marketBuy'; count: number }
@@ -287,6 +332,8 @@ export type GameplayEvent =
   | { type: 'collectBusiness'; defId: string }
   | { type: 'sendBoat'; tripId: string }
   | { type: 'unloadBoat'; tripId: string }
+  | { type: 'sendTrain'; shipmentId: string }
+  | { type: 'unloadTrain'; shipmentId: string }
   | { type: 'expand' }
   | { type: 'upgrade'; defId: string; category: BuildingCategory; stars: number }
   | { type: 'helpNeighbor' }

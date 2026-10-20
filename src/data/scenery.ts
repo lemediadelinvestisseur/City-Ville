@@ -18,7 +18,7 @@ import {
  */
 
 export interface SceneryItem {
-  defId: 'tree_oak' | 'tree_pine' | 'road';
+  defId: 'tree_oak' | 'tree_pine' | 'road' | 'rail';
   x: number;
   y: number;
 }
@@ -26,6 +26,17 @@ export interface SceneryItem {
 /** Grandes routes : rangées et colonnes qui traversent la carte. */
 const ROAD_ROWS = [20, 60];
 const ROAD_COLS = [19, 52, 90];
+
+/**
+ * Voie ferrée : elle sort des montagnes au nord (tunnel hors de la carte) et
+ * descend à l'ouest de la ville de départ jusqu'à un butoir, avant la grande route.
+ */
+export const RAIL_X = 4;
+export const RAIL_END_Y = 18;
+
+export function isSceneryRail(x: number, y: number): boolean {
+  return x === RAIL_X && y >= 0 && y <= RAIL_END_Y;
+}
 
 /** Zone de la ville de départ (ses routes et arbres sont posés à la main). */
 function inStartingArea(x: number, y: number): boolean {
@@ -54,7 +65,7 @@ export function forestDensity(x: number, y: number): number {
 
 /** Arbre sauvage sur cette case (null s'il n'y en a pas). */
 export function wildTreeAt(x: number, y: number): SceneryItem['defId'] | null {
-  if (terrainAt(x, y) !== 'grass' || isSceneryRoad(x, y)) return null;
+  if (terrainAt(x, y) !== 'grass' || isSceneryRoad(x, y) || isSceneryRail(x, y)) return null;
   // Pas d'arbre au bord immédiat des routes : elles restent visibles.
   for (const [dx, dy] of [
     [1, 0],
@@ -62,7 +73,7 @@ export function wildTreeAt(x: number, y: number): SceneryItem['defId'] | null {
     [0, 1],
     [0, -1],
   ] as const) {
-    if (isSceneryRoad(x + dx, y + dy)) return null;
+    if (isSceneryRoad(x + dx, y + dy) || isSceneryRail(x + dx, y + dy)) return null;
   }
   const density = forestDensity(x, y);
   const chance = 0.04 + density * 0.6;
@@ -76,6 +87,10 @@ export function sceneryOf(cx: number, cy: number): SceneryItem[] {
   for (let y = cy * CHUNK_SIZE; y < Math.min(MAP_H, (cy + 1) * CHUNK_SIZE); y++) {
     for (let x = cx * CHUNK_SIZE; x < Math.min(MAP_W, (cx + 1) * CHUNK_SIZE); x++) {
       if (inStartingArea(x, y)) continue;
+      if (isSceneryRail(x, y)) {
+        items.push({ defId: 'rail', x, y });
+        continue;
+      }
       if (isSceneryRoad(x, y)) {
         items.push({ defId: 'road', x, y });
         continue;
@@ -213,7 +228,7 @@ export function groundCoverOf(cx: number, cy: number): GroundCover[] {
   const items: GroundCover[] = [];
   for (let y = cy * CHUNK_SIZE; y < Math.min(MAP_H, (cy + 1) * CHUNK_SIZE); y++) {
     for (let x = cx * CHUNK_SIZE; x < Math.min(MAP_W, (cx + 1) * CHUNK_SIZE); x++) {
-      if (inStartingArea(x, y) || isSceneryRoad(x, y)) continue;
+      if (inStartingArea(x, y) || isSceneryRoad(x, y) || isSceneryRail(x, y)) continue;
       const terrain = terrainAt(x, y);
       const roll = hash2(x, y, 20);
       if (terrain === 'sand') {

@@ -103,6 +103,8 @@ export class TerrainAtlas {
     }
     if (!page || page.y + h > this.size) {
       const key = `${this.name}_${this.pages.length}`;
+      // Reste d'une scène précédente du même nom (visite d'une autre ville) : on le remplace.
+      if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
       const texture = this.scene.textures.createCanvas(key, this.size, this.size);
       if (!texture) throw new Error(`Atlas impossible : ${key}`);
       page = { key, texture, x: 0, y: 0, rowHeight: 0, dirty: true };

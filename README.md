@@ -42,6 +42,9 @@ La planche de tous les visuels générés est disponible en développement sur `
 - **Constructions** : habitations (loyers + habitants), commerces (marchandises → recettes), bâtiments publics
   (population maximale), stockage, champs, décorations (bonus de revenus à proximité) et routes.
 - **Chantiers à minuteur** (de 30 s à 16 h selon le bâtiment), puis inauguration ; accélérables contre du cash.
+  Un **ouvrier** par chantier (un au départ, un deuxième dans la boutique).
+- **Routes obligatoires** : un bâtiment ne fonctionne que relié à une route.
+- **Train** : gare le long de la voie ferrée (niveau 10), livraisons de marchandises contre des pièces.
 - **Cultures** : 9 cultures, des fraises (5 min) aux pommes (24 h) ; mode plantation en série.
 - **Pêche** : ville au bord de la mer, ponton / port de pêche / port industriel, sorties en mer.
 - **Progression jusqu'au niveau 30** (~3 semaines), 66 constructions, calibrée par un joueur simulé.
@@ -56,7 +59,9 @@ La planche de tous les visuels générés est disponible en développement sur `
 - **11 langues** : français, anglais, espagnol, portugais, allemand, italien, russe, turc, japonais, coréen,
   chinois — choisie à l'inscription (proposée d'après l'appareil), modifiable dans les réglages.
 - **Défis du jour**, **centre de notifications**, messages en jeu regroupés (« 4 champs sont prêts ! »),
-  résumé au retour, et **notifications de l'appareil** proposées au bon moment (iPhone : même jeu fermé).
+  résumé au retour, et **notifications de l'appareil** proposées au bon moment, même jeu fermé : notifications
+  locales dans l'appli iPhone, **Web Push** (via le serveur) dans le navigateur et l'appli web ajoutée à
+  l'écran d'accueil.
 - **Application iPhone** (Capacitor) : voir [docs/IOS.md](docs/IOS.md).
 - **Économie** : pièces, cash (monnaie premium), énergie qui se recharge, XP et niveaux avec déblocages.
 - **Objectifs guidés** (25) avec flèches d'aide, récompenses et passages de niveau.

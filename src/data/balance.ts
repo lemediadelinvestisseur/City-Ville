@@ -53,14 +53,14 @@ export const CONTENT_LEVEL = 30;
 
 /**
  * XP cumulée pour atteindre chaque niveau (index = niveau). Calibrée avec le
- * joueur simulé (src/core/simulation.ts, 4 connexions par jour) : niveau 10
- * vers le 2e jour, niveau 20 vers le 11e, niveau 30 vers le 21e. Un vrai joueur,
+ * joueur simulé (src/core/simulation.ts, 4 connexions par jour, un seul ouvrier) : niveau 10
+ * vers le 3e jour, niveau 20 vers le 12e, niveau 30 vers le 22e. Un vrai joueur,
  * moins assidu, y arrive en trois semaines environ. Au-delà de la table,
  * chaque niveau coûte 12 % de plus.
  */
 const XP_TABLE: readonly number[] = [
-  0, 0, 15, 55, 120, 210, 400, 570, 760, 1000, 1250, 1850, 2550, 3450, 4650, 6150, 7850, 9500, 11200, 12850, 14850,
-  16950, 19650, 22250, 24900, 27700, 30600, 33700, 36950, 40750, 45150,
+  0, 0, 15, 55, 120, 210, 400, 570, 760, 1000, 1250, 1600, 2200, 2950, 4000, 5300, 6750, 8150, 9650, 11050, 12750,
+  14600, 16900, 19150, 21400, 23800, 26300, 29000, 31800, 35050, 38850,
 ];
 
 export function xpForLevel(level: number): number {

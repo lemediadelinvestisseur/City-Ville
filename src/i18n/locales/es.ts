@@ -31,6 +31,20 @@ const translation: Translation = {
     'hud.energy': 'Energía',
     'hud.goods': 'Mercancías',
     'hud.population': 'Habitantes',
+    'hud.workers': 'Obreros disponibles',
+    'toast.trainSent': 'El tren sale con tus mercancías: vuelve en {duration}.',
+    'toast.needsRoad': '{name} debe tocar una carretera para funcionar.',
+    'fail.needsRoad': 'Conecta este edificio a una carretera para que funcione.',
+    'fail.needsRail': 'La estación debe estar junto a la vía férrea.',
+    'fail.noWorker': 'Tu obrero ya está en una obra: espera a que termine o acelérala.',
+    'workers.hire': 'Contratar a un obrero',
+    'build.effect.station': 'El tren cambia tus mercancías por monedas',
+    'shipments.title': '¿Qué lleva el tren?',
+    'shipments.aria': 'Cargar el tren',
+    'bubble.delivery': 'Al volver: {icon} {coins} monedas',
+    'bubble.trainDocked': 'El tren espera en la estación. Toca la estación para cargarlo.',
+    'bubble.needsRoad': 'Sin carretera: edificio parado',
+    'notif.kind.train': 'Regreso de los trenes',
     'hud.getCoins': 'Conseguir monedas',
     'hud.getCash': 'Conseguir cash',
     'hud.getEnergy': 'Conseguir energía',
@@ -411,6 +425,8 @@ const translation: Translation = {
     'ready.boat#one': '¡El barco volvió a puerto con su captura!',
     'ready.boat#many': '¡{n} barcos volvieron a puerto con su captura!',
     'ready.boat#other': '¡{n} barcos volvieron a puerto con su captura!',
+    'ready.train#one': '¡El tren ha vuelto con las ganancias!',
+    'ready.train#other': '¡{n} trenes han vuelto con las ganancias!',
     'ready.business#one': '{name} atendió a todos sus clientes: ¡cobra las ganancias!',
     'ready.business#many': '¡{n} comercios esperan que cobres sus ganancias!',
     'ready.business#other': '¡{n} comercios esperan que cobres sus ganancias!',
@@ -427,6 +443,8 @@ const translation: Translation = {
     'away.boat#one': '{n} barco de vuelta',
     'away.boat#many': '{n} barcos de vuelta',
     'away.boat#other': '{n} barcos de vuelta',
+    'away.train#one': '{n} tren de vuelta',
+    'away.train#other': '{n} trenes de vuelta',
     'away.business#one': '{n} comercio por cobrar',
     'away.business#many': '{n} comercios por cobrar',
     'away.business#other': '{n} comercios por cobrar',
@@ -476,7 +494,10 @@ const translation: Translation = {
     'notif.enabled': '¡Notificaciones activadas!',
     'notif.denied': 'Las notificaciones están bloqueadas: permítelas en los ajustes de tu dispositivo o del navegador.',
     'notif.unsupported': 'Las notificaciones no están disponibles en este navegador.',
-    'notif.webHint': 'En un navegador, las notificaciones llegan mientras el juego siga abierto en una pestaña.',
+    'notif.webHint':
+      'El servidor del juego te avisa incluso con el juego cerrado (permite las notificaciones del sitio).',
+    'notif.iosInstall':
+      'En iPhone: toca Compartir › «Añadir a pantalla de inicio» y abre el juego desde su icono para recibir notificaciones.',
     'notif.section': 'Notificaciones',
     'notif.on': 'Notificaciones: activadas',
     'notif.off': 'Notificaciones: desactivadas',
@@ -558,7 +579,7 @@ const translation: Translation = {
       hospital: { name: 'Hospital', description: 'Atención médica para toda la región.' },
       train_station: {
         name: 'Estación de tren',
-        description: 'Los trenes conectan tu ciudad con el resto del país.',
+        description: 'El tren se lleva tus mercancías y trae monedas. Colócala junto a la vía férrea.',
       },
       university: { name: 'Universidad', description: 'Llegan estudiantes de todas partes.' },
       museum: { name: 'Museo', description: 'Obras de arte de todo el mundo.' },
@@ -607,6 +628,7 @@ const translation: Translation = {
         description:
           'Une las dos orillas: la orilla este queda abierta a la ampliación. Se coloca sobre el brazo de mar.',
       },
+      rail: { name: 'Vía férrea', description: 'La línea que une la ciudad con el resto del país.' },
     },
     categories: {
       house: 'Viviendas',
@@ -617,6 +639,7 @@ const translation: Translation = {
       storage: 'Almacenes',
       decoration: 'Decoración',
       road: 'Calles',
+      station: 'Tren',
     },
     crops: {
       strawberry: 'Fresas',
@@ -636,6 +659,12 @@ const translation: Translation = {
       trawl: 'Campaña de arrastre',
       campaign: 'Gran campaña',
       industrial: 'Expedición industrial',
+    },
+    shipments: {
+      local: 'Entrega local',
+      regional: 'Tren regional',
+      freight: 'Tren de mercancías',
+      convoy: 'Gran convoy',
     },
     quests: {
       welcome: {
@@ -804,6 +833,7 @@ const translation: Translation = {
       },
     },
     products: {
+      worker_2: { title: 'Segundo obrero', description: 'Dos obras a la vez, para siempre', badge: 'Oferta única' },
       starter_pack: {
         title: 'Pack de inicio',
         description: '30 cash + 5000 monedas + 10 de energía',

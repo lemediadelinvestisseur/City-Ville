@@ -2,8 +2,9 @@ import { findBuildingDef } from '@/data/buildings';
 import { findCropDef } from '@/data/crops';
 import { findQuestDef } from '@/data/quests';
 import { CHUNK_SIZE } from '@/data/balance';
+import { isSceneryRail } from '@/data/scenery';
 import { isWater } from '@/data/terrain';
-import { SAVE_VERSION, emptyDaily } from './newGame';
+import { SAVE_VERSION, START_WORKERS, emptyDaily } from './newGame';
 import type { GameState } from './types';
 
 /** Accès au stockage clé/valeur (localStorage en web, Preferences en natif…). */
@@ -89,6 +90,46 @@ const MIGRATIONS: Record<number, Migration> = {
     state.loginStreak = { lastDay: null, streak: 0 };
     return state;
   },
+  /**
+   * v6 → v7 : ouvriers, champs 1 × 1 (même case d'origine), la gare devient un
+   * terminus de trains et la voie ferrée apparaît dans les zones déjà achetées
+   * (à la place des arbres sauvages, sans toucher aux constructions du joueur).
+   */
+  6: (state) => {
+    state.workers = START_WORKERS;
+    const unlocked = new Set(Array.isArray(state.unlockedChunks) ? (state.unlockedChunks as unknown[]) : []);
+    let entities = Array.isArray(state.entities) ? (state.entities as unknown[]).filter(isObject) : [];
+    const onRail = (e: Record<string, unknown>) =>
+      typeof e.x === 'number' && typeof e.y === 'number' && isSceneryRail(e.x, e.y);
+    entities = entities.filter(
+      (e) => !(onRail(e) && e.starter === true && typeof e.defId === 'string' && e.defId.startsWith('tree_')),
+    );
+    const occupied = new Set<string>();
+    for (const entity of entities) {
+      const def = typeof entity.defId === 'string' ? findBuildingDef(entity.defId) : undefined;
+      if (entity.defId === 'train_station' && entity.built === true) {
+        entity.station = { shipmentId: null, startedAt: 0, readyAt: 0 };
+      }
+      if (!def || typeof entity.x !== 'number' || typeof entity.y !== 'number') continue;
+      for (let dy = 0; dy < def.size.d; dy++) {
+        for (let dx = 0; dx < def.size.w; dx++) occupied.add(`${entity.x + dx},${entity.y + dy}`);
+      }
+    }
+    let nextId = typeof state.nextEntityId === 'number' ? state.nextEntityId : entities.length + 1;
+    for (const key of unlocked) {
+      if (typeof key !== 'string') continue;
+      const [cx = 0, cy = 0] = key.split(',').map(Number);
+      for (let y = cy * CHUNK_SIZE; y < (cy + 1) * CHUNK_SIZE; y++) {
+        for (let x = cx * CHUNK_SIZE; x < (cx + 1) * CHUNK_SIZE; x++) {
+          if (!isSceneryRail(x, y) || occupied.has(`${x},${y}`)) continue;
+          entities.push({ id: nextId++, defId: 'rail', x, y, built: true, starter: true });
+        }
+      }
+    }
+    state.entities = entities;
+    state.nextEntityId = nextId;
+    return state;
+  },
 };
 
 export function serialize(state: GameState, now: number): string {
@@ -125,7 +166,7 @@ export function deserialize(raw: string | null): GameState | null {
 }
 
 function validate(state: Record<string, unknown>): boolean {
-  const numbers = ['coins', 'cash', 'xp', 'level', 'goods', 'energy', 'energyUpdatedAt', 'nextEntityId'];
+  const numbers = ['coins', 'cash', 'xp', 'level', 'goods', 'energy', 'workers', 'energyUpdatedAt', 'nextEntityId'];
   if (!numbers.every((key) => typeof state[key] === 'number' && Number.isFinite(state[key]))) return false;
   if (!Array.isArray(state.entities) || !Array.isArray(state.unlockedChunks)) return false;
   if (!isObject(state.quests) || !isObject(state.tutorial) || !isObject(state.stats)) return false;
