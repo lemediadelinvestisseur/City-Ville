@@ -1165,7 +1165,6 @@ function triumphArch(): ArtPiece {
     [0.4, 2.35],
     [2.6, 2.35],
     [2.75, 1.0],
-    [0.25, 1.0],
   ] as const)
     flowerClump(p, x, y, 6, Math.round(x * 4 + y), 0);
   roundBush(p, 0.3, 2.65, 9);

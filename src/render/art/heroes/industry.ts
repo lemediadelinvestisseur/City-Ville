@@ -602,7 +602,8 @@ function hull(p: IsoPainter, x0: number, y0: number, x1: number, y1: number, h: 
 function rowboat(p: IsoPainter, x0: number, y0: number, len: number, color: string): void {
   const w = 0.3;
   hull(p, x0, y0, x0 + len, y0 + w, 9, color, '#a1673f');
-  for (const u of [0.25, 0.6]) p.box(x0 + len * u, y0 + 0.03, x0 + len * u + 0.07, y0 + w - 0.03, 7, 10, boxColors('#d7b48a'));
+  for (const u of [0.25, 0.6])
+    p.box(x0 + len * u, y0 + 0.03, x0 + len * u + 0.07, y0 + w - 0.03, 7, 10, boxColors('#d7b48a'));
   p.line([x0 + len * 0.5, y0 + w - 0.02, 11], [x0 + len * 0.35, y0 + w + 0.22, -2], '#8d6e63', 2.5);
   p.line([x0 + len * 0.5, y0 + 0.02, 11], [x0 + len * 0.6, y0 - 0.15, 2], '#8d6e63', 2.5);
 }
@@ -927,7 +928,8 @@ const bigWarehouse: Hero = {
         p.line([xa + tw * t, y0, h + rz * t], [xa + tw * t, y1, h + rz * t], shade('#6d4c41', -0.15), 1);
       }
       p.rightQuad(y0, y1, h, h + rz, xb, '#455a64');
-      for (let y = y0 + 0.06; y < y1 - 0.1; y += 0.24) p.window('right', y + 0.04, y + 0.18, h + 5, h + rz - 4, xb, '#9fd8f5', '#d7ccc8');
+      for (let y = y0 + 0.06; y < y1 - 0.1; y += 0.24)
+        p.window('right', y + 0.04, y + 0.18, h + 5, h + rz - 4, xb, '#9fd8f5', '#d7ccc8');
       p.fill(
         [
           [xa, y1, h],
@@ -1040,7 +1042,7 @@ const logistics: Hero = {
     ctx.restore();
     p.rightQuad(by0 + 0.2, by0 + 0.5, bz + 10, bz + 22, bx0 + bs, '#b07a3c');
 
-    p.sign('left', 1.2, 2.05, 38, 52, y1 + 0.01, '#e65100', '#ffffff', signText('LOGISTIQUE'));
+    p.sign('left', 1.42, 2.08, 38, 52, y1 + 0.01, '#e65100', '#ffffff', signText('LOGISTIQUE'));
     // Bureaux vitrés à l'angle avant-gauche.
     const ox0 = 0.12;
     const ox1 = 0.82;
@@ -1048,8 +1050,22 @@ const logistics: Hero = {
     const oy1 = 2.42;
     p.box(ox0, oy0, ox1, oy1, 0, 78, boxColors('#eceff1'));
     for (const z of [8, 30, 52]) {
-      p.leftQuad(ox0 + 0.05, ox1 - 0.05, z, z + 16, oy1, p.gradient([0, oy1, z + 16], [0, oy1, z], '#bfe7fb', '#4fa8d8'));
-      p.rightQuad(oy0 + 0.05, oy1 - 0.05, z, z + 16, ox1, p.gradient([ox1, 0, z + 16], [ox1, 0, z], '#a5d6f0', '#3b8fbf'));
+      p.leftQuad(
+        ox0 + 0.05,
+        ox1 - 0.05,
+        z,
+        z + 16,
+        oy1,
+        p.gradient([0, oy1, z + 16], [0, oy1, z], '#bfe7fb', '#4fa8d8'),
+      );
+      p.rightQuad(
+        oy0 + 0.05,
+        oy1 - 0.05,
+        z,
+        z + 16,
+        ox1,
+        p.gradient([ox1, 0, z + 16], [ox1, 0, z], '#a5d6f0', '#3b8fbf'),
+      );
       for (const u of [0.35, 0.6]) p.line([ox0 + u, oy1, z], [ox0 + u, oy1, z + 16], '#eceff1', 1.5);
       p.line([ox1, oy0 + 0.4, z], [ox1, oy0 + 0.4, z + 16], '#cfd8dc', 1.5);
     }
@@ -1061,7 +1077,8 @@ const logistics: Hero = {
     // Quais côté droit avec deux camions.
     const bays = [0.38, 0.98, 1.58] as const;
     for (const a of bays) rollDoor(p, 'right', a, a + 0.44, 0, 34, x1, '#eceff1');
-    for (const a of bays) p.fill(
+    for (const a of bays)
+      p.fill(
         [
           [x1, a - 0.04, 40],
           [x1, a + 0.48, 40],
@@ -1342,7 +1359,11 @@ const harbor: Hero = {
     for (let i = 0; i < 6; i++) {
       const t0 = i / 6;
       const t1 = (i + 1) / 6;
-      const lerp = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+      const lerp = (a: V3, b: V3, t: number): V3 => [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+      ];
       p.line(lerp(base, tip, t0), lerp(baseLow, [tip[0], tip[1], tip[2] - 5], t1), '#f57f17', 1.4);
     }
     p.line([cx, cy, 124], [cx, cy, 142], '#f9a825', 3);
