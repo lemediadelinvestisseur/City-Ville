@@ -26,6 +26,18 @@ Actions › CI › **Run workflow** sur `main`. Dans le tableau de bord Convex, 
 Le jeu compilé (`npm run build`, donc `npm run ios:sync`) se connecte à l'adresse de `.env.production`.
 `npm run dev` reste en **mode démo** tant qu'aucun déploiement de développement n'est configuré.
 
+## Version web (sans Xcode)
+
+À chaque fusion sur `main`, la CI publie aussi le jeu sur **GitHub Pages** :
+https://lemediadelinvestisseur.github.io/City-Ville/ (connecté au serveur de production).
+
+1. Une fois : GitHub › dépôt › **Settings › Pages › Build and deployment › Source : GitHub Actions**
+   (faisable depuis le téléphone, dans le navigateur).
+2. Sur l'iPhone : ouvre l'adresse dans Safari, puis Partager › « Sur l'écran d'accueil ». Le jeu s'ouvre en
+   plein écran, se met à jour tout seul à chaque fusion et reçoit les notifications (Web Push).
+3. Pour retrouver sa ville de l'appli : dans l'appli, Réglages › Compte › « Code de transfert », puis saisir
+   le code dans la version web.
+
 ## 3. Devenir l'administrateur (une fois)
 
 L'interface admin et les données sont réservées à **un seul compte**, le tien. Il n'y a pas de mot de passe
