@@ -471,7 +471,9 @@ const translation: Translation = {
     'notif.enabled': 'Notifiche attivate!',
     'notif.denied': 'Le notifiche sono bloccate: consentile nelle impostazioni del dispositivo o del browser.',
     'notif.unsupported': 'Le notifiche non sono disponibili su questo browser.',
-    'notif.webHint': 'In un browser, le notifiche arrivano finché il gioco resta aperto in una scheda.',
+    'notif.webHint': 'Il server del gioco ti avvisa anche a gioco chiuso (consenti le notifiche del sito).',
+    'notif.iosInstall':
+      'Su iPhone: tocca Condividi › «Aggiungi alla schermata Home», poi apri il gioco dalla sua icona per ricevere le notifiche.',
     'notif.section': 'Notifiche',
     'notif.on': 'Notifiche: attivate',
     'notif.off': 'Notifiche: disattivate',

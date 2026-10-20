@@ -529,7 +529,9 @@ export const FR = {
   'notif.denied':
     'Les notifications sont bloquées : autorisez-les dans les réglages de votre appareil ou du navigateur.',
   'notif.unsupported': 'Les notifications ne sont pas disponibles sur ce navigateur.',
-  'notif.webHint': 'Dans un navigateur, les notifications arrivent tant que le jeu reste ouvert dans un onglet.',
+  'notif.webHint': 'Le serveur du jeu vous prévient même quand le jeu est fermé (autorisez les notifications du site).',
+  'notif.iosInstall':
+    'Sur iPhone : touchez Partager › « Sur l’écran d’accueil », puis ouvrez le jeu depuis son icône pour recevoir les notifications.',
   'notif.section': 'Notifications',
   'notif.on': 'Notifications : activées',
   'notif.off': 'Notifications : désactivées',

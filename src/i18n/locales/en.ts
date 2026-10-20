@@ -468,7 +468,9 @@ const translation: Translation = {
     'notif.enabled': 'Notifications on!',
     'notif.denied': 'Notifications are blocked: allow them in your device or browser settings.',
     'notif.unsupported': 'Notifications aren’t available in this browser.',
-    'notif.webHint': 'In a browser, notifications arrive as long as the game stays open in a tab.',
+    'notif.webHint': 'The game server notifies you even when the game is closed (allow notifications for this site).',
+    'notif.iosInstall':
+      'On iPhone: tap Share › “Add to Home Screen”, then open the game from its icon to get notifications.',
     'notif.section': 'Notifications',
     'notif.on': 'Notifications: on',
     'notif.off': 'Notifications: off',

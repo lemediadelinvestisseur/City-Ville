@@ -102,7 +102,11 @@ export class NotificationsUi {
       });
       section.append(h('div', { class: 'modal__section-title' }, icon(Icons.bell), ` ${t('notif.section')}`));
       if (notifier.kind === 'none') {
-        section.append(h('p', { class: 'muted settings__hint', text: t('notif.unsupported') }));
+        // Safari sur iPhone : les notifications n'existent que pour le jeu ajouté à l'écran d'accueil.
+        const iosTab = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        section.append(
+          h('p', { class: 'muted settings__hint', text: t(iosTab ? 'notif.iosInstall' : 'notif.unsupported') }),
+        );
         return;
       }
       section.append(toggle);

@@ -80,7 +80,21 @@ dans la démo hors ligne, tout reste visible.
 | `chat.ts`        | Chat (salon Monde + salon par langue), annonces, modération, purge à 30 jours (`crons.ts`)   |
 | `roles.ts`       | Rôles : administrateur unique (ligne de commande), modérateurs nommés depuis l'admin         |
 | `stats.ts`       | Sessions (signal chaque minute) et évènements de progression                                 |
+| `push.ts`        | Notifications Web Push : abonnements, rappels programmés (envoi par `pushNode.ts`)           |
 | `admin.ts`       | Tableau de bord (audience, rétention, langues, chat…), annonces, bannissements — admin seul  |
+
+## Notifications Web Push
+
+Dans le navigateur (et l'appli web ajoutée à l'écran d'accueil de l'iPhone), le jeu envoie au serveur la liste
+de ses prochains rappels ; `push.ts` les programme et `pushNode.ts` les envoie à l'heure dite, même jeu fermé.
+L'appli iOS (Capacitor) utilise, elle, les notifications locales du téléphone.
+
+- **Rien à configurer** : les clés VAPID sont créées par le serveur au premier besoin (table `pushKeys`, la clé
+  privée ne quitte jamais le serveur). Mets une vraie adresse dans `PRIVACY_CONTACT` (`convex/privacy.ts`) :
+  elle sert aussi de contact pour les services d'envoi (Apple, Google, Mozilla).
+- **iPhone (navigateur)** : Safari n'autorise les notifications que pour un site ajouté à l'écran d'accueil
+  (Partager › « Sur l'écran d'accueil », iOS 16.4 ou plus récent) ; le jeu l'explique dans Réglages.
+- Le serveur ne contacte que les services d'envoi connus (Apple, Google, Mozilla, Microsoft).
 
 ## Rôles
 

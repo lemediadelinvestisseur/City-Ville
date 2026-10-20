@@ -469,7 +469,10 @@ const translation: Translation = {
     'notif.enabled': 'Benachrichtigungen aktiviert!',
     'notif.denied': 'Benachrichtigungen sind blockiert: Erlaube sie in den Einstellungen deines Geräts oder Browsers.',
     'notif.unsupported': 'Benachrichtigungen sind in diesem Browser nicht verfügbar.',
-    'notif.webHint': 'Im Browser kommen Benachrichtigungen nur an, solange das Spiel in einem Tab geöffnet ist.',
+    'notif.webHint':
+      'Der Spielserver benachrichtigt dich auch bei geschlossenem Spiel (Mitteilungen für die Seite erlauben).',
+    'notif.iosInstall':
+      'Auf dem iPhone: Teilen › „Zum Home-Bildschirm“ tippen und das Spiel über sein Symbol öffnen, um Mitteilungen zu erhalten.',
     'notif.section': 'Benachrichtigungen',
     'notif.on': 'Benachrichtigungen: an',
     'notif.off': 'Benachrichtigungen: aus',

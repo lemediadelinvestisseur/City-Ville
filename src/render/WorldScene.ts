@@ -1307,11 +1307,17 @@ export class WorldScene extends Phaser.Scene {
   private nearestFreeSpot(cx: number, cy: number, defId: string): { x: number; y: number } {
     const def = getBuildingDef(defId);
     const radius = def.placement === 'bridge' ? 40 : 10;
-    for (let r = 0; r <= radius; r++) {
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          if (this.game_.checkPlacement(def, cx + dx, cy + dy) === null) return { x: cx + dx, y: cy + dy };
+    // D'abord une place au bord d'une route (le bâtiment y fonctionnera), sinon la plus proche.
+    for (const connected of [true, false]) {
+      for (let r = 0; r <= radius; r++) {
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const x = cx + dx;
+            const y = cy + dy;
+            if (connected && !this.game_.wouldConnect(def, x, y)) continue;
+            if (this.game_.checkPlacement(def, x, y) === null) return { x, y };
+          }
         }
       }
     }

@@ -463,7 +463,9 @@ const translation: Translation = {
     'notif.enabled': '알림이 켜졌어요!',
     'notif.denied': '알림이 차단되어 있어요. 기기 또는 브라우저 설정에서 허용해 주세요.',
     'notif.unsupported': '이 브라우저에서는 알림을 사용할 수 없어요.',
-    'notif.webHint': '브라우저에서는 게임이 탭에 열려 있는 동안에만 알림이 와요.',
+    'notif.webHint': '게임을 닫아도 서버가 알려 줘요 (사이트 알림을 허용하세요).',
+    'notif.iosInstall':
+      'iPhone에서는 공유 › ‘홈 화면에 추가’를 누른 뒤 아이콘으로 게임을 열어야 알림을 받을 수 있어요.',
     'notif.section': '알림',
     'notif.on': '알림: 켜짐',
     'notif.off': '알림: 꺼짐',

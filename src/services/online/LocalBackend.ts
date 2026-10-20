@@ -455,4 +455,13 @@ export class LocalBackend implements Backend {
   async announcements(): Promise<Announcement[]> {
     return [];
   }
+
+  /** Démo hors-ligne : pas de serveur d'envoi (les rappels restent ceux de l'onglet ouvert). */
+  async pushPublicKey(): Promise<string | null> {
+    return null;
+  }
+
+  async pushSchedule(): Promise<void> {}
+
+  async pushUnsubscribe(): Promise<void> {}
 }

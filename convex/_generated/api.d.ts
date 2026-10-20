@@ -19,6 +19,8 @@ import type * as moderation from '../moderation.js';
 import type * as neighbors from '../neighbors.js';
 import type * as players from '../players.js';
 import type * as privacy from '../privacy.js';
+import type * as push from '../push.js';
+import type * as pushNode from '../pushNode.js';
 import type * as roles from '../roles.js';
 import type * as saves from '../saves.js';
 import type * as stats from '../stats.js';
@@ -35,6 +37,8 @@ declare const fullApi: ApiFromModules<{
   neighbors: typeof neighbors;
   players: typeof players;
   privacy: typeof privacy;
+  push: typeof push;
+  pushNode: typeof pushNode;
   roles: typeof roles;
   saves: typeof saves;
   stats: typeof stats;

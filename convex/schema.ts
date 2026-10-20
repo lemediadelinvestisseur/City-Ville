@@ -165,4 +165,30 @@ export default defineSchema({
   })
     .index('by_at', ['at'])
     .index('by_player', ['playerId']),
+
+  /** Abonnements Web Push (navigateur ou appli web installée sur l'écran d'accueil). */
+  pushSubscriptions: defineTable({
+    playerId: v.id('players'),
+    endpoint: v.string(),
+    p256dh: v.string(),
+    auth: v.string(),
+    createdAt: v.number(),
+  })
+    .index('by_player', ['playerId'])
+    .index('by_endpoint', ['endpoint']),
+
+  /** Notifications programmées (« vos fraises sont prêtes ») : une tâche planifiée chacune. */
+  pushJobs: defineTable({
+    playerId: v.id('players'),
+    at: v.number(),
+    title: v.string(),
+    body: v.string(),
+    scheduledId: v.optional(v.id('_scheduled_functions')),
+  }).index('by_player', ['playerId']),
+
+  /** Clés VAPID du serveur, créées au premier besoin (la clé privée ne quitte jamais le serveur). */
+  pushKeys: defineTable({
+    publicKey: v.string(),
+    privateKey: v.string(),
+  }),
 });
