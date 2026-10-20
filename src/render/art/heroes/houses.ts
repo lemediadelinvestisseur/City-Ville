@@ -1130,6 +1130,480 @@ const bungalow: Hero = {
   },
 };
 
+/** Maison de ville victorienne bleue : bow-window, perron, pignon ardoise à œil-de-bœuf. */
+const townhouse: Hero = {
+  height: 150,
+  draw(g, p) {
+    const S = 2;
+    paving(g, 0.02, 0.02, S - 0.02, S - 0.02, '#cfd8dc', 0.2);
+    const x0 = 0.42;
+    const x1 = 1.58;
+    const y0 = 0.24;
+    const y1 = 1.3;
+    const h = 80;
+    const wall = '#8ec5f2';
+    const trim = '#ffffff';
+    g.flat(0.12, 1.42, 0.98, 1.88, 0, '#8fd14f', '#6fae3a');
+    g.flat(1.88, 0.12, 1.98, 1.98, 0, '#8fd14f');
+    softShadow(g, S, x0, y0, x1, y1);
+
+    chimney(p, 0.72, 0.45, 96, 140, '#90a4ae', 0.09, 2);
+    p.box(x0, y0, x1, y1, 0, h, boxColors(wall));
+    lap(p, 'left', x0, x1, y1, 9, h, wall);
+    lap(p, 'right', y0, y1, x1, 9, h, wall);
+    band(p, x0, y0, x1, y1, 0, 9, '#9aa7ad');
+    band(p, x0, y0, x1, y1, 40, 44, trim);
+    band(p, x0, y0, x1, y1, h - 4, h, trim);
+    p.leftQuad(x0, x0 + 0.05, 9, h, y1, trim);
+    p.leftQuad(x1 - 0.05, x1, 9, h, y1, trim);
+    p.rightQuad(y1 - 0.05, y1, 9, h, x1, '#dfe3e6');
+    for (const c of [0.52, 1.0]) {
+      win(p, 'right', c, 0.12, x1, 16, 34, { shutter: '#2b5f8a', seed: 2 });
+      win(p, 'right', c, 0.12, x1, 52, 72, { shutter: '#2b5f8a', flowers: true, seed: c > 0.8 ? 1 : 4 });
+    }
+    // Bow-window sur deux niveaux.
+    const ba = 0.5;
+    const bb = 0.98;
+    const bd = 0.2;
+    jut(p, 'left', ba, bb, y1, bd, 0, 9, boxColors('#8d989e', false));
+    jut(p, 'left', ba, bb, y1, bd, 9, 74, boxColors(wall, false));
+    lap(p, 'left', ba, bb, y1 + bd, 9, 74, wall);
+    band(p, ba, y1, bb, y1 + bd, 40, 44, trim);
+    for (const [za, zb] of [
+      [15, 35],
+      [51, 70],
+    ] as const) {
+      win(p, 'left', (ba + bb) / 2, 0.14, y1 + bd, za, zb, { bars: 'grid' });
+      win(p, 'right', y1 + bd / 2, 0.05, bb, za, zb, { bars: 'none', sill: false });
+    }
+    jut(p, 'left', ba - 0.03, bb + 0.03, y1 - 0.02, bd + 0.05, 74, 79, boxColors(trim, false));
+    for (let s = ba; s < bb; s += 0.06) p.leftQuad(s, s + 0.03, 71, 74, y1 + bd + 0.02, '#e3e6e8');
+    // Entrée sur perron.
+    win(p, 'left', 1.32, 0.11, y1, 52, 72, { flowers: true, seed: 3 });
+    entry(p, 'left', 1.32, 0.24, 30, y1, '#37474f', { z0: 9, transom: true, pediment: trim });
+    steps(p, 'left', 1.32, 0.34, y1, 3, '#b8b0a4', 3, 0.09);
+    for (const x of [1.13, 1.51]) {
+      p.line([x, y1, 22], [x, y1 + 0.27, 10], '#263238', 2);
+      p.line([x, y1 + 0.27, 0], [x, y1 + 0.27, 12], '#263238', 2);
+    }
+    gableRoof(p, 'y', x0, y0, x1, y1, h, 46, '#50636e', wall, {
+      style: 'slate',
+      ov: 0.14,
+      onGable: () => {
+        lap(p, 'left', x0 + 0.1, x1 - 0.1, y1, h, h + 30, wall);
+        oculus(p, 'left', (x0 + x1) / 2, y1, h + 20, 8);
+        // Lambrequin ajouré sous la rive.
+        const xm = (x0 + x1) / 2;
+        for (let i = 1; i < 6; i++) {
+          const t = i / 6;
+          p.dot(x0 + (xm - x0) * t, y1 + 0.02, h + 46 * t - 5, 2.2, '#ffffff');
+          p.dot(x1 - (x1 - xm) * t, y1 + 0.02, h + 46 * t - 5, 2.2, '#ffffff');
+        }
+      },
+    });
+    flowerBush(p, 0.3, 1.58, 8, '#ff80ab');
+    flowerBush(p, 0.62, 1.72, 7, '#ffeb3b');
+    roundBush(p, 0.9, 1.6, 7, '#5cbf32');
+    ironFence(p, [0.1, 1.92], [1.0, 1.92]);
+    lamp(p, 1.86, 1.72, 40);
+    tree(p, 1.8, 0.3, 58, '#66bb44');
+    topiary(p, 1.8, 1.2, 'ball');
+  },
+};
+
+/** Chalet alpin : rondins, soubassement en pierre, balcon sculpté sous le grand pignon. */
+const chalet: Hero = {
+  height: 150,
+  draw(g, p) {
+    const S = 2;
+    lawn(g, S, '#9ccf63');
+    const x0 = 0.4;
+    const x1 = 1.6;
+    const y0 = 0.3;
+    const y1 = 1.36;
+    const h = 46;
+    const wood = '#a8693c';
+    const stone = '#9e9e9e';
+    const shut = '#2e7d32';
+    softShadow(g, S, x0, y0, x1, y1);
+    stonePath(g, [1.0, y1 + 0.2], [1.0, 1.92], '#d7ccc8');
+
+    p.fence([0.06, 0.06], [1.94, 0.06], '#8d6e63');
+    p.fence([0.06, 0.06], [0.06, 1.94], '#8d6e63');
+    pine(p, 0.22, 0.3, 66);
+    chimney(p, 0.7, 0.48, 70, 112, '#8f8a84', 0.1);
+    // Soubassement en pierres, puis rondins.
+    p.box(x0, y0, x1, y1, 0, 12, boxColors(stone));
+    const rnd = seeded(7);
+    for (const side of ['left', 'right'] as const) {
+      const [a, b, plane] = side === 'left' ? [x0, x1, y1] : [y0, y1, x1];
+      for (let z = 1, r = 0; z < 11; z += 5, r++)
+        for (let s = a + (r % 2) * 0.06; s < b - 0.05; s += 0.12)
+          poly(p, side, plane, [[s + 0.01, z], [s + 0.1, z], [s + 0.1, z + 4], [s + 0.01, z + 4]], tone(side, shade(stone, rnd() * 0.25 - 0.05)));
+    }
+    p.box(x0, y0, x1, y1, 12, h, boxColors(wood));
+    for (const side of ['left', 'right'] as const) {
+      const [a, b, plane] = side === 'left' ? [x0, x1, y1] : [y0, y1, x1];
+      for (let z = 12; z < h; z += 5.5) {
+        seg(p, side, plane, a, z + 4.8, b, z + 4.8, tone(side, shade(wood, -0.3)), 1.2);
+        seg(p, side, plane, a, z + 1.5, b, z + 1.5, tone(side, shade(wood, 0.15)), 1);
+      }
+    }
+    // Têtes de rondins aux angles.
+    for (let z = 14.5; z < h; z += 5.5) {
+      p.dot(x0, y1 + 0.02, z, 2.6, '#d9a066');
+      p.dot(x1 + 0.02, y1 + 0.02, z, 2.6, '#c88f55');
+    }
+    for (const c of [0.6, 1.4]) win(p, 'left', c, 0.12, y1, 20, 36, { shutter: shut, glass: WARM, flowers: true, seed: c > 1 ? 0 : 3 });
+    for (const c of [0.58, 1.08]) win(p, 'right', c, 0.12, x1, 20, 36, { shutter: shut, glass: WARM, flowers: true, seed: c > 1 ? 2 : 5 });
+    entry(p, 'left', 1.0, 0.24, 30, y1, '#4e342e', { z0: 0, frame: '#d7a86e' });
+    const xm = (x0 + x1) / 2;
+    gableRoof(p, 'y', x0, y0, x1, y1, h, 50, '#37474f', '#b77646', {
+      style: 'slate',
+      ov: 0.24,
+      rake: '#7a4a2a',
+      eave: '#5d4037',
+      onGable: () => {
+        for (let x = x0 + 0.06; x < x1 - 0.02; x += 0.075) {
+          const top = h + 50 * (1 - Math.abs(x - xm) / (xm - x0));
+          seg(p, 'left', y1, x, h, x, top - 2, shade('#b77646', -0.25), 1);
+        }
+        for (const c of [0.8, 1.2]) win(p, 'left', c, 0.09, y1, h + 12, h + 27, { glass: WARM, shutter: shut, sill: false });
+        oculus(p, 'left', xm, y1, h + 38, 4.5, '#f3e2c7', WARM);
+        // Balcon à balustres découpés.
+        jut(p, 'left', x0 - 0.04, x1 + 0.04, y1, 0.24, h - 1, h + 3, boxColors('#8a5530', false));
+        const yb = y1 + 0.23;
+        p.leftQuad(x0 - 0.04, x1 + 0.04, h + 3, h + 15, yb, '#c98a4f');
+        for (let x = x0 + 0.02; x < x1; x += 0.1) {
+          const [sx, sy] = p.p(x + 0.04, yb, h + 9);
+          p.ctx.fillStyle = '#6d4426';
+          p.ctx.beginPath();
+          p.ctx.ellipse(sx, sy, 2, 3.2, 0, 0, Math.PI * 2);
+          p.ctx.fill();
+        }
+        p.leftQuad(x0 - 0.06, x1 + 0.06, h + 14, h + 17, yb + 0.01, '#8a5530');
+        p.rightQuad(y1, yb, h + 3, h + 15, x1 + 0.04, '#a5703f');
+        for (let x = x0; x <= x1; x += 0.3) flowerBush(p, x + 0.1, yb - 0.03, 4, '#e53935', h + 15);
+      },
+    });
+    // Fumée.
+    for (const [dz, dx, r] of [
+      [10, 0, 5],
+      [20, 0.06, 6.5],
+      [32, 0.02, 8],
+    ] as const)
+      p.dot(0.7 + dx, 0.48 - dx, 120 + dz, r, '#f2f2f2');
+    // Étoile « premium ».
+    const [sx, sy] = p.p(1.12, 1.12, 132);
+    const { ctx } = p;
+    ctx.fillStyle = '#ffd54f';
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? 10 : 4.5;
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      ctx.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r);
+    }
+    ctx.closePath();
+    ctx.fill();
+    // Tas de bois contre la façade droite.
+    p.box(x1 + 0.04, 0.45, x1 + 0.2, 0.95, 0, 16, boxColors('#8d6e63', false));
+    for (let z = 3; z < 16; z += 4.5)
+      for (let y = 0.5; y < 0.95; y += 0.075) p.dot(x1 + 0.2, y, z, 2.3, '#e0b27a');
+    pine(p, 1.84, 0.28, 60, '#2f7a4a');
+    lamp(p, 0.78, y1 + 0.3, 26);
+    roundBush(p, 1.82, 1.72, 8, '#3f8f2f');
+    pine(p, 0.22, 1.78, 48, '#3a8a55');
+    p.fence([0.06, 1.94], [0.86, 1.94], '#8d6e63');
+    p.fence([1.14, 1.94], [1.94, 1.94], '#8d6e63');
+    p.fence([1.94, 0.06], [1.94, 1.94], '#8d6e63');
+  },
+};
+
+/** Villa méditerranéenne : tuiles canal, aile à toit-terrasse, piscine, palmiers et cyprès. */
+const villa: Hero = {
+  height: 150,
+  draw(g, p) {
+    const S = 3;
+    lawn(g, S, '#a8d672');
+    const x0 = 1.0;
+    const x1 = 2.62;
+    const y0 = 0.32;
+    const y1 = 1.8;
+    const h = 70;
+    const wall = '#fff6e3';
+    const roof = '#c8623a';
+    const teal = '#3fa7a0';
+    const frame = '#8d6e63';
+    paving(g, 0.12, 2.02, 2.9, 2.92, '#efe3cf', 0.22);
+    paving(g, 1.84, y1, 2.18, 2.02, '#efe3cf', 0.22);
+    softShadow(g, S, 0.3, y0, x1, y1);
+
+    picket(p, [0.06, 0.06], [2.94, 0.06]);
+    picket(p, [0.06, 0.06], [0.06, 2.94]);
+    palm(p, 0.32, 0.4, 84);
+    // Aile basse à toit-terrasse.
+    const wa = 0.3;
+    const wy0 = 0.78;
+    const wh = 38;
+    p.box(wa, wy0, x0, y1, 0, wh, boxColors(wall));
+    for (const c of [0.48, 0.82]) win(p, 'left', c, 0.1, y1, 6, 24, { arch: true, shutter: teal, frame, bars: 'vert' });
+    p.box(wa - 0.03, wy0 - 0.03, x0, y1 + 0.03, wh, wh + 4, boxColors('#f1dfc0', false));
+    for (let x = wa; x <= x0 - 0.02; x += 0.07) p.line([x, y1, wh + 4], [x, y1, wh + 12], '#ffffff', 2.2);
+    for (let y = wy0; y <= y1; y += 0.07) p.line([wa, y, wh + 4], [wa, y, wh + 12], '#ffffff', 2.2);
+    p.line([wa, y1, wh + 13], [x0, y1, wh + 13], '#ffffff', 3);
+    p.line([wa, wy0, wh + 13], [wa, y1, wh + 13], '#ffffff', 3);
+    topiary(p, 0.55, 1.15, 'ball', wh + 4);
+    // Corps principal.
+    chimney(p, 1.4, 0.62, 86, 124, '#f1dfc0', 0.09);
+    p.box(x0, y0, x1, y1, 0, h, boxColors(wall));
+    band(p, x0, y0, x1, y1, 0, 5, '#d9c6a5');
+    band(p, x0, y0, x1, y1, 35, 38, '#f1dfc0');
+    band(p, x0, y0, x1, y1, h - 5, h, '#f1dfc0');
+    const slots = [1.2, 1.61, 2.01, 2.42];
+    for (const [i, c] of slots.entries()) {
+      if (i !== 2) win(p, 'left', c, 0.1, y1, 9, 26, { arch: true, shutter: teal, frame, bars: 'vert' });
+      if (i !== 2) win(p, 'left', c, 0.1, y1, 44, 62, { shutter: teal, frame, flowers: true, seed: i });
+    }
+    entry(p, 'left', 2.01, 0.26, 26, y1, '#6d4c41', { arch: true, frame: '#e8c9a0' });
+    win(p, 'left', 2.01, 0.11, y1, 42, 64, { frame, bars: 'vert', sill: false });
+    balcony(p, 'left', 1.85, 2.17, y1, 42, { depth: 0.14, rail: '#3e2723', slab: '#f1dfc0' });
+    for (const [i, c] of [0.6, 1.06, 1.52].entries()) {
+      win(p, 'right', c, 0.1, x1, 9, 26, { arch: true, shutter: teal, frame, bars: 'vert' });
+      win(p, 'right', c, 0.1, x1, 44, 62, { shutter: teal, frame, flowers: true, seed: i + 2 });
+    }
+    hipRoof(p, x0, y0, x1, y1, h, 38, roof, { style: 'tiles', ov: 0.16, eave: '#fff3e0' });
+    // Bougainvillier grimpant sur l'angle.
+    for (const [dz, dx] of [
+      [10, 0],
+      [22, 0.03],
+      [34, -0.02],
+      [46, 0.02],
+    ] as const)
+      flowerBush(p, x0 + 0.04 + dx, y1 + 0.04, 7, '#e91e8c', dz - 6);
+    pool(p, 0.24, 2.18, 1.6, 2.8);
+    topiary(p, 1.78, 1.92, 'ball');
+    topiary(p, 2.25, 1.92, 'ball');
+    cypress(p, 2.82, 0.42, 66);
+    cypress(p, 2.82, 1.1, 58);
+    palm(p, 2.8, 1.85, 74);
+    lounger(p, 2.3, 2.44, '#4fc3f7');
+    lounger(p, 2.3, 2.66, '#ffb74d');
+    parasol(p, 2.72, 2.42, 0, '#e53935', '#ffffff', 22);
+    flowerBush(p, 0.18, 1.95, 7, '#e91e8c');
+    picket(p, [0.06, 2.94], [1.84, 2.94]);
+    picket(p, [2.18, 2.94], [2.94, 2.94]);
+    picket(p, [2.94, 0.06], [2.94, 2.94]);
+  },
+};
+
+/** Grande demeure coloniale blanche : portique à colonnes et fronton, ardoises, lucarnes, fontaine. */
+const mansion: Hero = {
+  height: 170,
+  draw(g, p) {
+    const S = 3;
+    lawn(g, S, '#a8d672');
+    const x0 = 0.42;
+    const x1 = 2.58;
+    const y0 = 0.32;
+    const y1 = 1.9;
+    const h = 80;
+    const wall = '#fdfaf2';
+    const slate = '#455a64';
+    const black = '#263238';
+    g.groundEllipse(1.5, 2.56, 0, 0.44, '#e8dfcf');
+    g.flat(1.3, 2.4, 1.7, 2.98, 0, '#e8dfcf');
+    g.groundEllipse(1.5, 2.56, 0, 0.2, '#a8d672');
+    softShadow(g, S, x0, y0, x1, y1);
+
+    ironFence(p, [0.08, 0.08], [2.92, 0.08]);
+    ironFence(p, [0.08, 0.08], [0.08, 2.92]);
+    tree(p, 0.3, 0.32, 80, '#4caf50');
+    chimney(p, 0.85, 1.1, 104, 146, '#bcaaa4', 0.11, 2);
+    chimney(p, 2.15, 1.1, 104, 146, '#bcaaa4', 0.11, 2);
+    p.box(x0, y0, x1, y1, 0, h, boxColors(wall));
+    band(p, x0, y0, x1, y1, 0, 6, '#d7ccc8');
+    band(p, x0, y0, x1, y1, 38, 42, '#ece6dc');
+    band(p, x0, y0, x1, y1, h - 5, h, '#ece6dc');
+    quoins(p, 'left', x0, x1, y1, 6, h - 5, '#efe9df');
+    for (const c of [0.72, 2.28]) {
+      win(p, 'left', c, 0.12, y1, 12, 32, { shutter: black, bars: 'grid' });
+      win(p, 'left', c, 0.12, y1, 50, 70, { shutter: black, bars: 'grid' });
+    }
+    for (const c of [1.2, 1.8]) {
+      win(p, 'left', c, 0.11, y1, 12, 32, { bars: 'grid' });
+      win(p, 'left', c, 0.11, y1, 50, 70, { bars: 'grid' });
+    }
+    entry(p, 'left', 1.5, 0.28, 30, y1, '#3e2723', { transom: true, z0: 6 });
+    for (const c of [0.62, 1.11, 1.6]) {
+      win(p, 'right', c, 0.12, x1, 12, 32, { shutter: black, bars: 'grid' });
+      win(p, 'right', c, 0.12, x1, 50, 70, { shutter: black, bars: 'grid' });
+    }
+    hipRoof(p, x0, y0, x1, y1, h, 46, slate, { style: 'slate', ov: 0.16 });
+    const k = 46 / ((y1 - y0) / 2 + 0.16);
+    for (const c of [0.9, 2.1]) dormer(p, 'left', c, 0.13, y1 + 0.16 - 0.3, h + k * 0.3, k, 14, slate, wall, { style: 'slate' });
+    dormer(p, 'right', 1.1, 0.13, x1 + 0.16 - 0.3, h + k * 0.3, k, 14, slate, wall, { style: 'slate' });
+    // Portique : emmarchement, colonnes, entablement et fronton.
+    const pa = 1.0;
+    const pb = 2.0;
+    const pd = y1 + 0.34;
+    p.box(pa - 0.04, y1, pb + 0.04, pd + 0.02, 0, 6, boxColors('#e7e1d6', false));
+    steps(p, 'left', 1.5, 0.5, pd + 0.02, 2, '#ddd5c8', 3, 0.08);
+    for (const x of [1.06, 1.35, 1.65, 1.94]) {
+      p.box(x - 0.055, pd - 0.1, x + 0.055, pd - 0.0, 6, 9, boxColors('#f3efe8', false));
+      p.box(x - 0.04, pd - 0.09, x + 0.04, pd - 0.01, 9, 70, { top: '#ffffff', left: '#ffffff', right: '#e3ded5' });
+      p.line([x - 0.02, pd - 0.01, 10], [x - 0.02, pd - 0.01, 69], '#ece8e0', 1);
+      p.box(x - 0.06, pd - 0.11, x + 0.06, pd + 0.01, 70, 74, boxColors('#f3efe8', false));
+    }
+    p.box(pa, y1, pb, pd + 0.02, 74, 84, boxColors('#f8f5ef', false));
+    const top = 108;
+    p.fill(
+      [
+        [1.5, pd + 0.02, top],
+        [pb + 0.05, pd + 0.02, 83],
+        [pb + 0.05, y1, 83],
+        [1.5, y1, top],
+      ],
+      shade(slate, -0.2),
+    );
+    poly(p, 'left', pd + 0.02, [[pa - 0.05, 84], [pb + 0.05, 84], [1.5, top]], '#ffffff');
+    poly(p, 'left', pd + 0.02, [[pa + 0.08, 87], [pb - 0.08, 87], [1.5, top - 5]], '#e8e2d6');
+    oculus(p, 'left', 1.5, pd + 0.02, 94, 4);
+    p.line([pa - 0.05, pd + 0.02, 84], [1.5, pd + 0.02, top], '#ffffff', 3.5);
+    p.line([1.5, pd + 0.02, top], [pb + 0.05, pd + 0.02, 84], '#f2f2f2', 3.5);
+    tree(p, 2.8, 0.42, 76, '#5cb83a');
+    for (const [x, y] of [
+      [0.5, 2.08],
+      [0.72, 2.12],
+      [2.28, 2.12],
+      [2.5, 2.08],
+    ] as const)
+      flowerBush(p, x, y, 7, x < 1 ? '#ff80ab' : '#ffffff');
+    topiary(p, 0.88, 2.4, 'cone', 0, '#eceff1');
+    topiary(p, 2.12, 2.4, 'cone', 0, '#eceff1');
+    fountain(p, 1.5, 2.56, 0.18);
+    roundBush(p, 0.3, 2.3, 10, '#3f8f2f');
+    roundBush(p, 2.72, 2.3, 10, '#3f8f2f');
+    roundBush(p, 2.78, 1.5, 9, '#4caf50');
+    lamp(p, 1.22, 2.86, 34);
+    lamp(p, 1.78, 2.86, 34);
+    ironFence(p, [0.08, 2.92], [1.22, 2.92]);
+    ironFence(p, [1.78, 2.92], [2.92, 2.92]);
+    ironFence(p, [2.92, 0.08], [2.92, 2.92]);
+  },
+};
+
+/** Manoir anglais : deux ailes à pignons en colombages, ardoises, lucarnes, piscine et jardin à la française. */
+const manor: Hero = {
+  height: 190,
+  draw(g, p) {
+    const S = 4;
+    lawn(g, S, '#9ccf63');
+    const wall = '#f6ecd8';
+    const slate = '#37474f';
+    const timber = '#6d4c41';
+    const h = 86;
+    const rh = 50;
+    const my0 = 0.5;
+    const my1 = 2.2;
+    const wy0 = 0.6;
+    const wy1 = 2.8;
+    const L = [0.42, 1.3] as const;
+    const R = [2.45, 3.33] as const;
+    g.flat(1.3, my1, 2.45, wy1, 0, '#e8dfcf');
+    g.flat(1.72, wy1, 2.04, 3.98, 0, '#e8dfcf');
+    paving(g, 0.14, 2.98, 1.62, 3.9, '#efe3cf', 0.25);
+    softShadow(g, S, L[0], my0, R[1], wy1);
+
+    picket(p, [0.06, 0.06], [3.94, 0.06]);
+    picket(p, [0.06, 0.06], [0.06, 3.94]);
+    tree(p, 0.3, 0.32, 86, '#4caf50');
+    tree(p, 3.62, 0.36, 80, '#5cb83a');
+
+    const wing = (a: number, b: number) => {
+      p.box(a, wy0, b, wy1, 0, h, boxColors(wall));
+      band(p, a, wy0, b, wy1, 0, 7, '#bdb3a3');
+      band(p, a, wy0, b, wy1, 41, 44, '#e9dcc3');
+      quoins(p, 'left', a, b, wy1, 7, h, '#e2d6c0');
+      quoins(p, 'right', wy0, wy1, b, 7, h, '#e2d6c0');
+      const c = (a + b) / 2;
+      // Bow-window du rez-de-chaussée.
+      jut(p, 'left', c - 0.26, c + 0.26, wy1, 0.14, 0, 7, boxColors('#bdb3a3', false));
+      jut(p, 'left', c - 0.26, c + 0.26, wy1, 0.14, 7, 36, boxColors(wall, false));
+      for (const s of [c - 0.15, c + 0.15]) win(p, 'left', s, 0.09, wy1 + 0.14, 12, 31, { bars: 'grid', sill: false });
+      win(p, 'right', wy1 + 0.07, 0.04, c + 0.26, 12, 31, { bars: 'none', sill: false });
+      jut(p, 'left', c - 0.29, c + 0.29, wy1 - 0.02, 0.19, 36, 40, boxColors(slate, false));
+      win(p, 'left', c, 0.14, wy1, 52, 72, { bars: 'grid', flowers: true, seed: a > 1 ? 2 : 0 });
+      for (const y of [1.0, 1.7, 2.4]) {
+        if (b > 3) win(p, 'right', y, 0.11, b, 12, 32, { bars: 'grid' });
+        win(p, 'right', y, 0.11, b, 52, 72, { bars: 'grid' });
+      }
+      chimney(p, c, 1.05, 118, 164, '#a1887f', 0.11, 3);
+      gableRoof(p, 'y', a, wy0, b, wy1, h, rh, slate, wall, {
+        style: 'slate',
+        ov: 0.14,
+        onGable: () => {
+          // Colombages.
+          const t = '#6d4c41';
+          seg(p, 'left', wy1, a, h + 2, b, h + 2, t, 3);
+          for (const s of [a + 0.2, c, b - 0.2]) {
+            const top = h + rh * (1 - Math.abs(s - c) / (c - a));
+            seg(p, 'left', wy1, s, h + 2, s, top - 3, t, 2.6);
+          }
+          seg(p, 'left', wy1, a + 0.2, h + 2, c - 0.1, h + 0.75 * rh, t, 2.2);
+          seg(p, 'left', wy1, b - 0.2, h + 2, c + 0.1, h + 0.75 * rh, t, 2.2);
+          win(p, 'left', c - 0.1, 0.06, wy1, h + 10, h + 24, { sill: false, bars: 'none' });
+          win(p, 'left', c + 0.1, 0.06, wy1, h + 10, h + 24, { sill: false, bars: 'none' });
+        },
+      });
+    };
+
+    wing(L[0], L[1]);
+    // Corps central entre les ailes.
+    p.box(L[1], my0, R[0], my1, 0, h, boxColors(wall));
+    band(p, L[1], my0, R[0], my1, 0, 7, '#bdb3a3');
+    band(p, L[1], my0, R[0], my1, 41, 44, '#e9dcc3');
+    for (const c of [1.55, 2.2]) win(p, 'left', c, 0.11, my1, 12, 32, { bars: 'grid', shutter: timber });
+    for (const c of [1.55, 1.875, 2.2]) win(p, 'left', c, 0.1, my1, 52, 72, { bars: 'grid', flowers: true, seed: Math.round(c * 7) });
+    entry(p, 'left', 1.875, 0.26, 32, my1, '#4e342e', { arch: true, z0: 0, frame: '#e9dcc3' });
+    gableRoof(p, 'x', 0.87, my0, 2.89, my1, h, rh - 8, slate, wall, { style: 'slate', ov: 0.14 });
+    const k = (rh - 8) / ((my1 - my0) / 2 + 0.14);
+    for (const c of [1.55, 2.2]) dormer(p, 'left', c, 0.12, my1 + 0.14 - 0.3, h - 3 + k * 0.3, k, 13, slate, wall, { style: 'slate' });
+    // Porche à colonnettes.
+    for (const x of [1.68, 2.07]) p.box(x - 0.03, my1 + 0.2, x + 0.03, my1 + 0.26, 0, 40, boxColors('#ffffff', false));
+    gableRoof(p, 'y', 1.64, my1, 2.11, my1 + 0.26, 40, 14, slate, '#ffffff', { style: 'slate', ov: 0.05 });
+    wing(R[0], R[1]);
+
+    // Jardin : piscine, massifs, haies, topiaires.
+    pool(p, 0.3, 3.08, 1.48, 3.78);
+    lounger(p, 0.4, 2.86, '#e57373');
+    lounger(p, 0.86, 2.86, '#4fc3f7');
+    parasol(p, 1.42, 2.92, 0, '#1e88e5', '#ffffff', 20);
+    for (const [x, y] of [
+      [2.4, 3.05],
+      [3.05, 3.05],
+      [2.4, 3.6],
+      [3.05, 3.6],
+    ] as const) {
+      p.box(x - 0.2, y - 0.16, x + 0.2, y + 0.16, 0, 8, boxColors('#3f8f2f', false));
+      flowerBush(p, x, y, 6, ['#e91e63', '#ffeb3b', '#ba68c8', '#ff7043'][Math.round(x + y * 2) % 4]!, 6);
+    }
+    topiary(p, 2.72, 3.32, 'cone', 0, '#eceff1');
+    for (const y of [1.3, 2.2, 3.0]) cypress(p, 3.72, y, 56);
+    roundBush(p, 1.48, 2.62, 8, '#5cbf32');
+    roundBush(p, 2.28, 2.62, 8, '#5cbf32');
+    lamp(p, 1.62, 3.85, 34);
+    lamp(p, 2.14, 3.85, 34);
+    picket(p, [0.06, 3.94], [1.72, 3.94]);
+    picket(p, [2.04, 3.94], [3.94, 3.94]);
+    picket(p, [3.94, 0.06], [3.94, 3.94]);
+  },
+};
+
 export const HEROES: Record<string, Hero> = {
   bungalow,
+  townhouse,
+  chalet,
+  villa,
+  mansion,
+  manor,
 };

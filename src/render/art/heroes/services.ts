@@ -161,7 +161,8 @@ function win(p: IsoPainter, side: Side, c: number, hw: number, plane: number, za
       p.line([plane, c - hw, mz], [plane, c + hw, mz], frame, 1.6);
     }
   }
-  if (o.sill) quad(c - hw - 0.04, c + hw + 0.04, za - 5, za - 2, plane, side === 'left' ? o.sill : shade(o.sill, -0.15));
+  if (o.sill)
+    quad(c - hw - 0.04, c + hw + 0.04, za - 5, za - 2, plane, side === 'left' ? o.sill : shade(o.sill, -0.15));
 }
 
 /** Rangée de `n` fenêtres régulièrement espacées entre `from` et `to`. */
@@ -281,7 +282,15 @@ function crossBadge(p: IsoPainter, side: Side, c: number, plane: number, z: numb
 }
 
 /** Chaînage d'angle (pierres alternées) sur un coin avant. */
-function quoins(p: IsoPainter, x: number, y: number, z0: number, z1: number, color: string, side: Side | 'both' = 'both') {
+function quoins(
+  p: IsoPainter,
+  x: number,
+  y: number,
+  z0: number,
+  z1: number,
+  color: string,
+  side: Side | 'both' = 'both',
+) {
   for (let z = z0, i = 0; z < z1 - 4; z += 8, i++) {
     const w = i % 2 ? 0.08 : 0.13;
     if (side !== 'right') p.leftQuad(x - w, x, z, z + 6, y, color);
@@ -461,7 +470,16 @@ function barrelRoof(
 
 // ——— Volumes ronds ———
 
-function cylinder(p: IsoPainter, cx: number, cy: number, z0: number, z1: number, r: number, color: string, top?: string) {
+function cylinder(
+  p: IsoPainter,
+  cx: number,
+  cy: number,
+  z0: number,
+  z1: number,
+  r: number,
+  color: string,
+  top?: string,
+) {
   const [sx, sy0] = p.p(cx, cy, z0);
   const [, sy1] = p.p(cx, cy, z1);
   const rx = r * RX;
@@ -539,7 +557,16 @@ function column(p: IsoPainter, x: number, y: number, z0: number, z1: number, r =
 // ——— Ensembles classiques ———
 
 /** Marches descendant vers +y. */
-function steps(p: IsoPainter, x0: number, x1: number, y: number, n: number, depth: number, rise: number, color: string) {
+function steps(
+  p: IsoPainter,
+  x0: number,
+  x1: number,
+  y: number,
+  n: number,
+  depth: number,
+  rise: number,
+  color: string,
+) {
   for (let i = 0; i < n; i++) {
     p.box(x0, y + i * depth, x1, y + (i + 1) * depth, 0, (n - i) * rise, C(shade(color, (i % 2) * 0.04)));
   }
@@ -568,7 +595,16 @@ function portico(
   p.leftQuad(x0 - 0.04, x1 + 0.04, zTop + eh - 2, zTop + eh, y1 + 0.03, shade(o.stone, 0.3));
   if (o.sign) {
     const t = signText(o.sign);
-    p.faceText('left', t, (x0 + x1) / 2, y1 + 0.035, zTop + eh / 2, `800 ${Math.min(11, eh - 1)}px system-ui, sans-serif`, '#6d4c41', (x1 - x0) * FACE_PX * 0.9);
+    p.faceText(
+      'left',
+      t,
+      (x0 + x1) / 2,
+      y1 + 0.035,
+      zTop + eh / 2,
+      `800 ${Math.min(11, eh - 1)}px system-ui, sans-serif`,
+      '#6d4c41',
+      (x1 - x0) * FACE_PX * 0.9,
+    );
   }
   p.gableRoofY(x0 - 0.04, wall - 0.1, x1 + 0.04, y1 + 0.03, zTop + eh, o.ped, o.roof, o.stone, 0.06);
   // Tympan : moulure intérieure et médaillon doré.
@@ -755,7 +791,14 @@ function van(p: IsoPainter, x: number, y: number, axis: 'x' | 'y', color: string
   v.side(0.5, 0.6, 12, 17, '#9fdcf7', wid - 0.01);
   v.side(0.02, 0.48, 12, 16, stripe);
   if (cross) {
-    crossBadge(p, v.sideSide, v.at(0.26, wid, 0)[axis === 'x' ? 0 : 1], v.at(0.26, wid, 0)[axis === 'x' ? 1 : 0], 22, 5);
+    crossBadge(
+      p,
+      v.sideSide,
+      v.at(0.26, wid, 0)[axis === 'x' ? 0 : 1],
+      v.at(0.26, wid, 0)[axis === 'x' ? 1 : 0],
+      22,
+      5,
+    );
     v.box(0.4, 0.05, 0.46, wid / 2, 28, 32, C('#e53935'));
     v.box(0.4, wid / 2, 0.46, wid - 0.05, 28, 32, C('#1e88e5'));
   }
@@ -837,7 +880,12 @@ function airliner(p: IsoPainter, x: number, y: number, axis: 'x' | 'y', len: num
   const s = len / 1.6;
   const wing = (sign: number) => {
     p.fill(
-      [at(len * 0.36, 0, z), at(len * 0.58, sign * 0.88 * s, z + 4), at(len * 0.66, sign * 0.88 * s, z + 4), at(len * 0.6, 0, z)],
+      [
+        at(len * 0.36, 0, z),
+        at(len * 0.58, sign * 0.88 * s, z + 4),
+        at(len * 0.66, sign * 0.88 * s, z + 4),
+        at(len * 0.6, 0, z),
+      ],
       sign > 0 ? '#e9eef2' : '#c9d2d9',
     );
     const e = at(len * 0.44, sign * 0.4 * s, z - 6);
@@ -848,7 +896,12 @@ function airliner(p: IsoPainter, x: number, y: number, axis: 'x' | 'y', len: num
   };
   const stab = (sign: number) =>
     p.fill(
-      [at(len * 0.86, 0, z + 4), at(len * 0.96, sign * 0.32 * s, z + 6), at(len, sign * 0.32 * s, z + 6), at(len * 0.98, 0, z + 4)],
+      [
+        at(len * 0.86, 0, z + 4),
+        at(len * 0.96, sign * 0.32 * s, z + 6),
+        at(len, sign * 0.32 * s, z + 6),
+        at(len * 0.98, 0, z + 4),
+      ],
       sign > 0 ? '#e9eef2' : '#c9d2d9',
     );
   wing(-1);
@@ -1183,11 +1236,15 @@ function police(g: IsoPainter, p: IsoPainter): void {
   wins(p, 'right', 0.3, 1.85, 2.2, 9, 24, 4, { glass: '#bbdefb', frame: '#0d47a1', w: 0.3 });
   flatRoof(p, 0.3, 0.3, 2.2, 1.85, 64, blue, '#a7b6c6');
   acUnit(p, 0.55, 0.5, 66);
+  p.box(0.5, 1.2, 0.9, 1.6, 66, 82, C('#dbe7f3'));
+  p.leftQuad(0.62, 0.78, 66, 78, 1.6, '#4f6f90');
+  flatRoof(p, 0.5, 1.2, 0.9, 1.6, 82, blue, '#a7b6c6', 3);
   // Mât d'antenne.
   p.line([1.95, 0.5, 66], [1.95, 0.5, 124], '#90a4ae', 2.4);
   for (const z of [84, 100, 114]) p.line([1.88, 0.5, z], [2.02, 0.5, z], '#90a4ae', 1.6);
   p.dot(1.95, 0.5, 126, 2.8, '#ff1744');
-  beacon(p, 1.25, 1.05, 71);
+  p.box(1.1, 0.9, 1.4, 1.2, 66, 76, C('#cfd8dc'));
+  beacon(p, 1.25, 1.05, 76);
 
   // Hall d'entrée avancé.
   body(p, 0.75, 1.85, 1.75, 2.2, 50, wall, { base: '#4f6f90' });
@@ -1206,14 +1263,20 @@ function police(g: IsoPainter, p: IsoPainter): void {
     ctx.fill();
   });
   door(p, 'left', 1.25, 0.4, 0, 24, 2.2, '#0d47a1', { glass: true });
-  p.box(0.85, 2.2, 1.65, 2.5, 26, 30, C(blue));
-  p.line([0.9, 2.46, 0], [0.9, 2.46, 26], '#cfd8dc', 2.4);
-  p.line([1.6, 2.46, 0], [1.6, 2.46, 26], '#cfd8dc', 2.4);
+  p.awning('left', 0.92, 1.58, 31, 2.2, [blue, WHITE], 0.26, 9);
   steps(p, 1.0, 1.5, 2.2, 2, 0.08, 2, '#c7ccd2');
+  // Tourelle d'angle vitrée.
+  cylinder(p, 2.2, 1.85, 0, 72, 0.3, '#eaf2fb');
+  for (const z of [10, 40]) cylBand(p, 2.2, 1.85, z, z + 15, 0.3, '#9fcaf0');
+  cylBand(p, 2.2, 1.85, 0, 6, 0.3, '#4f6f90');
+  cylBand(p, 2.2, 1.85, 60, 72, 0.3, blue);
+  cylinder(p, 2.2, 1.85, 72, 76, 0.34, blue, '#3f7cc8');
+  dome(p, 2.2, 1.85, 76, 0.26, 16, '#3f7cc8', false);
+  p.dot(2.2, 1.85, 94, 2.6, '#ffd54f');
 
   car(p, 2.42, 0.4, 'y', '#ffffff', true);
   car(p, 2.42, 1.15, 'y', '#ffffff', true);
-  car(p, 2.42, 1.9, 'y', '#455a64');
+  car(p, 2.62, 2.25, 'x', '#455a64');
   flag(p, 0.45, 2.55, 0, 58, '#1e5aa8', WHITE);
   roundBush(p, 0.55, 2.05, 8);
   roundBush(p, 1.95, 2.05, 8, '#5cbf32');
@@ -1363,7 +1426,12 @@ function hospital(g: IsoPainter, p: IsoPainter): void {
     const z = 14 + f * 30;
     p.leftQuad(0.35, 2.55, z - 4, z - 1, 2.0, green);
     p.rightQuad(0.35, 2.0, z - 4, z - 1, 2.55, shade(green, -0.2));
-    wins(p, 'left', 0.35, 2.55, 2.0, z + 4, z + 20, 6, { glass, frame: '#e0f2f1', w: 0.34, skip: f === 0 ? [2, 3] : [] });
+    wins(p, 'left', 0.35, 2.55, 2.0, z + 4, z + 20, 6, {
+      glass,
+      frame: '#e0f2f1',
+      w: 0.34,
+      skip: f === 0 ? [2, 3] : [],
+    });
     wins(p, 'right', 0.35, 2.0, 2.55, z + 4, z + 20, 4, { glass, frame: '#e0f2f1', w: 0.34 });
   }
   crossBadge(p, 'left', 1.45, 2.0, 127, 13);
@@ -1426,21 +1494,27 @@ function trainStation(g: IsoPainter, p: IsoPainter): void {
 
   const wall = '#e2b47a';
   const trim = '#fff6e6';
-  const roof = '#5a3a2e';
+  const roof = '#7a4432';
   bench(p, 0.25, 0.9, 'y');
   lamp(p, 0.25, 1.7, 36);
-  body(p, 0.6, 0.25, 2.2, 2.5, 52, wall, { base: '#8d6e63', bands: [36], band: trim });
-  quoins(p, 0.6, 2.5, 6, 50, trim, 'left');
-  quoins(p, 2.2, 2.5, 6, 50, trim);
+  body(p, 0.6, 0.25, 2.2, 2.5, 66, wall, { base: '#8d6e63', bands: [40], band: trim, cornice: trim });
+  quoins(p, 0.6, 2.5, 6, 62, trim, 'left');
+  quoins(p, 2.2, 2.5, 6, 62, trim);
   // Pignon : portail cintré, deux fenêtres, enseigne.
   door(p, 'left', 1.4, 0.42, 0, 26, 2.5, '#3e2723', { glass: true, arch: true });
   wins(p, 'left', 0.6, 2.2, 2.5, 8, 26, 3, { arch: true, glass: '#fff3c4', skip: [1], w: 0.2 });
-  p.sign('left', 0.85, 1.95, 38, 49, 2.51, '#1a237e', WHITE, signText('GARE'));
-  wins(p, 'right', 0.25, 2.5, 2.2, 8, 28, 5, { arch: true, glass: '#fff3c4', w: 0.24, skip: [2] });
-  door(p, 'right', 1.375, 0.34, 0, 26, 2.2, '#3e2723', { glass: true });
-  p.gableRoofY(0.6, 0.25, 2.2, 2.5, 52, 38, roof, wall, 0.16);
+  p.sign('left', 0.8, 2.0, 44, 58, 2.51, '#1a237e', WHITE, signText('GARE'));
+  wins(p, 'right', 0.25, 2.5, 2.2, 8, 30, 5, { arch: true, glass: '#fff3c4', w: 0.24, skip: [2] });
+  door(p, 'right', 1.375, 0.34, 0, 28, 2.2, '#3e2723', { glass: true });
+  p.gableRoofY(0.6, 0.25, 2.2, 2.5, 66, 30, roof, wall, 0.14);
+  // Lucarnes sur le long pan.
+  for (const y of [0.55, 2.0]) {
+    p.box(1.55, y, 1.85, y + 0.28, 66, 80, C(trim));
+    p.rightQuad(y + 0.06, y + 0.22, 69, 77, 1.85, '#fff3c4');
+    p.gableRoofX(1.55, y, 1.85, y + 0.28, 80, 10, roof, trim, 0.04);
+  }
   // Œil-de-bœuf dans le pignon.
-  onFace(p, 'left', 1.4, 2.51, 70, (ctx) => {
+  onFace(p, 'left', 1.4, 2.51, 78, (ctx) => {
     ctx.fillStyle = trim;
     ctx.beginPath();
     ctx.arc(0, 0, 8, 0, Math.PI * 2);
@@ -1451,30 +1525,31 @@ function trainStation(g: IsoPainter, p: IsoPainter): void {
     ctx.fill();
   });
   // Tour de l'horloge sur le faîtage.
-  const tx = 1.22;
-  const ty = 1.0;
-  p.box(tx, ty, tx + 0.36, ty + 0.36, 80, 108, C(trim));
-  clock(p, 'left', tx + 0.18, ty + 0.36, 96, 7.5);
-  clock(p, 'right', ty + 0.18, tx + 0.36, 96, 7.5);
-  p.pyramidRoof(tx, ty, tx + 0.36, ty + 0.36, 108, 26, roof, 0.07);
-  flag(p, tx + 0.18, ty + 0.18, 134, 14, '#1a237e', WHITE);
+  const tx = 1.17;
+  const ty = 0.95;
+  p.box(tx, ty, tx + 0.46, ty + 0.46, 84, 122, C(trim));
+  p.box(tx - 0.03, ty - 0.03, tx + 0.49, ty + 0.49, 118, 123, C('#e8d9bf'));
+  clock(p, 'left', tx + 0.23, ty + 0.46, 104, 10);
+  clock(p, 'right', ty + 0.23, tx + 0.46, 104, 10);
+  p.pyramidRoof(tx, ty, tx + 0.46, ty + 0.46, 123, 28, roof, 0.08);
+  flag(p, tx + 0.23, ty + 0.23, 151, 14, '#1a237e', WHITE);
 
   // Marquise du quai est.
   const posts = [0.4, 1.1, 1.8, 2.45];
   p.fill(
     [
-      [2.22, 0.2, 46],
-      [2.22, 2.55, 46],
-      [2.95, 2.55, 38],
-      [2.95, 0.2, 38],
+      [2.22, 0.2, 60],
+      [2.22, 2.55, 60],
+      [2.95, 2.55, 52],
+      [2.95, 0.2, 52],
     ],
-    p.gradient([2.22, 1, 46], [2.95, 1, 38], '#3f8f5a', '#2e6d43'),
+    p.gradient([2.22, 1, 60], [2.95, 1, 52], '#3f8f5a', '#2e6d43'),
   );
-  for (let y = 0.3; y < 2.55; y += 0.15) p.line([2.24, y, 46], [2.95, y, 38], '#2a5e3a', 1);
+  for (let y = 0.3; y < 2.55; y += 0.15) p.line([2.24, y, 60], [2.95, y, 52], '#2a5e3a', 1);
   // Lambrequin festonné.
-  p.rightQuad(0.2, 2.55, 33, 38, 2.95, '#f2efe6');
-  for (let y = 0.2; y < 2.55; y += 0.12) p.dot(2.95, y + 0.06, 33, 3, '#f2efe6');
-  for (const y of posts) p.line([2.82, y, 0], [2.82, y, 39], '#2e5d3a', 2.8);
+  p.rightQuad(0.2, 2.55, 47, 52, 2.95, '#f2efe6');
+  for (let y = 0.2; y < 2.55; y += 0.12) p.dot(2.95, y + 0.06, 47, 3, '#f2efe6');
+  for (const y of posts) p.line([2.82, y, 0], [2.82, y, 53], '#2e5d3a', 2.8);
   bench(p, 2.6, 0.75, 'y');
   bench(p, 2.6, 2.0, 'y');
   // Chariot à bagages.
@@ -1665,33 +1740,34 @@ function museum(g: IsoPainter, p: IsoPainter): void {
   p.box(0.25, 3.3, 0.6, 3.65, 0, 22, C('#cfc6b1'));
   p.box(0.22, 3.27, 0.63, 3.68, 22, 25, C('#ddd5c4'));
   {
+    // Statue en bronze : drapé, bras levé tenant une torche.
     const [sx, sy] = p.p(0.425, 3.475, 25);
     const { ctx } = p;
-    ctx.fillStyle = '#4f8f7d';
+    const g = ctx.createLinearGradient(sx - 9, 0, sx + 9, 0);
+    g.addColorStop(0, '#7fc4b0');
+    g.addColorStop(1, '#3f7f6d');
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(sx, sy - 12, 13, 7, -0.15, 0, Math.PI * 2);
+    ctx.moveTo(sx - 9, sy);
+    ctx.lineTo(sx - 5, sy - 30);
+    ctx.lineTo(sx + 5, sy - 30);
+    ctx.lineTo(sx + 9, sy);
+    ctx.closePath();
     ctx.fill();
-    ctx.fillRect(sx - 11, sy - 8, 3.5, 9);
-    ctx.fillRect(sx + 7, sy - 9, 3.5, 9);
     ctx.beginPath();
-    ctx.moveTo(sx + 8, sy - 16);
-    ctx.lineTo(sx + 17, sy - 28);
-    ctx.lineTo(sx + 21, sy - 24);
-    ctx.lineTo(sx + 13, sy - 12);
-    ctx.fill();
-    ctx.fillRect(sx - 3, sy - 32, 6, 16);
-    ctx.beginPath();
-    ctx.arc(sx, sy - 35, 4.2, 0, Math.PI * 2);
+    ctx.arc(sx, sy - 35, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#4f8f7d';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.moveTo(sx + 2, sy - 28);
-    ctx.lineTo(sx + 9, sy - 40);
+    ctx.moveTo(sx + 4, sy - 27);
+    ctx.lineTo(sx + 9, sy - 46);
     ctx.stroke();
-    ctx.fillStyle = '#7fc4b0';
+    ctx.fillStyle = '#f2c230';
     ctx.beginPath();
-    ctx.ellipse(sx - 4, sy - 14, 5, 2.5, 0, 0, Math.PI * 2);
+    ctx.moveTo(sx + 9, sy - 47);
+    ctx.quadraticCurveTo(sx + 4, sy - 54, sx + 9, sy - 60);
+    ctx.quadraticCurveTo(sx + 14, sy - 54, sx + 9, sy - 47);
     ctx.fill();
   }
   p.box(3.45, 3.35, 3.75, 3.65, 0, 10, C('#cfc6b1'));
@@ -1894,11 +1970,11 @@ export const HEROES: Record<string, Hero> = {
   town_hall: { height: 236, draw: townHall },
   school: { height: 150, draw: school },
   post_office: { height: 140, draw: postOffice },
-  police: { height: 132, draw: police },
+  police: { height: 134, draw: police },
   fire_station: { height: 168, draw: fireStation },
   library: { height: 136, draw: library },
   hospital: { height: 150, draw: hospital },
-  train_station: { height: 156, draw: trainStation },
+  train_station: { height: 172, draw: trainStation },
   university: { height: 222, draw: university },
   museum: { height: 146, draw: museum },
   convention_center: { height: 100, draw: conventionCenter },
