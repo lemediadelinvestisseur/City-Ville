@@ -1109,9 +1109,9 @@ function school(g: IsoPainter, p: IsoPainter): void {
     ],
     '#42a5f5',
   );
-  tree(p, 1.75, 2.35, 0.95);
-  bench(p, 1.75, 2.75);
-  flag(p, 2.3, 2.62, 0, 62, '#1e63c6', WHITE);
+  tree(p, 0.55, 3.62, 0.95);
+  bench(p, 1.75, 2.45);
+  flag(p, 2.2, 1.95, 0, 70, '#1e63c6', WHITE);
   bus(p, 2.55, 3.05, 'x');
   picket(p, [0.08, 1.7], [0.08, 3.92]);
   picket(p, [0.08, 3.92], [2.32, 3.92]);
@@ -1131,26 +1131,26 @@ function postOffice(g: IsoPainter, p: IsoPainter): void {
   const wall = '#fff6dc';
   const blue = '#1e3a8a';
   roundBush(p, 0.2, 0.25, 7);
-  body(p, 0.3, 0.25, 1.55, 1.3, 50, wall, { base: blue, bands: [38], band: blue });
+  body(p, 0.3, 0.25, 1.55, 1.3, 58, wall, { base: blue, bands: [37], band: blue });
   for (const [x, y] of [
     [0.3, 1.3],
     [1.55, 1.3],
   ] as const)
-    p.leftQuad(x - (x > 1 ? 0.07 : 0), x + (x > 1 ? 0 : 0.07), 6, 50, y, blue);
-  p.rightQuad(0.25, 0.32, 6, 50, 1.55, shade(blue, -0.2));
-  p.rightQuad(1.23, 1.3, 6, 50, 1.55, shade(blue, -0.2));
+    p.leftQuad(x - (x > 1 ? 0.07 : 0), x + (x > 1 ? 0 : 0.07), 6, 58, y, blue);
+  p.rightQuad(0.25, 0.32, 6, 58, 1.55, shade(blue, -0.2));
+  p.rightQuad(1.23, 1.3, 6, 58, 1.55, shade(blue, -0.2));
   win(p, 'left', 0.52, 0.14, 1.3, 9, 30, { glass: '#e3f2fd', frame: WHITE, panes: true });
   win(p, 'left', 0.9, 0.14, 1.3, 9, 30, { glass: '#e3f2fd', frame: WHITE, panes: true });
   door(p, 'left', 1.3, 0.24, 6, 26, 1.3, blue, { glass: true });
   wins(p, 'right', 0.25, 1.3, 1.55, 9, 30, 2, { glass: '#e3f2fd', panes: true, shutters: '#ffd600', w: 0.22 });
   p.awning('left', 0.35, 1.1, 36, 1.3, ['#ffd600', '#1e3a8a'], 0.22, 10);
-  p.sign('left', 0.42, 1.43, 39, 49, 1.31, '#ffd600', '#1a237e', signText('POSTE'));
-  hipRoof(p, 0.3, 0.25, 1.55, 1.3, 50, 24, '#3f51b5', 0.1);
+  p.sign('left', 0.42, 1.43, 40, 54, 1.31, '#ffd600', '#1a237e', signText('POSTE'));
+  hipRoof(p, 0.3, 0.25, 1.55, 1.3, 58, 24, '#3f51b5', 0.08);
   // Lucarne à horloge.
-  p.box(0.82, 0.95, 1.08, 1.22, 50, 64, C(wall));
-  p.gableRoofY(0.82, 0.95, 1.08, 1.22, 64, 14, '#3f51b5', wall, 0.05);
-  clock(p, 'left', 0.95, 1.225, 58, 6);
-  envelope(p, 0.85, 0.68, 98);
+  p.box(0.82, 0.95, 1.08, 1.22, 58, 72, C(wall));
+  p.gableRoofY(0.82, 0.95, 1.08, 1.22, 72, 14, '#3f51b5', wall, 0.05);
+  clock(p, 'left', 0.95, 1.225, 66, 6);
+  envelope(p, 0.85, 0.68, 106);
 
   // Camionnette postale et boîte aux lettres.
   van(p, 1.63, 0.32, 'y', '#ffd600', blue);
@@ -1234,10 +1234,10 @@ function fireStation(g: IsoPainter, p: IsoPainter): void {
 
   const red = '#d6453d';
   const trim = '#f5f5f5';
-  body(p, 0.3, 0.3, 2.45, 1.95, 66, red, { base: '#8e2b25', bands: [], cornice: trim });
-  bricks(p, 0.3, 2.45, 0.3, 1.95, 6, 60, red);
-  quoins(p, 0.3, 1.95, 6, 60, trim, 'left');
-  quoins(p, 2.45, 1.95, 6, 60, trim);
+  body(p, 0.3, 0.3, 2.45, 1.95, 74, red, { base: '#8e2b25', bands: [], cornice: trim });
+  bricks(p, 0.3, 2.45, 0.3, 1.95, 6, 68, red);
+  quoins(p, 0.3, 1.95, 6, 68, trim, 'left');
+  quoins(p, 2.45, 1.95, 6, 68, trim);
   // Grandes portes cintrées : l'une ouverte sur le camion, l'autre fermée.
   for (const [c, open] of [
     [0.8, true],
@@ -1262,16 +1262,16 @@ function fireStation(g: IsoPainter, p: IsoPainter): void {
       for (const x of [a + 0.08, a + 0.22, a + 0.36, a + 0.5]) p.leftQuad(x, x + 0.1, 24, 30, 1.953, '#9fdcf7');
     }
   }
-  p.sign('left', 0.5, 1.86, 44, 56, 1.96, WHITE, '#c62828', signText('POMPIERS'));
+  p.sign('left', 0.5, 1.86, 54, 66, 1.96, WHITE, '#c62828', signText('POMPIERS'));
   door(p, 'left', 2.18, 0.2, 0, 24, 1.95, '#5d4037');
-  win(p, 'left', 2.18, 0.08, 1.95, 34, 52, { arch: true, frame: trim });
+  win(p, 'left', 2.18, 0.08, 1.95, 36, 58, { arch: true, frame: trim });
   wins(p, 'right', 0.3, 1.95, 2.45, 10, 26, 3, { arch: true, frame: trim, glass: '#ffe0b2' });
-  wins(p, 'right', 0.3, 1.95, 2.45, 38, 54, 3, { arch: true, frame: trim, glass: '#ffe0b2' });
-  flatRoof(p, 0.3, 0.3, 2.45, 1.95, 66, trim, '#6b6b6b');
+  wins(p, 'right', 0.3, 1.95, 2.45, 40, 60, 3, { arch: true, frame: trim, glass: '#ffe0b2' });
+  flatRoof(p, 0.3, 0.3, 2.45, 1.95, 74, trim, '#6b6b6b');
   // Sirène sur le toit.
-  p.line([0.7, 0.7, 68], [0.7, 0.7, 84], '#9e9e9e', 2.4);
-  cylinder(p, 0.7, 0.7, 84, 92, 0.09, '#cfd8dc');
-  acUnit(p, 1.4, 0.6, 68);
+  p.line([0.7, 0.7, 76], [0.7, 0.7, 92], '#9e9e9e', 2.4);
+  cylinder(p, 0.7, 0.7, 92, 100, 0.09, '#cfd8dc');
+  acUnit(p, 1.4, 0.6, 76);
 
   // Tour d'exercice.
   const tx0 = 2.45;
@@ -1366,8 +1366,8 @@ function hospital(g: IsoPainter, p: IsoPainter): void {
     wins(p, 'left', 0.35, 2.55, 2.0, z + 4, z + 20, 6, { glass, frame: '#e0f2f1', w: 0.34, skip: f === 0 ? [2, 3] : [] });
     wins(p, 'right', 0.35, 2.0, 2.55, z + 4, z + 20, 4, { glass, frame: '#e0f2f1', w: 0.34 });
   }
-  crossBadge(p, 'left', 1.45, 2.0, 130, 9);
-  crossBadge(p, 'right', 1.18, 2.55, 130, 9);
+  crossBadge(p, 'left', 1.45, 2.0, 127, 13);
+  crossBadge(p, 'right', 1.18, 2.55, 127, 13);
   flatRoof(p, 0.35, 0.35, 2.55, 2.0, 138, '#e0e0e0', '#b0bec5');
   // Héliport.
   p.groundEllipse(1.45, 1.17, 140.5, 0.6, '#546e7a');
@@ -1752,7 +1752,8 @@ function conventionCenter(g: IsoPainter, p: IsoPainter): void {
   for (const z of [18, 36, 54]) cylBand(p, 1.05, 2.4, z, z + 2.5, 0.5, '#e0f7fa');
   cylBand(p, 1.05, 2.4, 0, 5, 0.5, teal);
   cylinder(p, 1.05, 2.4, 72, 78, 0.56, teal, '#4db6ac');
-  dome(p, 1.05, 2.4, 78, 0.4, 12, '#80cbc4', false);
+  cylinder(p, 1.05, 2.4, 78, 86, 0.3, '#b2ebf2', '#e0f7fa');
+  cylinder(p, 1.05, 2.4, 86, 89, 0.34, teal, '#4db6ac');
   {
     const [sx, sy] = p.p(1.05, 2.9, 0);
     p.ctx.fillStyle = '#004d40';
@@ -1892,7 +1893,7 @@ function airport(g: IsoPainter, p: IsoPainter): void {
 export const HEROES: Record<string, Hero> = {
   town_hall: { height: 236, draw: townHall },
   school: { height: 150, draw: school },
-  post_office: { height: 130, draw: postOffice },
+  post_office: { height: 140, draw: postOffice },
   police: { height: 132, draw: police },
   fire_station: { height: 168, draw: fireStation },
   library: { height: 136, draw: library },
