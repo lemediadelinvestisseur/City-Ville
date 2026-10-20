@@ -27,7 +27,13 @@ function quad(p: Painter, side: Side): Painter['leftQuad'] {
 }
 
 /** Polygone plaqué sur une face à partir de points (u, z). */
-function facePoly(p: Painter, side: Side, plane: number, pts: readonly (readonly [number, number])[], style: string | CanvasGradient) {
+function facePoly(
+  p: Painter,
+  side: Side,
+  plane: number,
+  pts: readonly (readonly [number, number])[],
+  style: string | CanvasGradient,
+) {
   p.fill(
     pts.map(([u, z]) => fp(side, plane, u, z)),
     style,
@@ -72,7 +78,14 @@ function screen(p: Painter, x: number, y: number, z: number, draw: (ctx: CanvasR
   ctx.restore();
 }
 
-function ell(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number, fill: string | CanvasGradient) {
+function ell(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  rx: number,
+  ry: number,
+  fill: string | CanvasGradient,
+) {
   ctx.fillStyle = fill;
   ctx.beginPath();
   ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
@@ -85,7 +98,17 @@ function block(p: Painter, x0: number, y0: number, x1: number, y1: number, z0: n
 }
 
 /** Toit plat encaissé derrière un acrotère (à appeler juste après la boîte du corps). */
-function deck(p: Painter, x0: number, y0: number, x1: number, y1: number, z: number, rim: string, roof: string, lip = 0.09) {
+function deck(
+  p: Painter,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  z: number,
+  rim: string,
+  roof: string,
+  lip = 0.09,
+) {
   p.flat(x0 + lip, y0 + lip, x1 - lip, y1 - lip, z - 4, roof);
   p.leftQuad(x0 + lip, x1 - lip, z - 4, z, y0 + lip, shade(rim, -0.22));
   p.rightQuad(y0 + lip, y1 - lip, z - 4, z, x0 + lip, shade(rim, -0.32));
@@ -211,7 +234,12 @@ function car(p: Painter, x: number, y: number, color: string, alongY = true) {
   p.groundEllipse(x + 0.04, y + 0.04, 0, 0.2, 'rgba(0,0,0,0.18)');
   block(p, x - hx, y - hy, x + hx, y + hy, 4, 15, color);
   const [cx, cy] = alongY ? [hx * 0.85, hy * 0.5] : [hx * 0.5, hy * 0.85];
-  p.box(x - cx, y - cy, x + cx, y + cy, 15, 25, { top: shade(color, 0.2), left: '#b3e5fc', right: '#81d4fa', outline: shade(color, -0.45) });
+  p.box(x - cx, y - cy, x + cx, y + cy, 15, 25, {
+    top: shade(color, 0.2),
+    left: '#b3e5fc',
+    right: '#81d4fa',
+    outline: shade(color, -0.45),
+  });
   p.leftQuad(x - hx + 0.03, x - hx + 0.08, 9, 13, y + hy + 0.003, '#fff59d');
   p.leftQuad(x + hx - 0.08, x + hx - 0.03, 9, 13, y + hy + 0.003, '#fff59d');
 }
@@ -471,7 +499,8 @@ function drawSupermarket(g: Painter, p: Painter) {
   for (const a of [0.4, 2.65]) {
     p.leftQuad(a, a + 0.95, 6, 42, 2.352, '#c62828');
     p.window('left', a + 0.04, a + 0.91, 9, 39, 2.354, '#e3f2fd', '#c62828');
-    for (let k = 1; k < 4; k++) p.line([a + 0.04 + k * 0.218, 2.356, 9], [a + 0.04 + k * 0.218, 2.356, 39], '#c62828', 2);
+    for (let k = 1; k < 4; k++)
+      p.line([a + 0.04 + k * 0.218, 2.356, 9], [a + 0.04 + k * 0.218, 2.356, 39], '#c62828', 2);
     p.awning('left', a - 0.02, a + 0.97, 48, 2.35, ['#e53935', '#ffffff'], 0.3, 14);
   }
   windowRow(p, 'right', 0.4, 2.2, 4, 10, 32, 3.752, '#e3f2fd', '#c62828', 0.6);
@@ -606,7 +635,14 @@ function drawHotel(g: Painter, p: Painter) {
   block(p, x0 - 0.06, y0 - 0.06, x1 + 0.06, y1 + 0.06, top, top + 7, '#ffffff');
   deck(p, x0 - 0.06, y0 - 0.06, x1 + 0.06, y1 + 0.06, top + 7, '#ffffff', '#c8a27a');
   p.flat(0.75, 0.62, 2.05, 1.55, top + 3.2, '#ffffff');
-  p.flat(0.82, 0.69, 1.98, 1.48, top + 3.3, p.gradient([0.82, 0.69, top + 3], [1.98, 1.48, top + 3], '#81d4fa', '#29b6f6'));
+  p.flat(
+    0.82,
+    0.69,
+    1.98,
+    1.48,
+    top + 3.3,
+    p.gradient([0.82, 0.69, top + 3], [1.98, 1.48, top + 3], '#81d4fa', '#29b6f6'),
+  );
   for (const [a, b] of [
     [1.0, 0.85],
     [1.5, 1.15],
@@ -830,7 +866,7 @@ function giantPin(p: Painter, x: number, y: number, z: number, s: number) {
 
 function giantBall(p: Painter, x: number, y: number, z: number, r: number) {
   p.groundEllipse(x, y, z, 0.18, 'rgba(0,0,0,0.25)');
-  screen(p, x, y, z - r + 4, (ctx) => {
+  screen(p, x, y, z + r - 4, (ctx) => {
     const g = ctx.createRadialGradient(-r * 0.4, -r * 0.4, 2, 0, 0, r);
     g.addColorStop(0, '#80d8ff');
     g.addColorStop(0.45, '#1e88e5');
@@ -913,7 +949,7 @@ function drawBowling(g: Painter, p: Painter) {
   deck(p, x0, y0, x1, y1, h, '#7e57c2', '#311b92');
   block(p, 0.55, 0.5, 0.95, 0.8, 60, 72, '#b0bec5');
   giantPin(p, 1.35, 0.95, 60, 1.25);
-  giantBall(p, 2.05, 1.45, 60, 22);
+  giantBall(p, 2.15, 1.65, 60, 24);
   giantPin(p, 0.75, 1.55, 60, 0.75);
 
   // Entrée sous un auvent « googie » relevé.
@@ -1179,7 +1215,13 @@ function dropTower(p: Painter, x: number, y: number) {
   p.groundEllipse(x, y, 106, 0.3, '#ffa000');
   for (let i = 0; i < 5; i++) {
     const a = (i * Math.PI) / 4.5 + 0.2;
-    p.dot(x + Math.cos(a) * 0.27, y + Math.sin(a) * 0.27, 101, 4, ['#29b6f6', '#66bb6a', '#ec407a', '#ffeb3b', '#ab47bc'][i]!);
+    p.dot(
+      x + Math.cos(a) * 0.27,
+      y + Math.sin(a) * 0.27,
+      101,
+      4,
+      ['#29b6f6', '#66bb6a', '#ec407a', '#ffeb3b', '#ab47bc'][i]!,
+    );
   }
   p.dot(x, y, 172, 9, '#7e57c2');
   p.dot(x, y, 176, 4, BULB);
@@ -1293,7 +1335,11 @@ function drawStadium(g: Painter, p: Painter) {
           p.dot(s, (y0 + d0 + y0 + d1) / 2, z + 1.5, 2.2, shade(color, 0.2));
         }
       } else {
-        p.box(x0 + d0, y0 + d0, x0 + d1, y1 - wf, 0, z, { top: '#dfe4e8', left: shade(color, 0.1), right: shade(color, -0.12) });
+        p.box(x0 + d0, y0 + d0, x0 + d1, y1 - wf, 0, z, {
+          top: '#dfe4e8',
+          left: shade(color, 0.1),
+          right: shade(color, -0.12),
+        });
         for (let s = y0 + d1 + 0.08; s < y1 - wf; s += 0.1) {
           p.dot(x0 + d1 + 0.003, s, z - 5, 1.6, shade(color, 0.4));
           p.dot((x0 + d0 + x0 + d1) / 2, s, z + 1.5, 2.2, shade(color, 0.25));
@@ -1372,7 +1418,14 @@ function drawStadium(g: Painter, p: Painter) {
   p.line([scr - 0.6, y0 + 0.1, hb + 30], [scr - 0.6, y0 + 0.1, hb + 40], '#607d8b', 3);
   p.line([scr + 0.6, y0 + 0.1, hb + 30], [scr + 0.6, y0 + 0.1, hb + 40], '#607d8b', 3);
   p.box(scr - 0.8, y0 + 0.02, scr + 0.8, y0 + 0.14, hb + 38, hb + 76, boxColors('#37474f'));
-  p.leftQuad(scr - 0.74, scr + 0.74, hb + 42, hb + 72, y0 + 0.142, p.gradient([scr, y0, hb + 72], [scr, y0, hb + 42], '#4fc3f7', '#1565c0'));
+  p.leftQuad(
+    scr - 0.74,
+    scr + 0.74,
+    hb + 42,
+    hb + 72,
+    y0 + 0.142,
+    p.gradient([scr, y0, hb + 72], [scr, y0, hb + 42], '#4fc3f7', '#1565c0'),
+  );
   p.faceText('left', '2 - 1', scr, y0 + 0.143, hb + 57, '900 20px system-ui, sans-serif', '#ffffff');
 
   // Tribunes avant (on n'en voit que le dos) et mur d'enceinte.
@@ -1450,7 +1503,7 @@ export const HEROES: Record<string, Hero> = {
   cinema: { height: 168, draw: drawCinema },
   supermarket: { height: 150, draw: drawSupermarket },
   hotel: { height: 220, draw: drawHotel },
-  mall: { height: 200, draw: drawMall },
+  mall: { height: 168, draw: drawMall },
   bowling: { height: 150, draw: drawBowling },
   amusement_park: { height: 200, draw: drawAmusementPark },
   stadium: { height: 230, draw: drawStadium },
