@@ -109,17 +109,7 @@ function lap(p: P, side: Side, a: number, b: number, plane: number, z0: number, 
 }
 
 /** Briques en quinconce, quelques-unes plus claires ou plus foncées. */
-function bricks(
-  p: P,
-  side: Side,
-  a: number,
-  b: number,
-  plane: number,
-  z0: number,
-  z1: number,
-  wall: string,
-  seed = 1,
-) {
+function bricks(p: P, side: Side, a: number, b: number, plane: number, z0: number, z1: number, wall: string, seed = 1) {
   const rnd = seeded(seed);
   const base = tone(side, wall, -0.2);
   const mortar = shade(base, -0.2);
@@ -185,7 +175,11 @@ function win(p: P, side: Side, c: number, w: number, plane: number, za: number, 
   }
   const rise = o.arch ? w * FACE_PX * 0.9 : 0;
   if (o.arch) {
-    const outer: FacePt[] = [[c - w - 0.03, za - 2.5], [c + w + 0.03, za - 2.5], ...arcPts(c, w + 0.03, zb, rise + 2.5)];
+    const outer: FacePt[] = [
+      [c - w - 0.03, za - 2.5],
+      [c + w + 0.03, za - 2.5],
+      ...arcPts(c, w + 0.03, zb, rise + 2.5),
+    ];
     poly(p, side, plane, outer, frame);
     const g = p.gradient(
       fp(side, c, plane, zb + rise),
@@ -212,7 +206,8 @@ function win(p: P, side: Side, c: number, w: number, plane: number, za: number, 
       seg(p, side, plane, c - w, z, c + w, z, frame, 1.6);
     }
   }
-  if (o.sill !== false) quad(p, side, c - w - 0.045, c + w + 0.045, za - 5, za - 2, plane, tone(side, '#f6f1e7', -0.15));
+  if (o.sill !== false)
+    quad(p, side, c - w - 0.045, c + w + 0.045, za - 5, za - 2, plane, tone(side, '#f6f1e7', -0.15));
   if (o.flowers) flowerBox(p, side, c, w, plane, za - 4, o.seed ?? 0);
 }
 
@@ -252,8 +247,20 @@ function entry(p: P, side: Side, c: number, w: number, h: number, plane: number,
     quad(p, side, a - 0.035, b + 0.035, z0, z0 + h + 3, plane, frame);
     quad(p, side, a, b, z0, z0 + h, plane, body);
     if (o.transom) {
-      poly(p, side, plane, [[a - 0.035, z0 + h + 2], [b + 0.035, z0 + h + 2], ...arcPts(c, w / 2 + 0.035, z0 + h + 2, 9)], frame);
-      poly(p, side, plane, [[a + 0.02, z0 + h + 3.5], [b - 0.02, z0 + h + 3.5], ...arcPts(c, w / 2 - 0.02, z0 + h + 3.5, 6)], tone(side, GLASS, -0.15));
+      poly(
+        p,
+        side,
+        plane,
+        [[a - 0.035, z0 + h + 2], [b + 0.035, z0 + h + 2], ...arcPts(c, w / 2 + 0.035, z0 + h + 2, 9)],
+        frame,
+      );
+      poly(
+        p,
+        side,
+        plane,
+        [[a + 0.02, z0 + h + 3.5], [b - 0.02, z0 + h + 3.5], ...arcPts(c, w / 2 - 0.02, z0 + h + 3.5, 6)],
+        tone(side, GLASS, -0.15),
+      );
     }
   }
   const panel = shade(body, -0.16);
@@ -267,7 +274,17 @@ function entry(p: P, side: Side, c: number, w: number, h: number, plane: number,
   dotV(p, fp(side, b - w * 0.16, plane, z0 + h * 0.48), 1.8, '#f7d774');
   if (o.pediment) {
     const top = z0 + h + (o.transom ? 12 : 4);
-    poly(p, side, plane, [[a - 0.08, top], [b + 0.08, top], [c, top + 11]], tone(side, o.pediment, -0.12));
+    poly(
+      p,
+      side,
+      plane,
+      [
+        [a - 0.08, top],
+        [b + 0.08, top],
+        [c, top + 11],
+      ],
+      tone(side, o.pediment, -0.12),
+    );
     quad(p, side, a - 0.08, b + 0.08, top - 3, top, plane, tone(side, shade(o.pediment, -0.08), -0.12));
   }
 }
@@ -307,7 +324,18 @@ function ribbon(
   p.ctx.save();
   p.ctx.globalAlpha = 0.3;
   const m = a + (b - a) * 0.15;
-  poly(p, side, plane, [[m, zb], [m + (b - a) * 0.12, zb], [m + (b - a) * 0.05, za], [m - (b - a) * 0.07, za]], '#ffffff');
+  poly(
+    p,
+    side,
+    plane,
+    [
+      [m, zb],
+      [m + (b - a) * 0.12, zb],
+      [m + (b - a) * 0.05, za],
+      [m - (b - a) * 0.07, za],
+    ],
+    '#ffffff',
+  );
   p.ctx.restore();
 }
 
@@ -329,9 +357,12 @@ function balcony(
   const kind = o.kind ?? 'bars';
   if (kind === 'glass') {
     p.ctx.save();
-    p.ctx.globalAlpha = 0.55;
-    quad(p, side, a, b, z, z + h, front, tone(side, '#b3e5fc', -0.15));
-    p.fill([fp(side, b, plane, z), fp(side, b, front, z), fp(side, b, front, z + h), fp(side, b, plane, z + h)], '#81d4fa');
+    p.ctx.globalAlpha = 0.45;
+    quad(p, side, a, b, z, z + h, front, tone(side, '#64b5f6', -0.15));
+    p.fill(
+      [fp(side, b, plane, z), fp(side, b, front, z), fp(side, b, front, z + h), fp(side, b, plane, z + h)],
+      '#42a5f5',
+    );
     p.ctx.restore();
   } else if (kind === 'solid') {
     quad(p, side, a, b, z, z + h, front, tone(side, rail));
@@ -349,7 +380,17 @@ function balcony(
 }
 
 /** Auvent rayé à lambrequin festonné. */
-function canopy(p: P, side: Side, a: number, b: number, plane: number, z: number, colors: readonly [string, string], depth = 0.3, drop = 12) {
+function canopy(
+  p: P,
+  side: Side,
+  a: number,
+  b: number,
+  plane: number,
+  z: number,
+  colors: readonly [string, string],
+  depth = 0.3,
+  drop = 12,
+) {
   p.awning(side, a, b, z, plane, colors, depth, drop);
   const n = Math.max(4, Math.round((b - a) * 7));
   const step = (b - a) / n;
@@ -443,7 +484,17 @@ interface RoofOpts {
 }
 
 /** Toit en croupe (quatre pans) à faîtage court, débord généreux. */
-function hipRoof(p: P, x0: number, y0: number, x1: number, y1: number, z: number, h: number, color: string, o: RoofOpts = {}) {
+function hipRoof(
+  p: P,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  z: number,
+  h: number,
+  color: string,
+  o: RoofOpts = {},
+) {
   const ov = o.ov ?? 0.16;
   const style = o.style ?? 'shingle';
   const X0 = x0 - ov;
@@ -494,6 +545,49 @@ function hipRoof(p: P, x0: number, y0: number, x1: number, y1: number, z: number
   p.line(r1, r2, shade(color, 0.3), 1.5);
   if (o.eave !== null) {
     const eave = o.eave ?? '#ffffff';
+    p.line(D, C, eave, 3.5);
+    p.line(C, B, shade(eave, -0.15), 3.5);
+  }
+}
+
+/** Toit à la Mansart : pans très raides jusqu'à un plateau en zinc. */
+function mansard(
+  p: P,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  z: number,
+  h: number,
+  inset: number,
+  color: string,
+  o: RoofOpts & { top?: string } = {},
+) {
+  const ov = o.ov ?? 0.08;
+  const style = o.style ?? 'slate';
+  const A: V3 = [x0 - ov, y0 - ov, z];
+  const B: V3 = [x1 + ov, y0 - ov, z];
+  const C: V3 = [x1 + ov, y1 + ov, z];
+  const D: V3 = [x0 - ov, y1 + ov, z];
+  const zt = z + h;
+  const a: V3 = [x0 + inset, y0 + inset, zt];
+  const b: V3 = [x1 - inset, y0 + inset, zt];
+  const c: V3 = [x1 - inset, y1 - inset, zt];
+  const d: V3 = [x0 + inset, y1 - inset, zt];
+  p.fill([A, B, b, a], shade(color, 0.12));
+  p.fill([A, D, d, a], shade(color, 0.16));
+  p.fill([a, b, c, d], o.top ?? '#78909c');
+  const front = [D, C, c, d];
+  const right = [C, B, b, c];
+  p.fill(front, p.gradient(d, D, shade(color, 0.08), shade(color, -0.06)));
+  p.fill(right, p.gradient(c, C, shade(color, -0.16), shade(color, -0.3)));
+  roofTex(p, front, D, C, c, d, color, style);
+  roofTex(p, right, C, B, b, c, shade(color, -0.2), style);
+  p.line(C, c, shade(color, -0.42), 3);
+  const eave = o.eave ?? '#ffffff';
+  p.line(d, c, shade(o.top ?? '#78909c', 0.35), 3);
+  p.line(c, b, shade(o.top ?? '#78909c', 0.2), 3);
+  if (o.eave !== null) {
     p.line(D, C, eave, 3.5);
     p.line(C, B, shade(eave, -0.15), 3.5);
   }
@@ -618,7 +712,16 @@ function dormer(
   const face = side === 'left' ? wall : shade(wall, -0.2);
   p.fill([P3(c + w, 0, zBase), P3(c + w, d1, zt), P3(c + w, 0, zt)], cheek);
   quad(p, side, c - w, c + w, zBase, zt, front, face);
-  p.window(side, c - w + 0.045, c + w - 0.045, zBase + 3, zt - 2, front, o.glass ?? GLASS, tone(side, o.frame ?? '#ffffff', -0.12));
+  p.window(
+    side,
+    c - w + 0.045,
+    c + w - 0.045,
+    zBase + 3,
+    zt - 2,
+    front,
+    o.glass ?? GLASS,
+    tone(side, o.frame ?? '#ffffff', -0.12),
+  );
   seg(p, side, front, c, zBase + 3, c, zt - 2, tone(side, o.frame ?? '#ffffff', -0.12), 1.4);
   const e = 0.05;
   const L: V3[] = [P3(c - w - e, -e, zt - 1), P3(c, -e, zt + rh), P3(c, d2, zt + rh), P3(c - w - e, d1, zt - 1)];
@@ -639,14 +742,24 @@ function flatTop(
   x1: number,
   y1: number,
   z: number,
-  o: { cornice?: string; parapet?: number; coping: string; roof: string; ov?: number; dentils?: string },
+  o: {
+    cornice?: string;
+    parapet?: number;
+    coping: string;
+    roof: string;
+    ov?: number;
+    dentils?: string;
+    /** Pas du dallage du toit-terrasse (0 : aucun). */
+    tiles?: number;
+  },
 ): number {
   const ov = o.ov ?? 0.06;
   let zc = z;
   if (o.cornice) {
     if (o.dentils) {
       for (let s = x0 + 0.04; s < x1 - 0.02; s += 0.08) p.leftQuad(s, s + 0.04, z - 4, z, y1 + ov * 0.5, o.dentils);
-      for (let s = y0 + 0.04; s < y1 - 0.02; s += 0.08) p.rightQuad(s, s + 0.04, z - 4, z, x1 + ov * 0.5, shade(o.dentils, -0.2));
+      for (let s = y0 + 0.04; s < y1 - 0.02; s += 0.08)
+        p.rightQuad(s, s + 0.04, z - 4, z, x1 + ov * 0.5, shade(o.dentils, -0.2));
     }
     p.box(x0 - ov, y0 - ov, x1 + ov, y1 + ov, z, z + 5, boxColors(o.cornice, false));
     zc = z + 5;
@@ -665,6 +778,11 @@ function flatTop(
   ]);
   ctx.clip();
   p.flat(x0 + t, y0 + t, x1 - t, y1 - t, zf, o.roof);
+  if (o.tiles) {
+    const c = shade(o.roof, -0.12);
+    for (let x = x0 + t + o.tiles; x < x1 - t; x += o.tiles) p.line([x, y0 + t, zf], [x, y1 - t, zf], c, 1);
+    for (let y = y0 + t + o.tiles; y < y1 - t; y += o.tiles) p.line([x0 + t, y, zf], [x1 - t, y, zf], c, 1);
+  }
   p.leftQuad(x0 + t, x1 - t, zf, zc + ph, y0 + t, shade(o.coping, -0.25));
   p.rightQuad(y0 + t, y1 - t, zf, zc + ph, x0 + t, shade(o.coping, -0.12));
   ctx.restore();
@@ -876,15 +994,15 @@ function parasol(p: P, x: number, y: number, z: number, a = '#e53935', b = '#fff
 }
 
 /** Transat. */
-function lounger(p: P, x: number, y: number, cushion = '#4fc3f7'): void {
-  p.box(x, y, x + 0.3, y + 0.12, 2, 5, boxColors('#ffffff', false));
-  p.box(x + 0.02, y + 0.01, x + 0.22, y + 0.11, 5, 7, boxColors(cushion, false));
+function lounger(p: P, x: number, y: number, cushion = '#4fc3f7', z = 0): void {
+  p.box(x, y, x + 0.3, y + 0.12, z + 2, z + 5, boxColors('#ffffff', false));
+  p.box(x + 0.02, y + 0.01, x + 0.22, y + 0.11, z + 5, z + 7, boxColors(cushion, false));
   p.fill(
     [
-      [x + 0.22, y + 0.01, 7],
-      [x + 0.22, y + 0.11, 7],
-      [x + 0.3, y + 0.11, 16],
-      [x + 0.3, y + 0.01, 16],
+      [x + 0.22, y + 0.01, z + 7],
+      [x + 0.22, y + 0.11, z + 7],
+      [x + 0.3, y + 0.11, z + 16],
+      [x + 0.3, y + 0.01, z + 16],
     ],
     shade(cushion, 0.1),
   );
@@ -1239,7 +1357,18 @@ const chalet: Hero = {
       const [a, b, plane] = side === 'left' ? [x0, x1, y1] : [y0, y1, x1];
       for (let z = 1, r = 0; z < 11; z += 5, r++)
         for (let s = a + (r % 2) * 0.06; s < b - 0.05; s += 0.12)
-          poly(p, side, plane, [[s + 0.01, z], [s + 0.1, z], [s + 0.1, z + 4], [s + 0.01, z + 4]], tone(side, shade(stone, rnd() * 0.25 - 0.05)));
+          poly(
+            p,
+            side,
+            plane,
+            [
+              [s + 0.01, z],
+              [s + 0.1, z],
+              [s + 0.1, z + 4],
+              [s + 0.01, z + 4],
+            ],
+            tone(side, shade(stone, rnd() * 0.25 - 0.05)),
+          );
     }
     p.box(x0, y0, x1, y1, 12, h, boxColors(wood));
     for (const side of ['left', 'right'] as const) {
@@ -1254,8 +1383,10 @@ const chalet: Hero = {
       p.dot(x0, y1 + 0.02, z, 2.6, '#d9a066');
       p.dot(x1 + 0.02, y1 + 0.02, z, 2.6, '#c88f55');
     }
-    for (const c of [0.6, 1.4]) win(p, 'left', c, 0.12, y1, 20, 36, { shutter: shut, glass: WARM, flowers: true, seed: c > 1 ? 0 : 3 });
-    for (const c of [0.58, 1.08]) win(p, 'right', c, 0.12, x1, 20, 36, { shutter: shut, glass: WARM, flowers: true, seed: c > 1 ? 2 : 5 });
+    for (const c of [0.6, 1.4])
+      win(p, 'left', c, 0.12, y1, 20, 36, { shutter: shut, glass: WARM, flowers: true, seed: c > 1 ? 0 : 3 });
+    for (const c of [0.58, 1.08])
+      win(p, 'right', c, 0.12, x1, 20, 36, { shutter: shut, glass: WARM, flowers: true, seed: c > 1 ? 2 : 5 });
     entry(p, 'left', 1.0, 0.24, 30, y1, '#4e342e', { z0: 0, frame: '#d7a86e' });
     const xm = (x0 + x1) / 2;
     gableRoof(p, 'y', x0, y0, x1, y1, h, 50, '#37474f', '#b77646', {
@@ -1268,7 +1399,8 @@ const chalet: Hero = {
           const top = h + 50 * (1 - Math.abs(x - xm) / (xm - x0));
           seg(p, 'left', y1, x, h, x, top - 2, shade('#b77646', -0.25), 1);
         }
-        for (const c of [0.8, 1.2]) win(p, 'left', c, 0.09, y1, h + 12, h + 27, { glass: WARM, shutter: shut, sill: false });
+        for (const c of [0.8, 1.2])
+          win(p, 'left', c, 0.09, y1, h + 12, h + 27, { glass: WARM, shutter: shut, sill: false });
         oculus(p, 'left', xm, y1, h + 38, 4.5, '#f3e2c7', WARM);
         // Balcon à balustres découpés.
         jut(p, 'left', x0 - 0.04, x1 + 0.04, y1, 0.24, h - 1, h + 3, boxColors('#8a5530', false));
@@ -1307,8 +1439,7 @@ const chalet: Hero = {
     ctx.fill();
     // Tas de bois contre la façade droite.
     p.box(x1 + 0.04, 0.45, x1 + 0.2, 0.95, 0, 16, boxColors('#8d6e63', false));
-    for (let z = 3; z < 16; z += 4.5)
-      for (let y = 0.5; y < 0.95; y += 0.075) p.dot(x1 + 0.2, y, z, 2.3, '#e0b27a');
+    for (let z = 3; z < 16; z += 4.5) for (let y = 0.5; y < 0.95; y += 0.075) p.dot(x1 + 0.2, y, z, 2.3, '#e0b27a');
     pine(p, 1.84, 0.28, 60, '#2f7a4a');
     lamp(p, 0.78, y1 + 0.3, 26);
     roundBush(p, 1.82, 1.72, 8, '#3f8f2f');
@@ -1439,7 +1570,8 @@ const mansion: Hero = {
     }
     hipRoof(p, x0, y0, x1, y1, h, 46, slate, { style: 'slate', ov: 0.16 });
     const k = 46 / ((y1 - y0) / 2 + 0.16);
-    for (const c of [0.9, 2.1]) dormer(p, 'left', c, 0.13, y1 + 0.16 - 0.3, h + k * 0.3, k, 14, slate, wall, { style: 'slate' });
+    for (const c of [0.9, 2.1])
+      dormer(p, 'left', c, 0.13, y1 + 0.16 - 0.3, h + k * 0.3, k, 14, slate, wall, { style: 'slate' });
     dormer(p, 'right', 1.1, 0.13, x1 + 0.16 - 0.3, h + k * 0.3, k, 14, slate, wall, { style: 'slate' });
     // Portique : emmarchement, colonnes, entablement et fronton.
     const pa = 1.0;
@@ -1464,8 +1596,28 @@ const mansion: Hero = {
       ],
       shade(slate, -0.2),
     );
-    poly(p, 'left', pd + 0.02, [[pa - 0.05, 84], [pb + 0.05, 84], [1.5, top]], '#ffffff');
-    poly(p, 'left', pd + 0.02, [[pa + 0.08, 87], [pb - 0.08, 87], [1.5, top - 5]], '#e8e2d6');
+    poly(
+      p,
+      'left',
+      pd + 0.02,
+      [
+        [pa - 0.05, 84],
+        [pb + 0.05, 84],
+        [1.5, top],
+      ],
+      '#ffffff',
+    );
+    poly(
+      p,
+      'left',
+      pd + 0.02,
+      [
+        [pa + 0.08, 87],
+        [pb - 0.08, 87],
+        [1.5, top - 5],
+      ],
+      '#e8e2d6',
+    );
     oculus(p, 'left', 1.5, pd + 0.02, 94, 4);
     p.line([pa - 0.05, pd + 0.02, 84], [1.5, pd + 0.02, top], '#ffffff', 3.5);
     p.line([1.5, pd + 0.02, top], [pb + 0.05, pd + 0.02, 84], '#f2f2f2', 3.5);
@@ -1559,11 +1711,13 @@ const manor: Hero = {
     band(p, L[1], my0, R[0], my1, 0, 7, '#bdb3a3');
     band(p, L[1], my0, R[0], my1, 41, 44, '#e9dcc3');
     for (const c of [1.55, 2.2]) win(p, 'left', c, 0.11, my1, 12, 32, { bars: 'grid', shutter: timber });
-    for (const c of [1.55, 1.875, 2.2]) win(p, 'left', c, 0.1, my1, 52, 72, { bars: 'grid', flowers: true, seed: Math.round(c * 7) });
+    for (const c of [1.55, 1.875, 2.2])
+      win(p, 'left', c, 0.1, my1, 52, 72, { bars: 'grid', flowers: true, seed: Math.round(c * 7) });
     entry(p, 'left', 1.875, 0.26, 32, my1, '#4e342e', { arch: true, z0: 0, frame: '#e9dcc3' });
     gableRoof(p, 'x', 0.87, my0, 2.89, my1, h, rh - 8, slate, wall, { style: 'slate', ov: 0.14 });
     const k = (rh - 8) / ((my1 - my0) / 2 + 0.14);
-    for (const c of [1.55, 2.2]) dormer(p, 'left', c, 0.12, my1 + 0.14 - 0.3, h - 3 + k * 0.3, k, 13, slate, wall, { style: 'slate' });
+    for (const c of [1.55, 2.2])
+      dormer(p, 'left', c, 0.12, my1 + 0.14 - 0.3, h - 3 + k * 0.3, k, 13, slate, wall, { style: 'slate' });
     // Porche à colonnettes.
     for (const x of [1.68, 2.07]) p.box(x - 0.03, my1 + 0.2, x + 0.03, my1 + 0.26, 0, 40, boxColors('#ffffff', false));
     gableRoof(p, 'y', 1.64, my1, 2.11, my1 + 0.26, 40, 14, slate, '#ffffff', { style: 'slate', ov: 0.05 });
@@ -1594,6 +1748,545 @@ const manor: Hero = {
   },
 };
 
+/** Petit pot de fleurs ou bac planté sur un toit ou un balcon. */
+function planter(p: P, x0: number, y0: number, x1: number, y1: number, z: number, color = '#8d6e63'): void {
+  p.box(x0, y0, x1, y1, z, z + 6, boxColors(color, false));
+  const n = Math.max(1, Math.round(Math.max(x1 - x0, y1 - y0) / 0.14));
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    bush(p, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, z + 3, 6, i % 2 ? '#4caf2a' : '#66bb44');
+  }
+}
+
+/** Immeuble de briques : balcons en fer forgé, rez-de-chaussée vitré à auvent, château d'eau sur le toit. */
+const apartments: Hero = {
+  height: 240,
+  draw(g, p) {
+    const S = 3;
+    paving(g, 0.02, 0.02, S - 0.02, S - 0.02, '#cfcac0', 0.25);
+    const x0 = 0.3;
+    const x1 = 2.7;
+    const y0 = 0.3;
+    const y1 = 2.32;
+    const fh = 30;
+    const h = fh * 5;
+    const wall = '#c9a98f';
+    const stone = '#efe4d4';
+    softShadow(g, S, x0, y0, x1, y1, 0.2);
+
+    p.box(x0, y0, x1, y1, 0, fh, boxColors(stone));
+    p.box(x0, y0, x1, y1, fh, h, boxColors(wall));
+    bricks(p, 'left', x0, x1, y1, fh, h, wall, 3);
+    bricks(p, 'right', y0, y1, x1, fh, h, wall, 5);
+    for (let z = 6; z < fh; z += 6) band(p, x0, y0, x1, y1, z - 0.8, z, shade(stone, -0.12));
+    quoins(p, 'left', x0, x1, y1, fh, h, '#efe6dc');
+    quoins(p, 'right', y0, y1, x1, fh, h, '#efe6dc');
+    band(p, x0, y0, x1, y1, fh - 3, fh + 1, '#efe6dc');
+    const L = [0.6, 1.2, 1.8, 2.4];
+    const Rr = [0.64, 1.31, 1.98];
+    for (let f = 1; f < 5; f++) {
+      const z = f * fh;
+      for (const [i, c] of L.entries())
+        win(p, 'left', c, 0.12, y1, z + 8, z + 24, { flowers: (i + f) % 3 === 0, seed: i + f });
+      for (const [i, c] of Rr.entries())
+        win(p, 'right', c, 0.12, x1, z + 8, z + 24, { flowers: (i + f) % 3 === 1, seed: i * 2 + f });
+      if (f % 2 === 0) balcony(p, 'left', 0.95, 2.05, y1, z + 3, { depth: 0.2, rail: '#263238', slab: '#efe6dc' });
+      else balcony(p, 'right', 1.06, 1.56, x1, z + 3, { depth: 0.2, rail: '#263238', slab: '#efe6dc' });
+      if (f % 2 === 0) {
+        flowerBush(p, 1.08, y1 + 0.1, 5, '#e53935', z);
+        flowerBush(p, 1.92, y1 + 0.1, 5, '#ffeb3b', z);
+      }
+    }
+    // Rez-de-chaussée : vitrines et entrée sous auvent.
+    for (const c of [0.62, 2.38]) {
+      ribbon(p, 'left', c - 0.2, c + 0.2, y1, 5, 22, '#a7d8f0', '#455a64', 0.2);
+      canopy(p, 'left', c - 0.24, c + 0.24, y1, 28, ['#2e7d32', '#ffffff'], 0.22, 8);
+    }
+    for (const c of [1.03, 1.97]) win(p, 'left', c, 0.1, y1, 8, 22, { frame: '#455a64', bars: 'vert' });
+    quad(p, 'left', 1.3, 1.7, 0, 25, y1, '#455a64');
+    ribbon(p, 'left', 1.33, 1.67, y1, 0, 22, '#cdefff', '#455a64', 0.17);
+    p.box(1.24, y1, 1.76, y1 + 0.32, 25, 29, boxColors('#2e7d32', false));
+    for (const x of [1.27, 1.73]) p.line([x, y1 + 0.3, 0], [x, y1 + 0.3, 25], '#263238', 2);
+    for (const c of Rr) {
+      ribbon(p, 'right', c - 0.2, c + 0.2, x1, 5, 22, '#a7d8f0', '#455a64', 0.2);
+      canopy(p, 'right', c - 0.24, c + 0.24, x1, 28, ['#2e7d32', '#ffffff'], 0.2, 8);
+    }
+    // Corniche, acrotère et toit.
+    const zf = flatTop(p, x0, y0, x1, y1, h, {
+      cornice: '#efe6dc',
+      coping: wall,
+      roof: '#b8aca0',
+      dentils: '#efe6dc',
+      tiles: 0.3,
+    });
+    waterTower(p, 0.85, 0.85, zf, 0.24, 28);
+    p.box(2.0, 0.55, 2.35, 0.85, zf, zf + 10, boxColors('#cfd8dc', false));
+    p.flat(2.05, 0.6, 2.3, 0.8, zf + 10, '#90a4ae');
+    // Cage d'escalier avec porte.
+    p.box(1.2, 0.5, 1.7, 0.95, zf, zf + 24, boxColors(wall, false));
+    bricks(p, 'left', 1.2, 1.7, 0.95, zf, zf + 24, wall, 9);
+    p.box(1.17, 0.47, 1.73, 0.98, zf + 24, zf + 28, boxColors('#efe6dc', false));
+    entry(p, 'left', 1.45, 0.18, 18, 0.95, '#455a64', { z0: zf });
+    lounger(p, 1.55, 1.4, '#ffb74d', zf);
+    lounger(p, 1.55, 1.62, '#4fc3f7', zf);
+    parasol(p, 2.05, 1.6, zf, '#2e7d32', '#ffffff', 20);
+    p.line([2.5, 0.45, zf], [2.5, 0.45, zf + 34], '#78909c', 2);
+    p.line([2.4, 0.45, zf + 26], [2.6, 0.45, zf + 26], '#78909c', 2);
+    planter(p, 1.3, 1.95, 2.5, 2.15, zf);
+    planter(p, 2.35, 1.1, 2.55, 1.9, zf);
+    // Trottoir.
+    tree(p, 0.2, 2.72, 58, '#5cb83a');
+    tree(p, 2.75, 2.72, 58, '#66bb44');
+    lamp(p, 1.0, 2.8, 38);
+    lamp(p, 2.0, 2.8, 38);
+    roundBush(p, 2.85, 1.0, 8);
+    roundBush(p, 2.85, 1.7, 8, '#5cbf32');
+  },
+};
+
+/** Résidence haussmannienne : pierre bossagée, balcons filants en fer forgé, lucarnes et cheminées. */
+const residence: Hero = {
+  height: 210,
+  draw(g, p) {
+    const S = 3;
+    paving(g, 0.02, 0.02, S - 0.02, S - 0.02, '#cfd8dc', 0.25);
+    const x0 = 0.32;
+    const x1 = 2.68;
+    const y0 = 0.32;
+    const y1 = 2.3;
+    const fh = 31;
+    const h = fh * 4;
+    const wall = '#f3d9b1';
+    const stone = '#e6d3b3';
+    const roof = '#8d4a36';
+    softShadow(g, S, x0, y0, x1, y1, 0.2);
+
+    p.box(x0, y0, x1, y1, 0, h, boxColors(wall));
+    band(p, x0, y0, x1, y1, 0, fh, stone);
+    for (let z = 5; z < fh; z += 5) band(p, x0, y0, x1, y1, z - 1, z, shade(stone, -0.15));
+    quoins(p, 'left', x0, x1, y1, fh, h, '#fff3df');
+    quoins(p, 'right', y0, y1, x1, fh, h, '#fff3df');
+    band(p, x0, y0, x1, y1, fh - 2, fh + 2, '#fff3df');
+    const L = [0.62, 1.21, 1.8, 2.39];
+    const Rr = [0.65, 1.31, 1.97];
+    for (let f = 1; f < 4; f++) {
+      const z = f * fh;
+      for (const [i, c] of L.entries())
+        win(p, 'left', c, 0.11, y1, z + 6, z + 25, { flowers: f === 3, seed: i, sill: f !== 1 });
+      for (const [i, c] of Rr.entries())
+        win(p, 'right', c, 0.11, x1, z + 6, z + 25, { flowers: f === 3, seed: i + 2, sill: f !== 1 });
+      if (f === 2)
+        for (const c of [...L.map((v) => ['left', v] as const), ...Rr.map((v) => ['right', v] as const)]) {
+          const [side, v] = c;
+          poly(
+            p,
+            side,
+            side === 'left' ? y1 : x1,
+            [
+              [v - 0.15, z + 28],
+              [v + 0.15, z + 28],
+              [v, z + 33],
+            ],
+            tone(side, '#fff3df'),
+          );
+        }
+    }
+    // Balcons filants au 1er et au dernier étage.
+    for (const z of [fh + 3, 3 * fh + 3]) {
+      balcony(p, 'left', x0 + 0.05, x1 - 0.05, y1, z, { depth: 0.14, rail: '#263238', slab: '#fff3df', h: 9 });
+      balcony(p, 'right', y0 + 0.05, y1 - 0.05, x1, z, { depth: 0.14, rail: '#263238', slab: '#fff3df', h: 9 });
+    }
+    // Rez-de-chaussée : grand portail cintré et fenêtres en arc.
+    for (const c of [0.62, 2.39]) win(p, 'left', c, 0.12, y1, 6, 18, { arch: true, bars: 'vert', sill: false });
+    for (const c of Rr) win(p, 'right', c, 0.12, x1, 6, 18, { arch: true, bars: 'vert', sill: false });
+    for (const c of [1.08, 1.92]) win(p, 'left', c, 0.08, y1, 8, 20, { bars: 'vert', sill: false });
+    entry(p, 'left', 1.5, 0.36, 18, y1, '#5d4037', { arch: true, frame: '#fff3df' });
+    canopy(p, 'left', 1.26, 1.74, y1, 33, ['#7b1f1f', '#f3d9b1'], 0.24, 6);
+    jut(p, 'left', x0 - 0.05, x1 + 0.05, y1, 0.05, h - 2, h + 4, boxColors('#fff3df', false));
+    jut(p, 'right', y0 - 0.05, y1, x1, 0.05, h - 2, h + 4, boxColors('#fff3df', false));
+    mansard(p, x0, y0, x1, y1, h + 4, 40, 0.3, roof, { style: 'tiles', ov: 0.06, eave: '#fff3df', top: '#7d8b93' });
+    const k = 40 / 0.36;
+    for (const c of [0.7, 1.2, 1.7, 2.2])
+      dormer(p, 'left', c, 0.12, y1 + 0.06 - 0.1, h + 4 + k * 0.1, k, 16, roof, '#fff3df');
+    for (const c of [0.85, 1.5, 2.15])
+      dormer(p, 'right', c, 0.12, x1 + 0.06 - 0.1, h + 4 + k * 0.1, k, 16, roof, '#fff3df');
+    chimney(p, 0.8, 0.8, 166, 186, '#e6d3b3', 0.12, 3);
+    chimney(p, 2.2, 0.8, 166, 186, '#e6d3b3', 0.12, 3);
+    chimney(p, 1.5, 1.8, 166, 180, '#e6d3b3', 0.1, 2);
+    for (const c of [0.85, 2.15]) {
+      topiary(p, c + 0.3, 2.52, 'ball', 0, '#546e7a');
+    }
+    lamp(p, 1.12, 2.62, 34);
+    lamp(p, 1.88, 2.62, 34);
+    tree(p, 2.85, 2.6, 62, '#5cb83a');
+    tree(p, 0.15, 2.75, 54, '#66bb44');
+    roundBush(p, 2.86, 0.9, 8);
+    roundBush(p, 2.86, 1.6, 8, '#5cbf32');
+  },
+};
+
+/** Lofts en briques rouges : verrières d'atelier, escalier de secours, réservoir en bois et guirlande sur le toit. */
+const lofts: Hero = {
+  height: 175,
+  draw(g, p) {
+    const S = 2;
+    paving(g, 0.02, 0.02, S - 0.02, S - 0.02, '#cfcac0', 0.2);
+    const x0 = 0.2;
+    const x1 = 1.72;
+    const y0 = 0.22;
+    const y1 = 1.55;
+    const fh = 34;
+    const h = fh * 3;
+    const wall = '#b5523b';
+    const steel = '#263238';
+    softShadow(g, S, x0, y0, x1, y1, 0.2);
+
+    p.box(x0, y0, x1, y1, 0, h, boxColors(wall));
+    bricks(p, 'left', x0, x1, y1, 0, h, wall, 11);
+    bricks(p, 'right', y0, y1, x1, 0, h, wall, 13);
+    for (let f = 1; f < 3; f++) band(p, x0, y0, x1, y1, f * fh - 3, f * fh, '#8a3a28');
+    const industrial = (side: Side, c: number, plane: number, z: number) => {
+      quad(p, side, c - 0.21, c + 0.21, z + 27, z + 31, plane, tone(side, '#8a3a28'));
+      for (let s = c - 0.2; s < c + 0.2; s += 0.05)
+        seg(p, side, plane, s, z + 27, s, z + 31, tone(side, '#6d2c1f'), 0.8);
+      win(p, side, c, 0.17, plane, z + 6, z + 25, { frame: steel, glass: '#a7d8f0', bars: 'grid' });
+    };
+    for (let f = 1; f < 3; f++) {
+      for (const c of [0.47, 0.96, 1.45]) industrial('left', c, y1, f * fh);
+      for (const c of [0.55, 1.22]) industrial('right', c, x1, f * fh);
+    }
+    // Rez-de-chaussée : grande vitrine en acier, porte de quai.
+    quad(p, 'left', 0.3, 1.62, 0, 28, y1, steel);
+    ribbon(p, 'left', 0.33, 1.15, y1, 4, 25, '#bfe6f7', steel, 0.205);
+    ribbon(p, 'left', 1.22, 1.59, y1, 0, 25, '#d6f1fb', steel, 0.185);
+    canopy(p, 'left', 0.3, 1.62, y1, 32, ['#2e5e4e', '#f1e4c8'], 0.26, 9);
+    quad(p, 'right', 0.3, 0.86, 0, 24, x1, '#78909c');
+    for (let z = 3; z < 24; z += 3) seg(p, 'right', x1, 0.3, z, 0.86, z, '#546e7a', 1);
+    win(p, 'right', 1.22, 0.17, x1, 6, 24, { frame: steel, bars: 'grid' });
+    // Escalier de secours.
+    const ya = 0.98;
+    const yb = 1.48;
+    for (let f = 1; f < 3; f++) {
+      const z = f * fh + 2;
+      balcony(p, 'right', ya, yb, x1, z, { depth: 0.16, rail: '#1c262b', slab: '#37474f', h: 10 });
+      if (f === 1) {
+        p.line([x1 + 0.14, ya + 0.04, z], [x1 + 0.14, ya + 0.04, 12], '#1c262b', 1.6);
+        p.line([x1 + 0.1, ya + 0.04, z], [x1 + 0.1, ya + 0.04, 12], '#1c262b', 1.6);
+        for (let zz = 15; zz < z; zz += 4)
+          p.line([x1 + 0.1, ya + 0.04, zz], [x1 + 0.14, ya + 0.04, zz], '#1c262b', 1.2);
+      } else {
+        const from: V3 = [x1 + 0.09, ya + 0.06, z - fh];
+        const to: V3 = [x1 + 0.09, yb - 0.08, z];
+        p.line(from, to, '#1c262b', 2.2);
+        for (let t = 0.1; t < 1; t += 0.12)
+          p.line(
+            [x1 + 0.03, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t],
+            [x1 + 0.15, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t],
+            '#1c262b',
+            1.2,
+          );
+      }
+    }
+    // Corniche à corbeaux et toit-terrasse.
+    const zf = flatTop(p, x0, y0, x1, y1, h, {
+      cornice: '#8a3a28',
+      coping: '#d7ccc8',
+      roof: '#6d5a52',
+      dentils: '#6d2c1f',
+      parapet: 7,
+    });
+    waterTower(p, 0.6, 0.6, zf, 0.2, 26);
+    p.box(1.15, 0.45, 1.5, 0.8, zf, zf + 6, boxColors('#cfd8dc', false));
+    p.fill(
+      [
+        [1.17, 0.47, zf + 6],
+        [1.48, 0.47, zf + 6],
+        [1.48, 0.78, zf + 14],
+        [1.17, 0.78, zf + 14],
+      ],
+      '#b3e5fc',
+    );
+    planter(p, 1.0, 1.3, 1.5, 1.42, zf);
+    p.box(0.75, 1.05, 0.83, 1.13, zf, zf + 6, boxColors('#a1887f', false));
+    p.box(0.9, 1.05, 0.98, 1.13, zf, zf + 6, boxColors('#a1887f', false));
+    // Guirlande lumineuse entre deux mâts.
+    p.line([1.62, 0.3, zf], [1.62, 0.3, zf + 30], '#37474f', 2);
+    p.line([0.3, 1.45, zf], [0.3, 1.45, zf + 30], '#37474f', 2);
+    const a: V3 = [0.3, 1.45, zf + 30];
+    const b: V3 = [1.62, 0.3, zf + 30];
+    const bulbs = ['#ffeb3b', '#ff7043', '#4fc3f7', '#e91e63', '#8bc34a'];
+    let prev: V3 = a;
+    for (let i = 1; i <= 10; i++) {
+      const t = i / 10;
+      const pt: V3 = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] - Math.sin(t * Math.PI) * 10];
+      p.line(prev, pt, '#37474f', 1);
+      if (i < 10) p.dot(pt[0], pt[1], pt[2] - 2, 2.4, bulbs[i % bulbs.length]!);
+      prev = pt;
+    }
+    tree(p, 1.86, 0.4, 56, '#5cb83a');
+    lamp(p, 0.15, 1.8, 36);
+    planter(p, 0.55, 1.75, 1.0, 1.86, 0);
+    // Vélo.
+    const [vx, vy] = p.p(1.35, 1.85, 0);
+    const { ctx } = p;
+    ctx.strokeStyle = '#e53935';
+    ctx.lineWidth = 1.8;
+    for (const dx of [-7, 7]) {
+      ctx.beginPath();
+      ctx.arc(vx + dx, vy - 6, 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(vx - 7, vy - 6);
+    ctx.lineTo(vx - 1, vy - 13);
+    ctx.lineTo(vx + 7, vy - 6);
+    ctx.moveTo(vx - 1, vy - 13);
+    ctx.lineTo(vx + 4, vy - 14);
+    ctx.stroke();
+  },
+};
+
+/** Dalle et garde-corps vitré d'un balcon d'angle (face gauche de `a` à x1, face droite de `b` à y1). */
+function cornerBalcony(p: P, a: number, b: number, x1: number, y1: number, z: number, d = 0.18): void {
+  const slab = boxColors('#e3f2fd', false);
+  p.box(x1, b, x1 + d, y1, z - 3, z, slab);
+  p.box(a, y1, x1 + d, y1 + d, z - 3, z, slab);
+  bush(p, x1 + d * 0.5, y1 + d * 0.4, z, 5, '#4caf2a');
+  p.ctx.save();
+  p.ctx.globalAlpha = 0.45;
+  p.leftQuad(a, x1 + d, z, z + 10, y1 + d, '#64b5f6');
+  p.rightQuad(b, y1 + d, z, z + 10, x1 + d, '#42a5f5');
+  p.ctx.restore();
+  p.line([a, y1 + d, z + 10], [x1 + d, y1 + d, z + 10], '#ffffff', 2);
+  p.line([x1 + d, y1 + d, z + 10], [x1 + d, b, z + 10], '#eceff1', 2);
+}
+
+/** Tour d'habitation moderne : bandeaux vitrés, balcons d'angle, hall vitré, toit-terrasse jardiné. */
+const tower: Hero = {
+  height: 300,
+  draw(g, p) {
+    const S = 3;
+    paving(g, 0.02, 0.02, S - 0.02, S - 0.02, '#cfd8dc', 0.25);
+    g.flat(0.1, 2.62, 0.95, 2.92, 0, '#8fd14f', '#6fae3a');
+    g.flat(2.62, 0.1, 2.92, 1.2, 0, '#8fd14f', '#6fae3a');
+    const x0 = 0.5;
+    const x1 = 2.5;
+    const y0 = 0.5;
+    const y1 = 2.5;
+    const lobby = 32;
+    const fh = 25;
+    const floors = 7;
+    const h = lobby + fh * floors;
+    const wall = '#90caf9';
+    const blue = '#1565c0';
+    const glass = '#b3e0fa';
+    softShadow(g, S, x0, y0, x1, y1, 0.2);
+
+    // Hall vitré en retrait.
+    const li = 0.12;
+    p.box(x0 + li, y0 + li, x1 - li, y1 - li, 0, lobby, boxColors('#eceff1', false));
+    ribbon(p, 'left', x0 + li + 0.04, x1 - li - 0.04, y1 - li, 2, lobby - 3, '#cdefff', '#546e7a', 0.3);
+    ribbon(p, 'right', y0 + li + 0.04, y1 - li - 0.04, x1 - li, 2, lobby - 3, '#cdefff', '#546e7a', 0.3);
+    entry(p, 'left', 1.5, 0.3, 24, y1 - li, '#455a64', { glass: true, frame: '#cfd8dc' });
+    p.box(x0, y0, x1, y1, lobby, h, boxColors(wall));
+    for (let f = 0; f < floors; f++) {
+      const z = lobby + f * fh;
+      band(p, x0, y0, x1, y1, z, z + 3, '#e3f2fd');
+      ribbon(p, 'left', x0 + 0.08, x1 - 0.08, y1, z + 8, z + 20, glass, blue, 0.23);
+      ribbon(p, 'right', y0 + 0.08, y1 - 0.08, x1, z + 8, z + 20, glass, blue, 0.23);
+      if (f % 2 === 1) balcony(p, 'left', 0.62, 1.22, y1, z + 3, { kind: 'glass', depth: 0.16, slab: '#e3f2fd' });
+      else balcony(p, 'right', 0.62, 1.22, x1, z + 3, { kind: 'glass', depth: 0.16, slab: '#e3f2fd' });
+      cornerBalcony(p, 1.72, 1.72, x1, y1, z + 3);
+    }
+    // Auvent d'entrée.
+    p.box(1.15, y1, 1.85, y1 + 0.3, lobby - 4, lobby - 1, boxColors('#ffffff', false));
+    for (const x of [1.2, 1.8]) p.line([x, y1 + 0.27, 0], [x, y1 + 0.27, lobby - 4], '#90a4ae', 2);
+    // Toit-terrasse : attique vitré, pergola, jardinières et antenne.
+    const zf = flatTop(p, x0, y0, x1, y1, h, {
+      cornice: '#ffffff',
+      coping: '#e3f2fd',
+      roof: '#d7b98e',
+      parapet: 7,
+      tiles: 0.2,
+    });
+    tree(p, 0.78, 2.18, 46, '#5cb83a', zf);
+    p.box(0.8, 0.72, 1.85, 1.65, zf, zf + 26, boxColors(wall, false));
+    ribbon(p, 'left', 0.86, 1.79, 1.65, zf + 4, zf + 22, glass, blue, 0.23);
+    ribbon(p, 'right', 0.78, 1.59, 1.85, zf + 4, zf + 22, glass, blue, 0.23);
+    p.box(0.74, 0.66, 1.92, 1.72, zf + 26, zf + 30, boxColors('#ffffff', false));
+    p.flat(0.8, 1.05, 1.86, 1.66, zf + 30, '#7cc35a');
+    for (let x = 0.95; x < 1.86; x += 0.22) bush(p, x, 1.5, zf + 30, 4, '#4caf2a');
+    p.line([1.15, 1.0, zf + 30], [1.15, 1.0, zf + 72], '#b0bec5', 2.4);
+    p.line([1.05, 1.0, zf + 58], [1.25, 1.0, zf + 58], '#b0bec5', 2);
+    p.dot(1.15, 1.0, zf + 74, 3.2, '#ff5252');
+    for (let i = 0; i < 3; i++) {
+      const x = 1.4 + i * 0.15;
+      p.fill(
+        [
+          [x, 0.85, zf + 31],
+          [x + 0.12, 0.85, zf + 31],
+          [x + 0.12, 1.4, zf + 37],
+          [x, 1.4, zf + 37],
+        ],
+        '#1a3a6b',
+      );
+    }
+    tree(p, 2.22, 0.78, 46, '#66bb44', zf);
+    for (const x of [2.0, 2.35]) p.line([x, 2.32, zf], [x, 2.32, zf + 22], '#8d6e63', 2.5);
+    for (const y of [1.95]) p.line([2.0, y, zf], [2.0, y, zf + 22], '#8d6e63', 2.5);
+    for (let x = 1.95; x <= 2.4; x += 0.09) p.line([x, 1.92, zf + 22], [x, 2.35, zf + 22], '#a1887f', 2);
+    lounger(p, 2.02, 2.05, '#ffb74d', zf);
+    planter(p, 1.0, 2.25, 1.75, 2.38, zf);
+    // Jardin au pied de la tour.
+    tree(p, 2.78, 0.32, 58, '#5cb83a');
+    tree(p, 0.28, 2.78, 58, '#66bb44');
+    roundBush(p, 2.78, 1.0, 8);
+    roundBush(p, 0.62, 2.78, 7, '#5cbf32');
+    lamp(p, 1.1, 2.82, 36);
+    lamp(p, 2.82, 2.0, 36);
+    flowerBush(p, 2.0, 2.8, 7, '#ff80ab');
+  },
+};
+
+/** Mur-rideau vitré : reflets du ciel, meneaux, lignes d'étage et nuages. */
+function curtain(p: P, side: Side, a: number, b: number, plane: number, z0: number, z1: number) {
+  const g = p.gradient(
+    fp(side, a, plane, z1),
+    fp(side, b, plane, z0),
+    side === 'left' ? '#d4ecfa' : '#86aacb',
+    side === 'left' ? '#5f86ab' : '#3a5877',
+  );
+  quad(p, side, a, b, z0, z1, plane, g);
+  const { ctx } = p;
+  ctx.save();
+  p.path([fp(side, a, plane, z0), fp(side, b, plane, z0), fp(side, b, plane, z1), fp(side, a, plane, z1)]);
+  ctx.clip();
+  ctx.globalAlpha = 0.22;
+  const span = b - a;
+  const hgt = z1 - z0;
+  for (const [u, w] of [
+    [0.12, 0.12],
+    [0.34, 0.05],
+    [0.62, 0.16],
+  ] as const) {
+    poly(
+      p,
+      side,
+      plane,
+      [
+        [a + span * u, z1],
+        [a + span * (u + w), z1],
+        [a + span * (u + w - 0.5), z0 + hgt * 0.1],
+        [a + span * (u - 0.5), z0 + hgt * 0.1],
+      ],
+      '#ffffff',
+    );
+  }
+  ctx.globalAlpha = side === 'left' ? 0.35 : 0.18;
+  for (const [u, v, r] of [
+    [0.3, 0.86, 9],
+    [0.38, 0.88, 11],
+    [0.46, 0.86, 8],
+    [0.75, 0.6, 7],
+    [0.82, 0.62, 9],
+  ] as const) {
+    const [sx, sy] = p.p(...fp(side, a + span * u, plane, z0 + hgt * v));
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, r * 1.4, r * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  const floor = tone(side, '#e8f1f8', -0.25);
+  for (let z = z0 + 13; z < z1 - 2; z += 13) seg(p, side, plane, a, z, b, z, floor, 1.4);
+  const mull = tone(side, '#2f4d6b', -0.1);
+  for (let s = a + 0.2; s < b - 0.05; s += 0.2) seg(p, side, plane, s, z0, s, z1, mull, 1);
+  quad(p, side, a, a + 0.05, z0, z1, plane, tone(side, '#e8eef3'));
+  quad(p, side, b - 0.05, b, z0, z1, plane, tone(side, '#e8eef3'));
+}
+
+/** Tour vitrée sur un volume. */
+function glassTier(p: P, x0: number, y0: number, x1: number, y1: number, z0: number, z1: number): void {
+  p.box(x0, y0, x1, y1, z0, z1, { top: '#cfd8dc', left: '#7fa3c4', right: '#4a6a8a' });
+  curtain(p, 'left', x0, x1, y1, z0, z1);
+  curtain(p, 'right', y0, y1, x1, z0, z1);
+}
+
+function flag(p: P, x: number, y: number, h: number, cloth: string): void {
+  p.line([x, y, 0], [x, y, h], '#b0bec5', 2);
+  const [sx, sy] = p.p(x, y, h);
+  const { ctx } = p;
+  ctx.fillStyle = cloth;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.quadraticCurveTo(sx + 9, sy - 3, sx + 18, sy + 2);
+  ctx.lineTo(sx + 18, sy + 11);
+  ctx.quadraticCurveTo(sx + 9, sy + 6, sx, sy + 9);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** Gratte-ciel : socle à colonnade, trois gradins de verre à reflets, couronnement pyramidal et flèche. */
+const skyscraper: Hero = {
+  height: 520,
+  draw(g, p) {
+    const S = 4;
+    paving(g, 0.02, 0.02, S - 0.02, S - 0.02, '#b0bec5', 0.33);
+    softShadow(g, S, 0.45, 0.45, 3.55, 3.55, 0.22);
+    tree(p, 3.72, 0.32, 62, '#5cb83a');
+    tree(p, 0.32, 3.72, 62, '#66bb44');
+    // Socle : colonnade de pierre et vitrages.
+    const pb = 36;
+    p.box(0.45, 0.45, 3.55, 3.55, 0, pb, boxColors('#eceff1', false));
+    ribbon(p, 'left', 0.5, 3.5, 3.55, 3, pb - 6, '#bfe3f7', '#cfd8dc', 0.5);
+    ribbon(p, 'right', 0.5, 3.5, 3.55, 3, pb - 6, '#bfe3f7', '#cfd8dc', 0.5);
+    for (let s = 0.45; s <= 3.56; s += 0.5) {
+      p.leftQuad(s - 0.04, s + 0.04, 0, pb, 3.55, '#f5f7f8');
+      p.rightQuad(s - 0.04, s + 0.04, 0, pb, 3.55, '#d5dde2');
+    }
+    entry(p, 'left', 2.0, 0.42, 26, 3.55, '#37474f', { glass: true, frame: '#90a4ae' });
+    const zp = flatTop(p, 0.45, 0.45, 3.55, 3.55, pb, { coping: '#eceff1', roof: '#a5b4bd', parapet: 6 });
+    for (let x = 0.7; x <= 3.3; x += 0.32) bush(p, x, 3.42, zp, 6, x % 0.64 < 0.32 ? '#4caf2a' : '#66bb44');
+    for (let y = 0.7; y <= 3.3; y += 0.32) bush(p, 3.42, y, zp, 6, '#4caf2a');
+    // Gradins vitrés.
+    const z1 = 262;
+    glassTier(p, 0.7, 0.7, 3.3, 3.3, zp, z1);
+    const zt1 = flatTop(p, 0.7, 0.7, 3.3, 3.3, z1, { coping: '#dfe7ec', roof: '#90a4ae', parapet: 5 });
+    for (let x = 1.05; x <= 3.0; x += 0.3) bush(p, x, 3.18, zt1, 5, '#4caf2a');
+    const z2 = 344;
+    glassTier(p, 0.98, 0.98, 3.02, 3.02, zt1, z2);
+    band(p, 0.98, 0.98, 3.02, 3.02, z2 - 6, z2 - 2, '#fff8e1');
+    const zt2 = flatTop(p, 0.98, 0.98, 3.02, 3.02, z2, { coping: '#dfe7ec', roof: '#90a4ae', parapet: 5 });
+    const z3 = 394;
+    glassTier(p, 1.28, 1.28, 2.72, 2.72, zt2, z3);
+    band(p, 1.28, 1.28, 2.72, 2.72, z3 - 6, z3 - 2, '#fff8e1');
+    for (let s = 1.36; s < 2.7; s += 0.12) {
+      p.dot(s, 2.72, z3 - 4, 1.6, '#ffffff');
+      p.dot(2.72, s, z3 - 4, 1.6, '#ffffff');
+    }
+    p.box(1.24, 1.24, 2.76, 2.76, z3, z3 + 5, boxColors('#dfe7ec', false));
+    p.pyramidRoof(1.28, 1.28, 2.72, 2.72, z3 + 5, 50, '#9fb8cf', 0.02);
+    // Flèche.
+    const top = z3 + 55;
+    p.line([2, 2, top - 6], [2, 2, top + 52], '#eceff1', 4);
+    p.line([2, 2, top - 6], [2, 2, top + 52], '#b0bec5', 1.5);
+    p.dot(2, 2, top + 6, 4, '#eceff1');
+    p.dot(2, 2, top + 54, 4, '#ff5252');
+    p.dot(1.99, 1.99, top + 55, 1.5, '#ffffff');
+    // Parvis.
+    p.box(1.6, 3.55, 2.4, 3.92, pb - 8, pb - 5, boxColors('#37474f', false));
+    for (const x of [1.65, 2.35]) p.line([x, 3.89, 0], [x, 3.89, pb - 8], '#90a4ae', 2);
+    flag(p, 1.2, 3.82, 56, '#e53935');
+    flag(p, 2.8, 3.82, 56, '#1e88e5');
+    flag(p, 3.82, 2.8, 56, '#ffca28');
+    planter(p, 0.5, 3.75, 1.0, 3.88, 0, '#90a4ae');
+    planter(p, 3.75, 0.9, 3.88, 1.9, 0, '#90a4ae');
+    lamp(p, 3.8, 3.4, 38);
+    lamp(p, 3.0, 3.8, 38);
+    tree(p, 3.75, 3.72, 56, '#4caf50');
+  },
+};
+
 export const HEROES: Record<string, Hero> = {
   bungalow,
   townhouse,
@@ -1601,4 +2294,9 @@ export const HEROES: Record<string, Hero> = {
   villa,
   mansion,
   manor,
+  apartments,
+  residence,
+  lofts,
+  tower,
+  skyscraper,
 };
