@@ -1260,7 +1260,7 @@ const chalet: Hero = {
     const xm = (x0 + x1) / 2;
     gableRoof(p, 'y', x0, y0, x1, y1, h, 50, '#37474f', '#b77646', {
       style: 'slate',
-      ov: 0.24,
+      ov: 0.18,
       rake: '#7a4a2a',
       eave: '#5d4037',
       onGable: () => {
@@ -1294,7 +1294,7 @@ const chalet: Hero = {
     ] as const)
       p.dot(0.7 + dx, 0.48 - dx, 120 + dz, r, '#f2f2f2');
     // Étoile « premium ».
-    const [sx, sy] = p.p(1.12, 1.12, 132);
+    const [sx, sy] = p.p(1.0, 1.7, 126);
     const { ctx } = p;
     ctx.fillStyle = '#ffd54f';
     ctx.beginPath();
@@ -1417,7 +1417,6 @@ const mansion: Hero = {
 
     ironFence(p, [0.08, 0.08], [2.92, 0.08]);
     ironFence(p, [0.08, 0.08], [0.08, 2.92]);
-    tree(p, 0.3, 0.32, 80, '#4caf50');
     chimney(p, 0.85, 1.1, 104, 146, '#bcaaa4', 0.11, 2);
     chimney(p, 2.15, 1.1, 104, 146, '#bcaaa4', 0.11, 2);
     p.box(x0, y0, x1, y1, 0, h, boxColors(wall));
@@ -1484,8 +1483,6 @@ const mansion: Hero = {
     roundBush(p, 0.3, 2.3, 10, '#3f8f2f');
     roundBush(p, 2.72, 2.3, 10, '#3f8f2f');
     roundBush(p, 2.78, 1.5, 9, '#4caf50');
-    lamp(p, 1.22, 2.86, 34);
-    lamp(p, 1.78, 2.86, 34);
     ironFence(p, [0.08, 2.92], [1.22, 2.92]);
     ironFence(p, [1.78, 2.92], [2.92, 2.92]);
     ironFence(p, [2.92, 0.08], [2.92, 2.92]);
@@ -1516,7 +1513,6 @@ const manor: Hero = {
 
     picket(p, [0.06, 0.06], [3.94, 0.06]);
     picket(p, [0.06, 0.06], [0.06, 3.94]);
-    tree(p, 0.3, 0.32, 86, '#4caf50');
     tree(p, 3.62, 0.36, 80, '#5cb83a');
 
     const wing = (a: number, b: number) => {
@@ -1591,8 +1587,7 @@ const manor: Hero = {
     for (const y of [1.3, 2.2, 3.0]) cypress(p, 3.72, y, 56);
     roundBush(p, 1.48, 2.62, 8, '#5cbf32');
     roundBush(p, 2.28, 2.62, 8, '#5cbf32');
-    lamp(p, 1.62, 3.85, 34);
-    lamp(p, 2.14, 3.85, 34);
+    lamp(p, 2.12, 3.86, 34);
     picket(p, [0.06, 3.94], [1.72, 3.94]);
     picket(p, [2.04, 3.94], [3.94, 3.94]);
     picket(p, [3.94, 0.06], [3.94, 3.94]);
