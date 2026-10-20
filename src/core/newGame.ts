@@ -5,7 +5,7 @@ import { STARTING_TOWN, type StartingPlacement } from '@/data/startingTown';
 import { chunkKey } from './grid';
 import type { DailyState, Entity, GameState } from './types';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 /** Ouvriers au début de la partie (un deuxième s'achète dans la boutique). */
 export const START_WORKERS = 1;

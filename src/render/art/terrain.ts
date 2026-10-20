@@ -3,16 +3,19 @@ import { seeded, shade } from './color';
 import { createCanvas, isoCanvas, type ArtPiece, type V3 } from './IsoPainter';
 import { t } from '@/i18n';
 
-const SIDEWALK = '#d9d3c5';
-const ASPHALT = '#5c6169';
+const SIDEWALK = '#d3d6d8';
+const SIDEWALK_EDGE = '#a9adb0';
+const CURB = '#868b8f';
+const ASPHALT = '#4a5059';
 
 /** Tronçon de route selon le masque de connexion (1 : x+1, 2 : y+1, 4 : x−1, 8 : y−1). */
 export function roadTile(mask: number): ArtPiece {
   const { painter, finish } = isoCanvas(1, 1, 0, 2);
   const e = 0.015;
-  const a = 0.15;
-  painter.flat(-e, -e, 1 + e, 1 + e, 0, SIDEWALK);
-  // Chaussée = carré central + bandes vers les côtés connectés ; la bordure est la même forme élargie.
+  const a = 0.16;
+  painter.flat(-e, -e, 1 + e, 1 + e, 0, SIDEWALK_EDGE);
+  painter.flat(0.015, 0.015, 0.985, 0.985, 0, SIDEWALK);
+  // Chaussée = carré central + bandes vers les côtés connectés ; trottoirs et bordure = la même forme élargie.
   const shapes = (k: number): Array<[number, number, number, number]> => {
     const list: Array<[number, number, number, number]> = [[a - k, a - k, 1 - a + k, 1 - a + k]];
     if (mask & 1) list.push([1 - a, a - k, 1 + e, 1 - a + k]);
@@ -21,22 +24,35 @@ export function roadTile(mask: number): ArtPiece {
     if (mask & 8) list.push([a - k, -e, 1 - a + k, a]);
     return list;
   };
-  for (const [x0, y0, x1, y1] of shapes(0.035)) painter.flat(x0, y0, x1, y1, 0, '#b3ab9a');
+  // Les trottoirs se prolongent jusqu'au bord de la case du côté des routes voisines.
+  for (const [x0, y0, x1, y1] of shapes(a - 0.015)) painter.flat(x0, y0, x1, y1, 0, SIDEWALK);
+  // Joints de dalles du trottoir.
+  const { ctx } = painter;
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  for (let i = 1; i < 4; i++) {
+    const t = i / 4;
+    painter.line([t, 0, 0], [t, a, 0], SIDEWALK_EDGE, 1);
+    painter.line([t, 1 - a, 0], [t, 1, 0], SIDEWALK_EDGE, 1);
+    painter.line([0, t, 0], [a, t, 0], SIDEWALK_EDGE, 1);
+    painter.line([1 - a, t, 0], [1, t, 0], SIDEWALK_EDGE, 1);
+  }
+  ctx.restore();
+  for (const [x0, y0, x1, y1] of shapes(0.025)) painter.flat(x0, y0, x1, y1, 0, CURB);
   for (const [x0, y0, x1, y1] of shapes(0)) painter.flat(x0, y0, x1, y1, 0, ASPHALT);
-  // Marquage au sol.
+  // Marquage au sol : ligne médiane jaune et passages piétons aux carrefours.
   const ends: Array<[number, number]> = [];
   if (mask & 1) ends.push([1, 0.5]);
   if (mask & 2) ends.push([0.5, 1]);
   if (mask & 4) ends.push([0, 0.5]);
   if (mask & 8) ends.push([0.5, 0]);
-  const { ctx } = painter;
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,250,235,0.85)';
-  ctx.lineWidth = 2.2;
-  ctx.setLineDash([9, 9]);
   const crossing = ends.length >= 3;
+  ctx.save();
+  ctx.strokeStyle = '#ffd54a';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 9]);
   for (const [ex, ey] of ends) {
-    const start: V3 = crossing ? [0.5 + (ex - 0.5) * 0.55, 0.5 + (ey - 0.5) * 0.55, 0] : [0.5, 0.5, 0];
+    const start: V3 = crossing ? [0.5 + (ex - 0.5) * 0.62, 0.5 + (ey - 0.5) * 0.62, 0] : [0.5, 0.5, 0];
     ctx.beginPath();
     ctx.moveTo(...painter.p(...start));
     ctx.lineTo(...painter.p(ex, ey));
@@ -44,33 +60,28 @@ export function roadTile(mask: number): ArtPiece {
   }
   ctx.restore();
   if (crossing) {
-    // Passages piétons.
-    ctx.save();
-    ctx.globalAlpha = 0.8;
-    for (let i = 0; i < 5; i++) {
-      const t = a + 0.05 + i * 0.13;
-      if (mask & 1)
-        painter.fill(
-          [
-            [0.8, t, 0],
-            [0.86, t, 0],
-            [0.86, t + 0.06, 0],
-            [0.8, t + 0.06, 0],
-          ],
-          '#f5f1e6',
-        );
-      if (mask & 2)
-        painter.fill(
-          [
-            [t, 0.8, 0],
-            [t + 0.06, 0.8, 0],
-            [t + 0.06, 0.86, 0],
-            [t, 0.86, 0],
-          ],
-          '#f5f1e6',
-        );
+    for (const [ex, ey] of ends) {
+      const along = 0.5 + (ex - 0.5) * 0.5;
+      const across = 0.5 + (ey - 0.5) * 0.5;
+      for (let i = 0; i < 6; i++) {
+        const t = a + 0.04 + i * 0.115;
+        const pts: V3[] =
+          ex !== 0.5
+            ? [
+                [along - 0.03, t, 0],
+                [along + 0.03, t, 0],
+                [along + 0.03, t + 0.06, 0],
+                [along - 0.03, t + 0.06, 0],
+              ]
+            : [
+                [t, across - 0.03, 0],
+                [t + 0.06, across - 0.03, 0],
+                [t + 0.06, across + 0.03, 0],
+                [t, across + 0.03, 0],
+              ];
+        painter.fill(pts, '#f7f7f2');
+      }
     }
-    ctx.restore();
   }
   return finish();
 }

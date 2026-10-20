@@ -393,7 +393,7 @@ export class IsoPainter {
     this.faceText(side, text, (a + b) / 2, plane, (za + zb) / 2, `800 ${size}px system-ui, sans-serif`, fg, maxWidth);
   }
 
-  pyramidRoof(x0: number, y0: number, x1: number, y1: number, z: number, h: number, color: string, ov = 0.08): void {
+  pyramidRoof(x0: number, y0: number, x1: number, y1: number, z: number, h: number, color: string, ov = 0.12): void {
     const xm = (x0 + x1) / 2;
     const ym = (y0 + y1) / 2;
     const apex: V3 = [xm, ym, z + h];
@@ -407,6 +407,10 @@ export class IsoPainter {
     this.fill([d, c, apex], this.gradient(apex, d, shade(color, 0.08), shade(color, -0.05)), outline);
     this.fill([c, b, apex], this.gradient(apex, c, shade(color, -0.15), shade(color, -0.28)), outline);
     this.shingles([d, c, apex], color);
+    // Rive claire le long des égouts avant (relief « cartoon »).
+    this.line(a, d, shade(color, 0.4), 2.5);
+    this.line(d, c, shade(color, 0.4), 2.5);
+    this.line(c, b, shade(color, 0.15), 2.5);
   }
 
   /** Toit à deux pans, faîtage parallèle à l'axe x ; pignon visible sur la face droite. */
@@ -419,7 +423,7 @@ export class IsoPainter {
     h: number,
     color: string,
     gable: string,
-    ov = 0.1,
+    ov = 0.14,
   ): void {
     const ym = (y0 + y1) / 2;
     const outline = shade(color, -0.45);
@@ -447,6 +451,7 @@ export class IsoPainter {
     );
     this.fill(front, this.gradient([x0, ym, z + h], [x0, y1 + ov, z], shade(color, 0.08), shade(color, -0.1)), outline);
     this.shingles(front, color);
+    this.line([x0 - ov, y1 + ov, z], [x1 + ov, y1 + ov, z], shade(color, 0.45), 3);
     // Rive du toit côté pignon.
     this.ctx.beginPath();
     this.ctx.moveTo(...this.p(x1 + ov, y0 - ov, z));
@@ -467,7 +472,7 @@ export class IsoPainter {
     h: number,
     color: string,
     gable: string,
-    ov = 0.1,
+    ov = 0.14,
   ): void {
     const xm = (x0 + x1) / 2;
     const outline = shade(color, -0.45);
@@ -499,6 +504,7 @@ export class IsoPainter {
       outline,
     );
     this.shingles(front, shade(color, -0.2));
+    this.line([x1 + ov, y0 - ov, z], [x1 + ov, y1 + ov, z], shade(color, 0.25), 3);
     this.ctx.beginPath();
     this.ctx.moveTo(...this.p(x0 - ov, y1 + ov, z));
     this.ctx.lineTo(...this.p(xm, y1 + ov, z + h));

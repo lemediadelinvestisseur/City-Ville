@@ -138,14 +138,15 @@ export class GroundStyle {
   /** Teinte de l'herbe au sommet (X, Y) : prairie sèche ou grasse, sous-bois plus sombre. */
   grassAt(X: number, Y: number): Mul {
     const lush = smoothNoise(X, Y, 10, 41);
-    const light = 0.9 + 0.1 * smoothNoise(X, Y, 3.5, 42);
+    const light = 0.95 + 0.05 * smoothNoise(X, Y, 3.5, 42);
     const dry = smoothstep(0.58, 0.85, lush);
     const wet = smoothstep(0.42, 0.14, lush);
     const shade = smoothstep(0.1, 0.65, forestDensity(X, Y));
+    // Variations volontairement discrètes : une prairie franche, un peu plus sombre sous les bois.
     return [
-      0.97 * light * (1 + 0.02 * dry) * (1 - 0.14 * wet) * (1 - 0.3 * shade),
-      0.97 * light * (1 - 0.03 * dry) * (1 - 0.05 * wet) * (1 - 0.2 * shade),
-      0.95 * light * (1 - 0.3 * dry) * (1 - 0.02 * wet) * (1 - 0.24 * shade),
+      light * (1 + 0.02 * dry) * (1 - 0.06 * wet) * (1 - 0.18 * shade),
+      light * (1 - 0.01 * dry) * (1 - 0.02 * wet) * (1 - 0.1 * shade),
+      light * (1 - 0.15 * dry) * (1 - 0.01 * wet) * (1 - 0.14 * shade),
     ];
   }
 
