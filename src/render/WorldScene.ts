@@ -299,7 +299,17 @@ export class WorldScene extends Phaser.Scene {
 
   // ———————————————————————————— Vues des constructions ————————————————————————————
 
+  /** Clé de texture, ajoutée à Phaser au premier usage (les bâtiments sont dessinés à la demande). */
+  private texture(key: string): string {
+    if (!this.textures.exists(key)) this.textures.addCanvas(key, this.ctx.art.get(key).canvas);
+    return key;
+  }
+
   private textureFor(entity: Entity): string {
+    return this.texture(this.baseTextureFor(entity));
+  }
+
+  private baseTextureFor(entity: Entity): string {
     const def = getBuildingDef(entity.defId);
     if (def.id === 'road') {
       return ArtKey.road(roadMask((x, y) => this.game_.isRoad(x, y) || this.map.isWildRoad(x, y), entity.x, entity.y));
@@ -1292,7 +1302,7 @@ export class WorldScene extends Phaser.Scene {
       x = spot.x;
       y = spot.y;
     }
-    const key = defId === 'road' ? ArtKey.road(0) : ArtKey.building(defId);
+    const key = this.texture(defId === 'road' ? ArtKey.road(0) : ArtKey.building(defId));
     const piece = this.ctx.art.get(key);
     const ghost = this.add
       .image(0, 0, key)

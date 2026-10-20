@@ -14,6 +14,7 @@ import { PLANT_VARIANTS, plantArt, type PlantKind } from '@/render/art/nature';
 
 const params = new URLSearchParams(location.search);
 const lib = ArtLibrary.build();
+lib.drawAll();
 // Visuels que la carte dessine à la demande.
 for (let i = 0; i < GROUND_PERIOD; i++) {
   for (let j = 0; j < GROUND_PERIOD; j++) {
