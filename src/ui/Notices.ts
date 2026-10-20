@@ -17,6 +17,7 @@ const READY_ICONS: Record<ReadyKind, string> = {
   build: Icons.build,
   boat: Icons.boat,
   train: Icons.train,
+  production: Icons.goods,
   business: Icons.coin,
 };
 
@@ -112,7 +113,7 @@ export class Notices {
     const counts = new Map<ReadyKind, number>();
     for (const item of items) counts.set(item.kind, (counts.get(item.kind) ?? 0) + 1);
     if (counts.size === 0) return;
-    const parts = (['crop', 'build', 'boat', 'train', 'business'] as const)
+    const parts = (['crop', 'build', 'production', 'boat', 'train', 'business'] as const)
       .filter((kind) => counts.has(kind))
       .map((kind) => tn(`away.${kind}`, counts.get(kind) ?? 0));
     const first = items[0];

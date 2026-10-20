@@ -9,6 +9,8 @@ export type InboxKind =
   | 'build'
   | 'boat'
   | 'train'
+  | 'production'
+  | 'visitor'
   | 'business'
   | 'quest'
   | 'level'

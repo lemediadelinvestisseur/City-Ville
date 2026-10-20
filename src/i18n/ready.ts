@@ -21,6 +21,10 @@ export function readyMessage({ kind, count, defId, cropId }: ReadySummary): stri
       return tn('ready.boat', count);
     case 'train':
       return tn('ready.train', count);
+    case 'production':
+      return tn('ready.production', count, { name: defId ? buildingName(defId) : '' });
+    case 'meal':
+      return t('ready.meal');
     case 'business':
       return tn('ready.business', count, { name: defId ? buildingName(defId) : '' });
     case 'energy':

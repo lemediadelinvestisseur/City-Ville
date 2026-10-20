@@ -2,9 +2,12 @@ import type { ScreenPoint } from '@/app/context';
 import type { Game, UpgradeInfo } from '@/core/game';
 import type { Entity } from '@/core/types';
 import { getBuildingDef } from '@/data/buildings';
-import { getCropDef, getShipmentDef, getTripDef } from '@/data/crops';
+import { getCropDef, getTripDef } from '@/data/crops';
+import { getRecipeDef } from '@/data/recipes';
 import { t } from '@/i18n';
-import { buildingName, cropName, shipmentName, tripName } from '@/i18n/content';
+import { buildingName, cropName, recipeName, tripName } from '@/i18n/content';
+import { rewardChips } from './DailyPanel';
+import { bagChips, itemChip, itemEmoji } from './items';
 import { clear, h, icon, rich } from './dom';
 import { formatClock } from './format';
 import { Icons } from './icons';
@@ -35,6 +38,9 @@ interface Timing {
  * La structure n'est reconstruite que lorsque l'état change ; le minuteur est
  * mis à jour sur place pour ne pas « voler » les clics sur les boutons.
  */
+/** Pictogramme d'un produit dans une phrase. */
+const emoji = (id: string) => h('span', { class: 'item-chip__emoji', text: itemEmoji(id) });
+
 export class Bubble {
   readonly el = h('div', { class: 'bubble', attrs: { role: 'dialog' } });
   private entityId: number | null = null;
@@ -104,7 +110,11 @@ export class Bubble {
     if (this.kind === 'edit') return `edit:${entity.id}`;
     const action = this.game.primaryAction(entity).type;
     const cost = this.game.speedUpCost(entity);
-    const content = entity.farm?.cropId ?? entity.port?.tripId ?? entity.station?.shipmentId ?? '';
+    const content =
+      entity.farm?.cropId ??
+      entity.port?.tripId ??
+      entity.producer?.recipeId ??
+      (entity.station?.reward ? 'train' : '');
     const up = this.game.upgradeInfo(entity);
     const upKey = `${up.status}:${'stars' in up ? up.stars : ''}:${up.status === 'available' ? up.reason : ''}`;
     return `info:${entity.id}:${action}:${this.game.isConnected(entity)}:${cost}:${this.game.decorationBonus(entity)}:${content}:${upKey}`;
@@ -128,13 +138,12 @@ export class Bubble {
       const remaining = (action.readyAt - now) / 1000;
       return { remaining, progress: 1 - remaining / getTripDef(entity.port.tripId).durationSec, served: null };
     }
-    if (action.type === 'waitTrain' && entity.station?.shipmentId) {
+    const timed =
+      action.type === 'waitTrain' ? entity.station : action.type === 'waitProduction' ? entity.producer : null;
+    if (timed && (action.type === 'waitTrain' || action.type === 'waitProduction')) {
       const remaining = (action.readyAt - now) / 1000;
-      return {
-        remaining,
-        progress: 1 - remaining / getShipmentDef(entity.station.shipmentId).durationSec,
-        served: null,
-      };
+      const total = Math.max(1, (timed.readyAt - timed.startedAt) / 1000);
+      return { remaining, progress: 1 - remaining / total, served: null };
     }
     if (action.type === 'waitRent' && def.category === 'house') {
       const remaining = (action.readyAt - now) / 1000;
@@ -222,7 +231,7 @@ export class Bubble {
           if (entity.port?.tripId) {
             const trip = getTripDef(entity.port.tripId);
             title = t('bubble.titleWith', { name, detail: tripName(trip) });
-            lines.push(rich('bubble.catch', { icon: icon(Icons.goods), n: trip.goods }));
+            lines.push(rich('bubble.catch', { icon: emoji('fish'), n: trip.amount }));
           } else {
             lines.push(t('bubble.docked'));
           }
@@ -236,7 +245,7 @@ export class Bubble {
         }
         case 'business': {
           if (action.type === 'supply') {
-            lines.push(rich('bubble.needs', { icon: icon(Icons.goods), n: def.supplyGoods }));
+            lines.push(h('span', { class: 'bubble__needs' }, `${t('bubble.needs')} `, bagChips(def.inputs, game)));
             lines.push(t('bubble.supplyHint'));
           } else if (timing.served) {
             this.refs.served = h('span', { text: t('bubble.served', timing.served) });
@@ -249,7 +258,7 @@ export class Bubble {
           if (entity.farm?.cropId) {
             const crop = getCropDef(entity.farm.cropId);
             title = t('bubble.titleWith', { name, detail: cropName(crop) });
-            lines.push(rich('bubble.harvest', { icon: icon(Icons.goods), n: crop.goods }));
+            lines.push(rich('bubble.harvest', { icon: emoji(crop.id), n: crop.amount }));
           }
           break;
         }
@@ -263,12 +272,28 @@ export class Bubble {
           lines.push(t('bubble.decoration', { percent: def.bonus.percent, radius: def.bonus.radius }));
           break;
         case 'station': {
-          if (entity.station?.shipmentId) {
-            const shipment = getShipmentDef(entity.station.shipmentId);
-            title = t('bubble.titleWith', { name, detail: shipmentName(shipment) });
-            lines.push(rich('bubble.delivery', { icon: icon(Icons.coin), coins: shipment.coins }));
+          const reward = entity.station?.reward;
+          if (reward)
+            lines.push(h('span', { class: 'bubble__needs' }, `${t('bubble.delivery')} `, rewardChips(reward)));
+          else lines.push(t('bubble.trainDocked'));
+          break;
+        }
+        case 'ranch':
+        case 'workshop': {
+          const recipeId = entity.producer?.recipeId;
+          if (recipeId) {
+            const recipe = getRecipeDef(recipeId);
+            title = t('bubble.titleWith', { name, detail: recipeName(recipeId) });
+            lines.push(
+              h(
+                'span',
+                { class: 'bubble__needs' },
+                `${t('bubble.produces')} `,
+                itemChip(recipe.output.item, recipe.output.qty),
+              ),
+            );
           } else {
-            lines.push(t('bubble.trainDocked'));
+            lines.push(t(def.category === 'ranch' ? 'bubble.ranchIdle' : 'bubble.workshopIdle'));
           }
           break;
         }
@@ -333,7 +358,7 @@ export class Bubble {
         ` ${t('bubble.upgradeLocked', { stars, level: info.level })}`,
       );
     }
-    const short = info.reason === 'notEnoughCoins' || info.reason === 'notEnoughGoods';
+    const short = info.reason === 'notEnoughCoins';
     return h(
       'div',
       { class: 'bubble__actions' },
@@ -347,8 +372,6 @@ export class Bubble {
           stars,
           coinIcon: icon(Icons.coin),
           coins: info.cost.coins,
-          goodsIcon: icon(Icons.goods),
-          goods: info.cost.goods,
         }),
       ),
     );

@@ -8,6 +8,7 @@ import { ArtKey, type ArtLibrary } from '@/render/art/library';
 import { clear, h, icon } from './dom';
 import { formatDuration, formatNumber } from './format';
 import { Icons } from './icons';
+import { itemEmoji } from './items';
 
 /** Choix de la sortie en mer d'un bateau. */
 export class TripPicker {
@@ -84,8 +85,7 @@ export class TripPicker {
             { class: 'card__effect' },
             icon(Icons.clock),
             ` ${formatDuration(trip.durationSec)} · `,
-            icon(Icons.goods),
-            ` ${trip.goods}`,
+            ` ${itemEmoji('fish')} ${trip.amount}`,
           ),
           h(
             'span',

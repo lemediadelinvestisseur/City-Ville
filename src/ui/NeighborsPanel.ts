@@ -14,6 +14,8 @@ export interface NeighborsCallbacks {
   onToggle: () => void;
   /** Contenu de l'onglet Marché. */
   market: () => Promise<HTMLElement>;
+  /** Vie du quartier (défi de la semaine, demandes), en tête de l'onglet Voisins. */
+  quarter: () => Promise<HTMLElement>;
 }
 
 const AVATAR_COLORS = ['#e57373', '#64b5f6', '#81c784', '#ffb74d', '#ba68c8', '#4db6ac', '#f06292', '#7986cb'];
@@ -47,7 +49,7 @@ export class NeighborsPanel {
   private tabs = h('div', { class: 'tabs tabs--center', attrs: { role: 'tablist' } });
   private body = h('div', { class: 'neighbors__body' });
   private tab: Tab = 'neighbors';
-  private rankingBy: 'level' | 'population' = 'level';
+  private rankingBy: 'level' | 'population' | 'likes' = 'level';
   private renderId = 0;
   isOpen = false;
 
@@ -167,8 +169,9 @@ export class NeighborsPanel {
   }
 
   private async neighbors(): Promise<HTMLElement> {
-    const list = await this.backend.neighbors();
+    const [list, quarter] = await Promise.all([this.backend.neighbors(), this.callbacks.quarter()]);
     const wrap = h('div', { class: 'people' });
+    wrap.append(quarter);
     if (list.length === 0) {
       wrap.append(
         h('p', { class: 'neighbors__empty', text: t('neighbors.empty') }),
@@ -258,8 +261,8 @@ export class NeighborsPanel {
   }
 
   private async ranking(): Promise<HTMLElement> {
-    const board = await this.backend.leaderboard(this.rankingBy);
     const wrap = h('div', { class: 'people' });
+    const by = this.rankingBy;
     const switcher = h(
       'div',
       { class: 'segmented' },
@@ -267,6 +270,7 @@ export class NeighborsPanel {
         [
           ['level', t('neighbors.byLevel')],
           ['population', t('neighbors.byPopulation')],
+          ['likes', t('neighbors.byLikes')],
         ] as const
       ).map(([id, label]) =>
         h('button', {
@@ -280,6 +284,26 @@ export class NeighborsPanel {
       ),
     );
     wrap.append(switcher);
+    if (by === 'likes') {
+      const contest = await this.backend.prettiest();
+      wrap.append(h('p', { class: 'neighbors__tip', text: t('neighbors.likesTip', { n: contest.myLikes }) }));
+      if (contest.rows.length === 0)
+        wrap.append(h('p', { class: 'neighbors__empty', text: t('neighbors.likesEmpty') }));
+      contest.rows.forEach((p, index) => {
+        const rank = index + 1;
+        const mine = contest.myRank === rank;
+        const row = this.person(
+          p,
+          mine ? [] : [this.visitButton(p)],
+          h('span', { class: `rank${rank <= 3 ? ` rank--${rank}` : ''}`, text: String(rank) }),
+        );
+        row.querySelector('.person__stats')?.replaceChildren(`❤️ ${formatNumber(p.likes)}`);
+        if (mine) row.classList.add('is-me');
+        wrap.append(row);
+      });
+      return wrap;
+    }
+    const board = await this.backend.leaderboard(by);
     board.rows.forEach((p, index) => {
       const rank = index + 1;
       const row = this.person(

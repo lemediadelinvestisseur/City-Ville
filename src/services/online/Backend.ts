@@ -65,6 +65,8 @@ export interface Leaderboard {
 
 export interface MarketOffer {
   id: string;
+  /** Produit du lot (src/data/items.ts). */
+  item: string;
   qty: number;
   unitPrice: number;
   seller: string;
@@ -73,6 +75,7 @@ export interface MarketOffer {
 
 export interface MyListing {
   id: string;
+  item: string;
   qty: number;
   unitPrice: number;
   createdAt: number;
@@ -161,11 +164,26 @@ export interface Backend {
   report(id: string, reason: string): Promise<void>;
 
   marketOverview(): Promise<{ offers: MarketOffer[]; mine: MyListing[] }>;
-  marketCreate(qty: number, unitPrice: number): Promise<void>;
-  marketBuy(id: string): Promise<{ qty: number; total: number }>;
-  marketCancel(id: string): Promise<{ goods: number }>;
+  marketCreate(item: string, qty: number, unitPrice: number): Promise<void>;
+  marketBuy(id: string): Promise<{ item: string; qty: number; total: number }>;
+  marketCancel(id: string): Promise<{ item: string; qty: number }>;
   /** Encaisse les ventes et récupère les invendus. */
-  marketSettle(): Promise<{ coins: number; goods: number; sold: number }>;
+  marketSettle(): Promise<{ coins: number; items: Record<string, number>; sold: number }>;
+
+  /** Ma demande aux voisins en cours. */
+  myRequest(): Promise<MyRequest | null>;
+  createRequest(item: string, qty: number): Promise<void>;
+  /** Récupère ce que les voisins ont envoyé. */
+  claimRequest(): Promise<{ item: string | null; qty: number }>;
+  neighborRequests(): Promise<NeighborRequest[]>;
+  giveToRequest(id: string, qty: number): Promise<void>;
+  /** « J'aime » pour une ville visitée (un par semaine) ; renvoie le total de la ville. */
+  like(playerId: string): Promise<number>;
+  likeStatus(playerId: string): Promise<{ likes: number; liked: boolean }>;
+  prettiest(): Promise<{ rows: Array<Profile & { likes: number }>; myRank: number | null; myLikes: number }>;
+  community(): Promise<CommunityStatus>;
+  contribute(amount: number): Promise<void>;
+  claimCommunity(): Promise<void>;
 
   /** Abonnement en temps réel aux messages d'un salon ; renvoie de quoi se désabonner. */
   watchChat(channel: string, onFeed: (feed: ChatFeed) => void, onError: (error: BackendError) => void): () => void;
@@ -182,6 +200,30 @@ export interface Backend {
   /** Remplace les rappels programmés sur le serveur pour cet appareil. */
   pushSchedule(subscription: PushKeys, items: PushItem[]): Promise<void>;
   pushUnsubscribe(endpoint: string): Promise<void>;
+}
+
+export interface MyRequest {
+  id: string;
+  item: string;
+  qty: number;
+  received: number;
+  /** Reçu mais pas encore récupéré. */
+  toClaim: number;
+  expiresAt: number;
+}
+
+export interface NeighborRequest extends MyRequest {
+  profile: Profile;
+}
+
+/** Défi de quartier de la semaine. */
+export interface CommunityStatus {
+  week: string;
+  total: number;
+  goal: number;
+  mine: number;
+  claimable: boolean;
+  claimed: boolean;
 }
 
 /** Abonnement Web Push d'un appareil (adresse du service d'envoi et clés de chiffrement). */

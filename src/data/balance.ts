@@ -30,9 +30,11 @@ export const STARTING_CHUNKS: ReadonlyArray<readonly [number, number]> = [
 export const START_RESOURCES = {
   coins: 3000,
   cash: 5,
-  goods: 40,
   energy: 16,
 } as const;
+
+/** Produits dans l'entrepôt au début de la partie (de quoi approvisionner la boulangerie). */
+export const START_INVENTORY: Readonly<Record<string, number>> = { wheat: 20 };
 
 /** Une unité d'énergie toutes les N secondes. */
 export const ENERGY_REGEN_SEC = 180;
@@ -42,7 +44,7 @@ export function energyMaxForLevel(level: number): number {
   return Math.min(60, 15 + level);
 }
 
-/** Capacité de stockage de marchandises sans bâtiment de stockage. */
+/** Capacité de l'entrepôt (produits, toutes sortes confondues) sans bâtiment de stockage. */
 export const BASE_GOODS_CAP = 100;
 /** Plafond de population sans bâtiment communautaire. */
 export const BASE_POP_CAP = 0;
@@ -54,13 +56,13 @@ export const CONTENT_LEVEL = 30;
 /**
  * XP cumulée pour atteindre chaque niveau (index = niveau). Calibrée avec le
  * joueur simulé (src/core/simulation.ts, 4 connexions par jour, un seul ouvrier) : niveau 10
- * vers le 3e jour, niveau 20 vers le 12e, niveau 30 vers le 22e. Un vrai joueur,
+ * vers le 3e jour, niveau 20 vers le 13e, niveau 30 vers le 23e. Un vrai joueur,
  * moins assidu, y arrive en trois semaines environ. Au-delà de la table,
  * chaque niveau coûte 12 % de plus.
  */
 const XP_TABLE: readonly number[] = [
-  0, 0, 15, 55, 120, 210, 400, 570, 760, 1000, 1250, 1600, 2200, 2950, 4000, 5300, 6750, 8150, 9650, 11050, 12750,
-  14600, 16900, 19150, 21400, 23800, 26300, 29000, 31800, 35050, 38850,
+  0, 0, 15, 55, 120, 210, 400, 570, 760, 1000, 1250, 1600, 2200, 2950, 4000, 5300, 6750, 8150, 9650, 10400, 12000,
+  13700, 15900, 18000, 20100, 22350, 24700, 27250, 29900, 32950, 36500,
 ];
 
 export function xpForLevel(level: number): number {
@@ -125,10 +127,9 @@ export const UPGRADE_GAIN = {
 export type UpgradableCategory = keyof typeof UPGRADE_GAIN;
 
 /** Coût de la prochaine étoile (`stars` : étoiles déjà obtenues). */
-export function upgradeCost(price: number, stars: number): { coins: number; goods: number } {
+export function upgradeCost(price: number, stars: number): { coins: number } {
   const ratio = UPGRADE.costRatio[stars] ?? 0;
-  const coins = Math.round((price * ratio) / 10) * 10;
-  return { coins, goods: Math.min(300, Math.max(5, Math.round(coins / 100))) };
+  return { coins: Math.round((price * ratio) / 10) * 10 };
 }
 
 /**
@@ -146,6 +147,8 @@ export function buildLimit(category: string, level: number): number | null {
     case 'storage':
       return 1 + Math.floor(level / 6);
     case 'port':
+    case 'ranch':
+    case 'workshop':
       return 1 + Math.floor(level / 10);
     case 'farm':
       return 8 + level;
@@ -194,3 +197,48 @@ export function chunkDistance(cx: number, cy: number): number {
   for (const [sx, sy] of STARTING_CHUNKS) best = Math.min(best, Math.max(Math.abs(cx - sx), Math.abs(cy - sy)));
   return best;
 }
+
+// ———————————————————————————— Vie de la ville ————————————————————————————
+
+/** Repas : un repas rassasie la ville pendant 12 h ; on peut servir le suivant 2 h avant la fin. */
+export const MEAL = {
+  durationMs: 12 * 3600_000,
+  earlyMs: 2 * 3600_000,
+  /** Un point de repas pour 10 habitants (au moins 5). */
+  perPopulation: 10,
+  minNeed: 5,
+} as const;
+
+export function mealNeed(population: number): number {
+  return Math.max(MEAL.minNeed, Math.ceil(population / MEAL.perPopulation));
+}
+
+/** Paliers de bonheur (score de 0 à 100) : effet sur les loyers et le plafond de population. */
+export const HAPPINESS_TIERS = [
+  { id: 'delighted', min: 80, rent: 0.2, popCap: 0.1 },
+  { id: 'happy', min: 60, rent: 0.1, popCap: 0.05 },
+  { id: 'content', min: 40, rent: 0, popCap: 0 },
+  { id: 'unhappy', min: 20, rent: -0.1, popCap: 0 },
+  { id: 'miserable', min: 0, rent: -0.2, popCap: 0 },
+] as const;
+
+export type HappinessTier = (typeof HAPPINESS_TIERS)[number]['id'];
+
+/** Coffre de la mairie : il se remplit pendant 8 h au plus. */
+export const CHEST = { maxHours: 8, minLevel: 2 } as const;
+
+export function chestRatePerHour(population: number): number {
+  return Math.round(20 + population * 0.4);
+}
+
+/** Commandes du jour : trois livraisons (plus une par le train avec une gare). */
+export const ORDERS = { minLevel: 3, count: 3, trainCount: 1, trainTripMs: 2 * 3600_000 } as const;
+
+/** Visiteurs de passage : un toutes les 5 à 9 heures, qui attend 4 heures. */
+export const VISITOR = { minLevel: 3, stayMs: 4 * 3600_000, minGapMs: 5 * 3600_000, maxGapMs: 9 * 3600_000 } as const;
+
+/** Roue de la chance : un tour gratuit par jour, plus un par voisin aidé (deux au plus). */
+export const WHEEL = { minLevel: 2, freeSpins: 1, maxExtra: 2 } as const;
+
+/** Pluie : les cultures plantées sous la pluie poussent plus vite. */
+export const RAIN_GROWTH_BONUS = 0.15;

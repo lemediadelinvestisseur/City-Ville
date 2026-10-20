@@ -1,10 +1,12 @@
 import { findBuildingDef } from '@/data/buildings';
 import { findCropDef } from '@/data/crops';
+import { findItemDef } from '@/data/items';
+import { findRecipeDef } from '@/data/recipes';
 import { findQuestDef } from '@/data/quests';
 import { CHUNK_SIZE } from '@/data/balance';
 import { isSceneryRail } from '@/data/scenery';
 import { isWater } from '@/data/terrain';
-import { SAVE_VERSION, START_WORKERS, emptyDaily } from './newGame';
+import { SAVE_VERSION, START_WORKERS, cityLife, emptyDaily } from './newGame';
 import type { GameState } from './types';
 
 /** Accès au stockage clé/valeur (localStorage en web, Preferences en natif…). */
@@ -130,6 +132,22 @@ const MIGRATIONS: Record<number, Migration> = {
     state.nextEntityId = nextId;
     return state;
   },
+  /**
+   * v7 → v8 : les marchandises deviennent des produits (rangées en blé), vie de
+   * la ville (repas, commandes, coffre, visiteurs, roue) ; un train parti avec
+   * une ancienne livraison rentre à vide.
+   */
+  7: (state, savedAt) => {
+    const goods = typeof state.goods === 'number' ? Math.max(0, Math.floor(state.goods)) : 0;
+    state.inventory = goods > 0 ? { wheat: goods } : {};
+    delete state.goods;
+    Object.assign(state, cityLife(savedAt));
+    const entities = Array.isArray(state.entities) ? (state.entities as unknown[]).filter(isObject) : [];
+    for (const entity of entities) {
+      if (isObject(entity.station)) entity.station = { reward: null, startedAt: 0, readyAt: 0 };
+    }
+    return state;
+  },
 };
 
 export function serialize(state: GameState, now: number): string {
@@ -166,7 +184,17 @@ export function deserialize(raw: string | null): GameState | null {
 }
 
 function validate(state: Record<string, unknown>): boolean {
-  const numbers = ['coins', 'cash', 'xp', 'level', 'goods', 'energy', 'workers', 'energyUpdatedAt', 'nextEntityId'];
+  const numbers = [
+    'coins',
+    'cash',
+    'xp',
+    'level',
+    'energy',
+    'workers',
+    'energyUpdatedAt',
+    'nextEntityId',
+    'nextVisitorAt',
+  ];
   if (!numbers.every((key) => typeof state[key] === 'number' && Number.isFinite(state[key]))) return false;
   if (!Array.isArray(state.entities) || !Array.isArray(state.unlockedChunks)) return false;
   if (!isObject(state.quests) || !isObject(state.tutorial) || !isObject(state.stats)) return false;
@@ -190,6 +218,29 @@ function validate(state: Record<string, unknown>): boolean {
   );
   quests.completed = (quests.completed as unknown[]).filter((id) => typeof id === 'string' && findQuestDef(id));
   if (!isValidDaily(state.daily)) state.daily = emptyDaily();
+  if (!isObject(state.inventory)) return false;
+  for (const [id, qty] of Object.entries(state.inventory)) {
+    // Produit retiré par une mise à jour, ou quantité illisible : écarté.
+    if (!findItemDef(id) || typeof qty !== 'number' || !Number.isFinite(qty) || qty <= 0) delete state.inventory[id];
+    else state.inventory[id] = Math.floor(qty);
+  }
+  const life = cityLife(Date.now());
+  const meals = state.meals;
+  if (!isObject(meals) || typeof meals.fedUntil !== 'number' || typeof meals.variety !== 'number') {
+    state.meals = life.meals;
+  }
+  if (!isObject(state.orders) || !Array.isArray(state.orders.list)) state.orders = life.orders;
+  if (!isObject(state.chest) || typeof state.chest.since !== 'number') state.chest = life.chest;
+  if (state.visitor !== null && (!isObject(state.visitor) || !findItemDef(String(state.visitor.item)))) {
+    state.visitor = null;
+  }
+  if (!isObject(state.wheel) || typeof state.wheel.used !== 'number') state.wheel = life.wheel;
+  for (const entity of state.entities as Array<Record<string, unknown>>) {
+    const producer = entity.producer;
+    if (isObject(producer) && producer.recipeId !== null && !findRecipeDef(String(producer.recipeId))) {
+      entity.producer = { recipeId: null, startedAt: 0, readyAt: 0 };
+    }
+  }
   return true;
 }
 

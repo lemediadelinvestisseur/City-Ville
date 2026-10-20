@@ -12,8 +12,11 @@ import {
   type BackendErrorCode,
   type ChatFeed,
   type ChatPulse,
+  type CommunityStatus,
   type Leaderboard,
   type Me,
+  type MyRequest,
+  type NeighborRequest,
   type NeighborProfile,
   type Profile,
   type PushItem,
@@ -192,8 +195,8 @@ export class ConvexBackend implements Backend {
     return this.call(() => this.client.query(api.market.overview, { token: this.auth }));
   }
 
-  async marketCreate(qty: number, unitPrice: number): Promise<void> {
-    await this.call(() => this.client.mutation(api.market.create, { token: this.auth, qty, unitPrice }));
+  async marketCreate(item: string, qty: number, unitPrice: number): Promise<void> {
+    await this.call(() => this.client.mutation(api.market.create, { token: this.auth, item, qty, unitPrice }));
   }
 
   marketBuy(id: string) {
@@ -265,6 +268,57 @@ export class ConvexBackend implements Backend {
 
   announcements(channels: string[]): Promise<Announcement[]> {
     return this.call(() => this.client.query(api.chat.announcements, { token: this.auth, channels }));
+  }
+
+  myRequest(): Promise<MyRequest | null> {
+    return this.call(() => this.client.query(api.social.myRequest, { token: this.auth }));
+  }
+
+  async createRequest(item: string, qty: number): Promise<void> {
+    await this.call(() => this.client.mutation(api.social.createRequest, { token: this.auth, item, qty }));
+  }
+
+  claimRequest() {
+    return this.call(() => this.client.mutation(api.social.claimRequest, { token: this.auth }));
+  }
+
+  neighborRequests(): Promise<NeighborRequest[]> {
+    return this.call(() => this.client.query(api.social.neighborRequests, { token: this.auth }));
+  }
+
+  async giveToRequest(id: string, qty: number): Promise<void> {
+    await this.call(() =>
+      this.client.mutation(api.social.giveToRequest, { token: this.auth, requestId: id as Id<'requests'>, qty }),
+    );
+  }
+
+  async like(playerId: string): Promise<number> {
+    const result = await this.call(() =>
+      this.client.mutation(api.social.like, { token: this.auth, playerId: playerId as PlayerId }),
+    );
+    return result.likes;
+  }
+
+  likeStatus(playerId: string) {
+    return this.call(() =>
+      this.client.query(api.social.likeStatus, { token: this.auth, playerId: playerId as PlayerId }),
+    );
+  }
+
+  prettiest() {
+    return this.call(() => this.client.query(api.social.prettiest, { token: this.auth }));
+  }
+
+  community(): Promise<CommunityStatus> {
+    return this.call(() => this.client.query(api.social.community, { token: this.auth }));
+  }
+
+  async contribute(amount: number): Promise<void> {
+    await this.call(() => this.client.mutation(api.social.contribute, { token: this.auth, amount }));
+  }
+
+  async claimCommunity(): Promise<void> {
+    await this.call(() => this.client.mutation(api.social.claimCommunity, { token: this.auth }));
   }
 
   async pushPublicKey(): Promise<string | null> {

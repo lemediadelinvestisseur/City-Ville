@@ -1,14 +1,24 @@
 import type { Game } from '@/core/game';
-import { MARKET, checkListing, sellerIncome } from '@/data/market';
+import { ITEMS } from '@/data/items';
+import { MARKET, checkListing, maxUnitPrice, sellerIncome } from '@/data/market';
 import { t, tn } from '@/i18n';
 import type { Backend } from '@/services/online/Backend';
 import { h, icon } from './dom';
 import { formatDuration, formatNumber } from './format';
 import { Icons } from './icons';
+import { itemEmoji } from './items';
+import { itemName } from '@/i18n/content';
 import { backendErrorMessage, failMessage, listingProblemMessage } from './messages';
 
-/** Onglet « Marché » : vendre ses marchandises et acheter celles des autres joueurs. */
+/** « 30 × 🥛 Lait » */
+const lotLabel = (item: string, qty: number) =>
+  t('market.lot', { n: qty, item: `${itemEmoji(item)} ${itemName(item)}` });
+
+/** Onglet « Marché » : vendre ses produits et acheter ceux des autres joueurs. */
 export class MarketView {
+  /** Produit à proposer en premier (choisi depuis l'inventaire). */
+  preselect: string | null = null;
+
   constructor(
     private readonly game: Game,
     private readonly backend: Backend,
@@ -18,14 +28,15 @@ export class MarketView {
 
   /** Encaisse les ventes et récupère les invendus (à chaque ouverture). */
   private async settle(): Promise<void> {
-    const { coins, goods, sold } = await this.backend.marketSettle();
+    const { coins, items, sold } = await this.backend.marketSettle();
     if (coins > 0) {
       this.game.marketIncome(coins);
       this.toast(tn('market.sold', sold, { coins }), 'success');
     }
-    if (goods > 0) {
-      this.game.marketReturn(goods);
-      this.toast(t('market.returned', { n: goods }), 'info');
+    const back = Object.values(items).reduce((sum, n) => sum + n, 0);
+    if (back > 0) {
+      this.game.marketReturn(items);
+      this.toast(t('market.returned', { n: back }), 'info');
     }
   }
 
@@ -55,8 +66,8 @@ export class MarketView {
             button.setAttribute('disabled', '');
             this.backend
               .marketCancel(listing.id)
-              .then(({ goods }) => {
-                this.game.marketReturn(goods);
+              .then(({ item, qty }) => {
+                this.game.marketReturn({ [item]: qty });
                 this.rerender();
               })
               .catch((e: unknown) => {
@@ -69,11 +80,11 @@ export class MarketView {
           h(
             'div',
             { class: 'person market__row' },
-            h('span', { class: 'market__crate', html: Icons.goods }),
+            h('span', { class: 'market__crate', text: itemEmoji(listing.item) }),
             h(
               'div',
               { class: 'person__info' },
-              h('span', { class: 'person__name', text: t('market.goods', { n: listing.qty }) }),
+              h('span', { class: 'person__name', text: lotLabel(listing.item, listing.qty) }),
               h('span', {
                 class: 'person__city',
                 text: tn('market.priceLeft', listing.unitPrice, {
@@ -105,8 +116,8 @@ export class MarketView {
             button.setAttribute('disabled', '');
             this.backend
               .marketBuy(offer.id)
-              .then(({ qty, total: paid }) => {
-                const result = this.game.marketBuy(qty, paid);
+              .then(({ item, qty, total: paid }) => {
+                const result = this.game.marketBuy(item, qty, paid);
                 if (result.ok) this.toast(t('market.bought', { n: qty, seller: offer.seller }), 'success');
                 this.rerender();
               })
@@ -123,11 +134,11 @@ export class MarketView {
         h(
           'div',
           { class: 'person market__row' },
-          h('span', { class: 'market__crate', html: Icons.goods }),
+          h('span', { class: 'market__crate', text: itemEmoji(offer.item) }),
           h(
             'div',
             { class: 'person__info' },
-            h('span', { class: 'person__name', text: t('market.goods', { n: offer.qty }) }),
+            h('span', { class: 'person__name', text: lotLabel(offer.item, offer.qty) }),
             h('span', {
               class: 'person__city',
               text: tn('market.offerFrom', offer.unitPrice, { seller: offer.seller }),
@@ -141,7 +152,18 @@ export class MarketView {
   }
 
   private sellForm(openCount: number): HTMLElement {
-    const goods = this.game.state.goods;
+    // Produits en assez grande quantité pour un lot.
+    const owned = ITEMS.filter((item) => this.game.itemCount(item.id) >= MARKET.minQty);
+    const select = h('select', { class: 'field__input market__input' });
+    for (const item of owned) {
+      const option = h('option', {
+        text: `${item.emoji} ${itemName(item.id)} (${formatNumber(this.game.itemCount(item.id))})`,
+        attrs: { value: item.id },
+      });
+      select.append(option);
+    }
+    if (this.preselect && owned.some((item) => item.id === this.preselect)) select.value = this.preselect;
+    this.preselect = null;
     const qty = h('input', {
       class: 'field__input market__input',
       attrs: {
@@ -152,81 +174,92 @@ export class MarketView {
         step: '10',
       },
     });
-    qty.value = String(Math.max(MARKET.minQty, Math.min(MARKET.maxQty, Math.floor(goods / 20) * 10 || MARKET.minQty)));
     const price = h('input', {
       class: 'field__input market__input',
-      attrs: {
-        type: 'number',
-        inputmode: 'numeric',
-        min: String(MARKET.minUnitPrice),
-        max: String(MARKET.maxUnitPrice),
-        step: '1',
-      },
+      attrs: { type: 'number', inputmode: 'numeric', min: String(MARKET.minUnitPrice), step: '1' },
     });
-    price.value = '4';
+    const pick = () => {
+      const have = this.game.itemCount(select.value);
+      qty.value = String(Math.max(MARKET.minQty, Math.min(MARKET.maxQty, Math.floor(have / 20) * 10 || MARKET.minQty)));
+      price.max = String(maxUnitPrice(select.value));
+      price.value = String(Math.max(1, Math.round(maxUnitPrice(select.value) / 3)));
+    };
     const summary = h('p', { class: 'market__summary' });
     const update = () => {
       const q = Number(qty.value);
       const p = Number(price.value);
-      const problem = checkListing(q, p);
-      summary.textContent = problem
-        ? listingProblemMessage(problem)
-        : t('market.youGet', { coins: sellerIncome(q, p), tax: MARKET.taxPercent });
-      summary.classList.toggle('is-bad', problem !== null || q > this.game.state.goods);
-      if (!problem && q > this.game.state.goods) summary.textContent = t('market.notEnough');
+      const problem = checkListing(select.value, q, p);
+      summary.textContent =
+        problem === 'qty' || problem === 'price'
+          ? listingProblemMessage(problem, select.value)
+          : t('market.youGet', { coins: sellerIncome(q, p), tax: MARKET.taxPercent });
+      const short = q > this.game.itemCount(select.value);
+      summary.classList.toggle('is-bad', problem !== null || short);
+      if (!problem && short) summary.textContent = t('market.notEnough');
     };
+    select.addEventListener('change', () => {
+      pick();
+      update();
+    });
     qty.addEventListener('input', update);
     price.addEventListener('input', update);
-    update();
+    if (owned.length > 0) {
+      pick();
+      update();
+    }
     const full = openCount >= MARKET.maxListings;
     const submit = h('button', {
       class: 'btn btn--primary',
       text: full ? t('market.maxListings', { n: MARKET.maxListings }) : t('market.sell'),
       onClick: () => {
+        const item = select.value;
         const q = Number(qty.value);
         const p = Number(price.value);
-        const problem = checkListing(q, p);
-        if (problem) {
-          this.toast(listingProblemMessage(problem), 'error');
+        const problem = checkListing(item, q, p);
+        if (problem === 'qty' || problem === 'price') {
+          this.toast(listingProblemMessage(problem, item), 'error');
           return;
         }
-        const reserve = this.game.marketReserve(q);
+        const reserve = this.game.marketReserve(item, q);
         if (!reserve.ok) {
-          this.toast(failMessage(reserve.reason, reserve.missing), 'error');
+          this.toast(failMessage(reserve.reason, reserve.missing, reserve.item), 'error');
           return;
         }
         submit.setAttribute('disabled', '');
         this.backend
-          .marketCreate(q, p)
+          .marketCreate(item, q, p)
           .then(() => {
             this.game.marketListed();
             this.toast(t('market.listed'), 'success');
             this.rerender();
           })
           .catch((e: unknown) => {
-            this.game.marketReturn(q);
+            this.game.marketReturn({ [item]: q });
             submit.removeAttribute('disabled');
             this.toast(backendErrorMessage(e), 'error');
           });
       },
     });
-    if (full) submit.setAttribute('disabled', '');
+    if (full || owned.length === 0) submit.setAttribute('disabled', '');
     return h(
       'div',
       { class: 'market__sell' },
-      h(
-        'div',
-        { class: 'market__title' },
-        `${t('market.sellTitle')} `,
-        h('span', { class: 'market__have' }, icon(Icons.goods), ` ${formatNumber(goods)}`),
-      ),
-      h(
-        'div',
-        { class: 'market__fields' },
-        h('label', { class: 'field' }, h('span', { class: 'field__label', text: t('market.qty') }), qty),
-        h('label', { class: 'field' }, h('span', { class: 'field__label', text: t('market.unitPrice') }), price),
-      ),
-      summary,
+      h('div', { class: 'market__title' }, t('market.sellTitle')),
+      owned.length === 0
+        ? h('p', { class: 'muted small', text: t('market.nothingToSell', { n: MARKET.minQty }) })
+        : h(
+            'div',
+            { class: 'market__fields' },
+            h(
+              'label',
+              { class: 'field field--wide' },
+              h('span', { class: 'field__label', text: t('market.item') }),
+              select,
+            ),
+            h('label', { class: 'field' }, h('span', { class: 'field__label', text: t('market.qty') }), qty),
+            h('label', { class: 'field' }, h('span', { class: 'field__label', text: t('market.unitPrice') }), price),
+          ),
+      owned.length === 0 ? null : summary,
       submit,
     );
   }

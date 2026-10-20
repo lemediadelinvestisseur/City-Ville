@@ -110,6 +110,8 @@ export default defineSchema({
   /** Lots de marchandises mis en vente sur le marché. */
   listings: defineTable({
     sellerId: v.id('players'),
+    /** Produit du lot (absent : lot d'avant les produits, compté comme du blé). */
+    item: v.optional(v.string()),
     qty: v.number(),
     unitPrice: v.number(),
     createdAt: v.number(),
@@ -117,7 +119,7 @@ export default defineSchema({
     status: v.union(v.literal('open'), v.literal('sold'), v.literal('cancelled'), v.literal('expired')),
     buyerId: v.optional(v.id('players')),
     soldAt: v.optional(v.number()),
-    /** Le vendeur a récupéré ses pièces (ou ses marchandises si invendu). */
+    /** Le vendeur a récupéré ses pièces (ou ses produits si invendu). */
     settled: v.boolean(),
   })
     .index('by_status_price', ['status', 'unitPrice'])
@@ -191,4 +193,47 @@ export default defineSchema({
     publicKey: v.string(),
     privateKey: v.string(),
   }),
+
+  /** Demandes aux voisins : « j'ai besoin de 20 lait ». Une demande ouverte par joueur. */
+  requests: defineTable({
+    playerId: v.id('players'),
+    item: v.string(),
+    qty: v.number(),
+    /** Unités reçues des voisins / déjà récupérées par le demandeur. */
+    received: v.number(),
+    claimed: v.number(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+  }).index('by_player', ['playerId', 'createdAt']),
+
+  /** « J'aime » donnés aux villes visitées (concours de la plus belle ville, par semaine). */
+  likes: defineTable({
+    fromId: v.id('players'),
+    toId: v.id('players'),
+    week: v.string(),
+  }).index('by_from_to_week', ['fromId', 'toId', 'week']),
+
+  likeCounts: defineTable({
+    playerId: v.id('players'),
+    week: v.string(),
+    count: v.number(),
+  })
+    .index('by_player_week', ['playerId', 'week'])
+    .index('by_week_count', ['week', 'count']),
+
+  /** Défi de quartier : récoltes de tous les joueurs pendant la semaine. */
+  communityWeeks: defineTable({
+    week: v.string(),
+    total: v.number(),
+    contributors: v.number(),
+  }).index('by_week', ['week']),
+
+  communityContributions: defineTable({
+    week: v.string(),
+    playerId: v.id('players'),
+    amount: v.number(),
+    claimed: v.boolean(),
+  })
+    .index('by_week_player', ['week', 'playerId'])
+    .index('by_player', ['playerId']),
 });

@@ -4,12 +4,13 @@ import type { Game, ReadyKind } from './game';
 
 /**
  * Rappels à programmer en notifications : quand une culture, un chantier,
- * un bateau ou un commerce sera prêt, quand l'énergie sera pleine et quand
+ * un bateau, un train, un atelier ou un commerce sera prêt, quand la ville aura
+ * faim, quand l'énergie sera pleine et quand
  * de nouveaux défis du jour arrivent. Calcul pur (testable) ; l'application
  * se charge des textes et de la programmation sur l'appareil.
  */
 
-export type ReminderKind = ReadyKind | 'energy' | 'daily';
+export type ReminderKind = ReadyKind | 'meal' | 'energy' | 'daily';
 
 export const REMINDER_KINDS: readonly ReminderKind[] = [
   'crop',
@@ -66,11 +67,16 @@ export function planReminders(game: Game, now: number, options: ReminderOptions)
     }
     if (entity.farm?.cropId) add({ at: entity.farm.readyAt, kind: 'crop', count: 1, cropId: entity.farm.cropId });
     if (entity.port?.tripId) add({ at: entity.port.readyAt, kind: 'boat', count: 1, defId: entity.defId });
-    if (entity.station?.shipmentId) add({ at: entity.station.readyAt, kind: 'train', count: 1 });
+    if (entity.station?.reward) add({ at: entity.station.readyAt, kind: 'train', count: 1 });
+    if (entity.producer?.recipeId) {
+      add({ at: entity.producer.readyAt, kind: 'production', count: 1, defId: entity.defId });
+    }
     if (entity.business && entity.business.readyAt !== null) {
       add({ at: entity.business.readyAt, kind: 'business', count: 1, defId: entity.defId });
     }
   }
+  // La ville aura faim : il est temps de servir le repas suivant.
+  add({ at: game.state.meals.fedUntil, kind: 'meal', count: 1 });
   const { energy } = game.state;
   const max = game.derived().energyMax;
   // Seulement si la jauge est bien entamée (sinon le rappel n'apporte rien).

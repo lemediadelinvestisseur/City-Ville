@@ -6,6 +6,8 @@ import type { FailReason, PrimaryAction, Reward } from '@/core/types';
 import type { ArtLibrary } from '@/render/art/library';
 import type { PaymentProvider } from '@/services/payments/PaymentProvider';
 import type { Preferences } from '@/services/preferences';
+import type { Haptics } from '@/services/haptics';
+import type { Music } from '@/services/music';
 import type { SoundFx } from '@/services/sound';
 
 /** Position à l'écran, en pixels CSS. */
@@ -31,13 +33,19 @@ export interface AppEvents {
   'world:lockedTap': { cx: number; cy: number; screen: ScreenPoint };
   'world:emptyTap': undefined;
   'world:cameraMoved': undefined;
-  'world:fail': { reason: FailReason; missing?: number; screen?: ScreenPoint };
+  'world:fail': { reason: FailReason; missing?: number; item?: string; screen?: ScreenPoint };
   'world:action': { type: PrimaryAction['type']; ok: boolean };
   'world:placement': PlacementInfo | null;
   'world:editSelect': { entityId: number; screen: ScreenPoint } | null;
   'world:hint': HintTarget | null;
   /** La caméra s'approche du bord de la ville (invitation à voir les voisins). */
   'world:edge': boolean;
+  /** Paysage autour de la caméra (0 à 1) : sons de la mer et de la forêt. */
+  'world:ambience': { sea: number; forest: number };
+  /** Le visiteur de passage a été touché. */
+  'world:visitorTap': undefined;
+  /** Photo de la ville (image PNG). */
+  'world:photo': { url: string };
   'fx:reward': { screen: ScreenPoint; reward: Reward };
   /** Récompenses tombées au sol : les compteurs attendent leur ramassage. */
   'world:drops': Reward;
@@ -56,6 +64,8 @@ export interface AppEvents {
   /** Centre la caméra sur une case (coordonnées de case, fractionnaires possibles). */
   'ui:focusTile': { x: number; y: number };
   'ui:modalOpen': boolean;
+  /** Photo de la ville demandée (le monde répond par `world:photo`). */
+  'ui:photo': undefined;
   'ui:dayNightMode': DayNightMode;
 }
 
@@ -65,5 +75,7 @@ export interface AppContext {
   art: ArtLibrary;
   payments: PaymentProvider;
   sound: SoundFx;
+  music: Music;
+  haptics: Haptics;
   prefs: Preferences;
 }

@@ -30,7 +30,20 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
         sound.play('harvest');
         break;
       case 'unloadTrain':
+      case 'collectChest':
         sound.play('coin');
+        break;
+      case 'feedCity':
+        sound.play('quest');
+        break;
+      case 'produce':
+        sound.play('supply');
+        break;
+      case 'collectProduction':
+        sound.play('harvest');
+        break;
+      case 'deliverOrder':
+        sound.play(event.train ? 'whistle' : 'complete');
         break;
       case 'expand':
         sound.play('complete');
@@ -39,6 +52,17 @@ export function bindSounds(ctx: AppContext, sound: SoundFx, uiRoot: HTMLElement)
         break;
     }
   });
+  // Vibrations : légères pour une action, « réussite » pour un objectif, fortes pour un niveau.
+  const { haptics } = ctx;
+  bus.on('world:action', ({ ok }) => {
+    if (ok) haptics.play('light');
+  });
+  bus.on('world:fail', () => haptics.play('warning'));
+  game.events.on('questCompleted', () => haptics.play('success'));
+  game.events.on('dailyCompleted', () => haptics.play('success'));
+  game.events.on('levelUp', () => haptics.play('heavy'));
+  game.events.on('constructionComplete', () => haptics.play('medium'));
+  game.events.on('visitorArrived', () => sound.play('chime'));
   game.events.on('constructionComplete', () => sound.play('complete'));
   game.events.on('upgradeStarted', () => sound.play('construction'));
   game.events.on('upgradeComplete', () => sound.play('complete'));

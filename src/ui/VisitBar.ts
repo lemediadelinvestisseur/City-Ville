@@ -12,6 +12,9 @@ export interface VisitCallbacks {
   report: () => void;
   block: () => void;
   leave: () => void;
+  /** « J'aime » (concours de la plus belle ville) : renvoie le total de la ville. */
+  like: () => Promise<number>;
+  likeStatus: (playerId: string) => Promise<{ likes: number; liked: boolean }>;
   toast: (text: string, kind: 'info' | 'success' | 'error') => void;
 }
 
@@ -77,6 +80,31 @@ export class VisitBar {
         }),
       ),
     );
+    const like = h('button', { class: 'btn btn--small btn--secondary visit-bar__like', text: '❤️' });
+    const showLikes = (likes: number, liked: boolean) => {
+      like.textContent = `${liked ? '❤️' : '🤍'} ${formatNumber(likes)}`;
+      like.setAttribute('aria-label', t(liked ? 'visit.liked' : 'visit.like'));
+      like.classList.toggle('is-on', liked);
+      if (liked) like.setAttribute('disabled', '');
+    };
+    showLikes(0, false);
+    this.callbacks
+      .likeStatus(profile.id)
+      .then(({ likes, liked }) => showLikes(likes, liked))
+      .catch(() => undefined);
+    like.addEventListener('click', () => {
+      like.setAttribute('disabled', '');
+      this.callbacks
+        .like()
+        .then((likes) => {
+          showLikes(likes, true);
+          this.callbacks.toast(t('visit.likedToast', { city: profile.cityName || profile.pseudo }), 'success');
+        })
+        .catch((e: unknown) => {
+          like.removeAttribute('disabled');
+          this.callbacks.toast(backendErrorMessage(e), 'error');
+        });
+    });
     this.top.append(
       avatar(profile.pseudo, 44),
       h(
@@ -93,6 +121,7 @@ export class VisitBar {
           ` ${formatNumber(profile.population)}`,
         ),
       ),
+      like,
       help,
       more,
     );

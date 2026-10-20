@@ -5,6 +5,7 @@ import { CHUNKS_X, CHUNKS_Y, chunkOf, roadMask } from '@/core/grid';
 import type { Entity, FailReason, Reward } from '@/core/types';
 import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
+import { findItemDef } from '@/data/items';
 import { RAIL_END_Y } from '@/data/scenery';
 import { isWater } from '@/data/terrain';
 import { ArtKey, CLOUD_VARIANTS } from './art/library';
@@ -327,6 +328,10 @@ export class WorldScene extends Phaser.Scene {
         return 'fish';
       case 'unloadTrain':
         return 'train';
+      case 'collectProduction':
+        return 'harvest';
+      case 'startProduction':
+        return 'goods';
       case 'needsRoad':
         return 'road';
       case 'collectRent':
@@ -565,7 +570,6 @@ export class WorldScene extends Phaser.Scene {
     const works = worksOf(entity);
     if (works && now < works.endsAt) return works.endsAt;
     if (entity.port?.tripId && now < entity.port.readyAt) return entity.port.readyAt;
-    if (entity.station?.shipmentId && now < entity.station.readyAt) return entity.station.readyAt;
     return null;
   }
 
@@ -700,7 +704,7 @@ export class WorldScene extends Phaser.Scene {
       view.train = this.add.image(0, 0, ArtKey.train).setOrigin(piece.originX, piece.originY);
     }
     const pos = tileToWorld(spot.x, spot.y);
-    const away = !!entity.station?.shipmentId && this.game_.now() < (entity.station?.readyAt ?? 0);
+    const away = !!entity.station?.reward && this.game_.now() < (entity.station?.readyAt ?? 0);
     view.train
       .setPosition(pos.x, pos.y)
       .setDepth(depthOf(spot.x, spot.y, 1, 3))
@@ -720,17 +724,18 @@ export class WorldScene extends Phaser.Scene {
   private refreshDynamic(): void {
     this.night.refresh(Date.now(), this.game_.state.entities, (e) => this.game_.isTileUnlocked(e.x, e.y));
     for (const view of this.views.values()) {
-      if (view.timer || worksOf(view.entity) || view.entity.port?.tripId || view.entity.station?.shipmentId)
+      const e0 = view.entity;
+      if (view.timer || worksOf(e0) || e0.port?.tripId || e0.station?.reward || e0.producer?.recipeId)
         this.syncTimer(view);
       const e = view.entity;
       const roadIssue = view.badgeKind === 'road' || !this.game_.isConnected(e);
-      if (e.house || e.business || e.farm || e.port || e.station || worksOf(e) || roadIssue) {
+      if (e.house || e.business || e.farm || e.port || e.station || e.producer || worksOf(e) || roadIssue) {
         const badge = this.badgeFor(e);
         const progress = this.buildProgress(e);
         const barChanged = progress !== null && !view.barKey.startsWith(`${progress}@`);
         const atSea = !!e.port?.tripId && this.game_.now() < e.port.readyAt;
         const boatChanged = !!view.boat && view.boat.visible === atSea;
-        const away = !!e.station?.shipmentId && this.game_.now() < e.station.readyAt;
+        const away = !!e.station?.reward && this.game_.now() < e.station.readyAt;
         const trainChanged = !!view.train && view.train.visible === away;
         if (
           badge !== view.badgeKind ||
@@ -1176,7 +1181,7 @@ export class WorldScene extends Phaser.Scene {
     const view = this.views.get(entity.id);
     if (view) this.bounce(view);
     const action = game.primaryAction(entity);
-    let result: { ok: boolean; reason?: FailReason; missing?: number } | null = null;
+    let result: { ok: boolean; reason?: FailReason; missing?: number; item?: string } | null = null;
     switch (action.type) {
       case 'finishBuild':
         result = game.finishBuild(entity.id);
@@ -1190,6 +1195,10 @@ export class WorldScene extends Phaser.Scene {
         break;
       case 'unloadTrain':
         result = game.unloadTrain(entity.id);
+        break;
+      case 'collectProduction':
+        result = game.collectProduction(entity.id);
+        if (result.ok && view) this.supplyFx(view);
         break;
       case 'collectRent':
         result = game.collectRent(entity.id);
@@ -1213,7 +1222,7 @@ export class WorldScene extends Phaser.Scene {
     }
     if (result) bus.emit('world:action', { type: action.type, ok: result.ok });
     if (result && !result.ok && result.reason) {
-      bus.emit('world:fail', { reason: result.reason, missing: result.missing, screen });
+      bus.emit('world:fail', { reason: result.reason, missing: result.missing, item: result.item, screen });
     }
   }
 
@@ -1504,7 +1513,10 @@ export class WorldScene extends Phaser.Scene {
     const s = this.overlayScale;
     const lines: Array<[string, string]> = [];
     if (reward.coins) lines.push([`+${reward.coins}`, '#ffd54f']);
-    if (reward.goods) lines.push([`+${reward.goods}`, '#ffb74d']);
+    // Produits : « +10 🌾 » au-dessus du bâtiment.
+    for (const [id, qty] of Object.entries(reward.items ?? {})) {
+      lines.push([`+${qty} ${findItemDef(id)?.emoji ?? ''}`, '#ffb74d']);
+    }
     if (reward.xp) lines.push([`+${reward.xp} XP`, '#81d4fa']);
     lines.forEach(([text, color], i) => this.fx.popText(a.x, a.top + 20 + i * 38 * s, text, color, i * 120, s));
     // Pièces et XP tombent au sol (à ramasser) ; le reste s'envole directement.
@@ -1516,8 +1528,9 @@ export class WorldScene extends Phaser.Scene {
       const spread = Math.max(a.w, a.d) * HALF_W * 0.9;
       this.drops.spawn(a.x, a.top + 40 * s, front + 10 * s, spread, ground, s);
     }
-    const rest: Reward = { goods: reward.goods, cash: reward.cash, energy: reward.energy };
+    const rest: Reward = { items: reward.items, cash: reward.cash, energy: reward.energy };
     const screen = this.entityScreenPoint(entityId);
-    if (screen && (rest.goods || rest.cash || rest.energy)) this.ctx.bus.emit('fx:reward', { screen, reward: rest });
+    const hasItems = Object.keys(reward.items ?? {}).length > 0;
+    if (screen && (hasItems || rest.cash || rest.energy)) this.ctx.bus.emit('fx:reward', { screen, reward: rest });
   }
 }

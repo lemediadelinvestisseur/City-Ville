@@ -1,5 +1,7 @@
 import { BUILDINGS, getBuildingDef } from '@/data/buildings';
-import { CROPS, SHIPMENTS, TRIPS } from '@/data/crops';
+import { CROPS, TRIPS } from '@/data/crops';
+import { getItemDef, isFood, type ItemBag } from '@/data/items';
+import { recipesOf } from '@/data/recipes';
 import type { Clock } from './game';
 import { Game } from './game';
 import { CHUNK_SIZE } from '@/data/balance';
@@ -64,8 +66,9 @@ export function simulate(options: Partial<SimOptions> = {}): SimResult {
 
 /** Une connexion : quelques passes d'actions, avec un peu de temps qui s'écoule. */
 function playSession(game: Game, clock: SimClock, gapSec: number): void {
+  game.tick();
   for (let pass = 0; pass < 6; pass++) {
-    const did = collectAll(game, gapSec) + invest(game);
+    const did = cityLife(game) + collectAll(game, gapSec) + invest(game);
     // Le joueur reste quelques minutes : les petits chantiers se terminent.
     clock.t += 90_000;
     if (did === 0 && pass > 1) break;
@@ -103,21 +106,22 @@ function collectAll(game: Game, gapSec: number): number {
       case 'unloadTrain':
         ok = game.unloadTrain(entity.id).ok;
         break;
-      case 'sendTrain': {
-        // Le train n'emporte que le surplus : les commerces passent d'abord.
-        const spare = game.state.goods - game.derived().goodsCap * 0.5;
-        const shipment = SHIPMENTS.filter(
-          (d) => (d.requires?.level ?? 1) <= game.state.level && d.goods <= spare && d.durationSec <= gapSec,
-        ).pop();
-        if (shipment) ok = game.sendTrain(entity.id, shipment.id).ok;
+      case 'collectProduction':
+        ok = game.collectProduction(entity.id).ok;
+        break;
+      case 'startProduction': {
+        // La production dont le produit manque le plus, parmi celles qu'on peut lancer.
+        const needs = demand(game);
+        const options = recipesOf(entity.defId).filter(
+          (r) => (r.requires?.level ?? 1) <= game.state.level && game.missingItem(r.inputs) === null,
+        );
+        options.sort((a, b) => shortage(game, needs, b.output.item) - shortage(game, needs, a.output.item));
+        const recipe = options[0];
+        if (recipe) ok = game.startProduction(entity.id, recipe.id).ok;
         break;
       }
       case 'plant': {
-        const crop = bestFitting(
-          CROPS.map((c) => ({ id: c.id, sec: c.growSec, level: c.requires?.level ?? 1, cost: c.cost })),
-          game,
-          gapSec,
-        );
+        const crop = pickCrop(game, gapSec);
         if (crop) ok = game.plant(entity.id, crop).ok;
         break;
       }
@@ -143,6 +147,70 @@ function collectAll(game: Game, gapSec: number): number {
     if (ok) count++;
   }
   return count;
+}
+
+/** Produits demandés : commerces et ateliers possédés, repas de la ville. */
+function demand(game: Game): ItemBag {
+  const bag: ItemBag = {};
+  const add = (items: ItemBag, times = 1) => {
+    for (const [id, qty] of Object.entries(items)) bag[id] = (bag[id] ?? 0) + qty * times;
+  };
+  for (const entity of game.state.entities) {
+    if (!entity.built) continue;
+    const def = getBuildingDef(entity.defId);
+    if (def.category === 'business') add(def.inputs, 2);
+    if (def.category === 'ranch' || def.category === 'workshop') {
+      for (const recipe of recipesOf(def.id)) if ((recipe.requires?.level ?? 1) <= game.state.level) add(recipe.inputs);
+    }
+  }
+  // Un repas : des céréales et des fruits et légumes au moins.
+  const meal = Math.ceil(game.mealPlan().need / 2);
+  add({ wheat: meal, carrot: game.state.level >= 3 ? meal : 0 });
+  return bag;
+}
+
+/** Manque d'un produit par rapport à la demande (positif : il en faut plus). */
+function shortage(game: Game, needs: ItemBag, item: string): number {
+  return (needs[item] ?? 0) - game.itemCount(item);
+}
+
+/** Culture à planter : celle qui manque le plus et tient avant la prochaine connexion. */
+function pickCrop(game: Game, gapSec: number): string | null {
+  const needs = demand(game);
+  const crops = CROPS.filter((c) => (c.requires?.level ?? 1) <= game.state.level && c.cost <= game.state.coins);
+  const wanted = crops
+    .filter((c) => shortage(game, needs, c.id) > 0)
+    .sort((a, b) => shortage(game, needs, b.id) - shortage(game, needs, a.id));
+  const fitting = wanted.find((c) => c.growSec <= gapSec) ?? wanted[0];
+  if (fitting) return fitting.id;
+  return bestFitting(
+    crops.map((c) => ({ id: c.id, sec: c.growSec, level: c.requires?.level ?? 1, cost: c.cost })),
+    game,
+    gapSec,
+  );
+}
+
+/** Vie de la ville : repas, commandes, coffre, visiteur, roue et vente du surplus. */
+function cityLife(game: Game): number {
+  let done = 0;
+  if (game.mealPlan().canServe && game.feedCity().ok) done++;
+  game.state.orders.list.forEach((_, index) => {
+    if (game.deliverOrder(index).ok) done++;
+  });
+  if (game.claimOrdersBonus().ok) done++;
+  if (game.chestInfo().coins > 0 && game.collectChest().ok) done++;
+  if (game.state.visitor && game.serveVisitor().ok) done++;
+  if (game.wheelInfo().spinsLeft > 0 && game.spinWheel(0.4).ok) done++;
+  // Entrepôt presque plein : on vend ce qui dépasse la demande.
+  const cap = game.derived().goodsCap;
+  if (game.stock() > cap * 0.8) {
+    const needs = demand(game);
+    for (const [item, qty] of Object.entries(game.state.inventory)) {
+      const keep = isFood(getItemDef(item)) ? (needs[item] ?? 0) + 20 : (needs[item] ?? 0);
+      if (qty > keep) game.sellItems(item, qty - keep);
+    }
+  }
+  return done;
 }
 
 /** Option la plus longue qui tient avant la prochaine connexion (sinon la plus courte). */
@@ -207,6 +275,19 @@ function placeSomewhere(game: Game, def: BuildingDef): boolean {
   return false;
 }
 
+/** Élevage ou atelier pas encore possédé (le moins cher), pour produire de nouveaux produits. */
+function cheapestNewProducer(game: Game, reserve: number): BuildingDef | null {
+  const options = BUILDINGS.filter(
+    (def) =>
+      (def.category === 'ranch' || def.category === 'workshop') &&
+      game.countOf(def.id) === 0 &&
+      game.checkPurchase(def).ok &&
+      (def.cost.coins ?? 0) + reserve <= game.state.coins,
+  );
+  options.sort((a, b) => (a.cost.coins ?? 0) - (b.cost.coins ?? 0));
+  return options[0] ?? null;
+}
+
 /** Améliore le bâtiment le plus rentable possible (le plus cher à l'achat). */
 function tryUpgrade(game: Game, reserve: number): boolean {
   let best: { id: number; price: number } | null = null;
@@ -245,6 +326,7 @@ function invest(game: Game): number {
     const plots = count(game, (d) => d.category === 'farm');
     const ports = count(game, (d) => d.category === 'port');
     const stations = count(game, (d) => d.category === 'station');
+    const producers = count(game, (d) => d.category === 'ranch' || d.category === 'workshop');
     const decorations = count(game, (d, e) => d.category === 'decoration' && !e.starter);
 
     const storages = count(game, (d) => d.category === 'storage');
@@ -260,10 +342,11 @@ function invest(game: Game): number {
       def = bestAffordable(game, 'community', reserve);
       if (!def && businesses * 2 >= houses) break;
     }
-    if (!def && game.state.goods > derived.goodsCap * 0.85 && storages < 1 + Math.floor(level / 4))
+    if (!def && game.stock() > derived.goodsCap * 0.85 && storages < 1 + Math.floor(level / 4))
       def = bestAffordable(game, 'storage', reserve);
     if (!def && plots < 4 + Math.floor(level / 2)) def = bestAffordable(game, 'farm', reserve);
     if (!def && ports < 1 + Math.floor(level / 12)) def = bestAffordable(game, 'port', reserve);
+    if (!def && producers < 2 + Math.floor(level / 3)) def = cheapestNewProducer(game, reserve);
     if (!def && stations < 1) {
       const station = bestAffordable(game, 'station', reserve);
       // La gare longe la voie ferrée : seulement si une zone traversée par la voie est achetée.

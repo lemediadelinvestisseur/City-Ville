@@ -379,17 +379,21 @@ describe('marché', () => {
     const lea = await seller(t, 1, 'Léa', 6);
     const paul = await seller(t, 2, 'Paul', 6);
     const zoe = await seller(t, 3, 'Zoé', 6);
-    const { id } = await t.mutation(api.market.create, { token: lea.token, qty: 100, unitPrice: 4 });
+    const { id } = await t.mutation(api.market.create, { token: lea.token, item: 'wheat', qty: 100, unitPrice: 4 });
     const seen = await t.query(api.market.overview, { token: paul.token });
     expect(seen.offers).toEqual([expect.objectContaining({ qty: 100, unitPrice: 4, seller: 'Léa' })]);
-    expect(await t.mutation(api.market.buy, { token: paul.token, listingId: id })).toEqual({ qty: 100, total: 400 });
+    expect(await t.mutation(api.market.buy, { token: paul.token, listingId: id })).toEqual({
+      item: 'wheat',
+      qty: 100,
+      total: 400,
+    });
     await expect(t.mutation(api.market.buy, { token: zoe.token, listingId: id })).rejects.toThrow(/notFound/);
     expect((await t.query(api.market.overview, { token: lea.token })).mine[0]).toMatchObject({
       status: 'sold',
       income: 360,
     });
-    expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({ coins: 360, goods: 0, sold: 1 });
-    expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({ coins: 0, goods: 0, sold: 0 });
+    expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({ coins: 360, items: {}, sold: 1 });
+    expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({ coins: 0, items: {}, sold: 0 });
   });
 
   it('applique les limites (niveau, lot, nombre de lots) et rend les invendus', async () => {
@@ -398,16 +402,28 @@ describe('marché', () => {
     const t = convexTest(schema, modules);
     const novice = await seller(t, 1, 'Novice', 2);
     const lea = await seller(t, 2, 'Léa', 8);
-    await expect(t.mutation(api.market.create, { token: novice.token, qty: 50, unitPrice: 2 })).rejects.toThrow(
-      /forbidden/,
-    );
-    await expect(t.mutation(api.market.create, { token: lea.token, qty: 5, unitPrice: 2 })).rejects.toThrow();
-    for (let i = 0; i < 5; i++) await t.mutation(api.market.create, { token: lea.token, qty: 20, unitPrice: 2 });
-    await expect(t.mutation(api.market.create, { token: lea.token, qty: 20, unitPrice: 2 })).rejects.toThrow(/limit/);
+    await expect(
+      t.mutation(api.market.create, { token: novice.token, item: 'wheat', qty: 50, unitPrice: 2 }),
+    ).rejects.toThrow(/forbidden/);
+    await expect(
+      t.mutation(api.market.create, { token: lea.token, item: 'wheat', qty: 5, unitPrice: 2 }),
+    ).rejects.toThrow();
+    for (let i = 0; i < 5; i++)
+      await t.mutation(api.market.create, { token: lea.token, item: 'wheat', qty: 20, unitPrice: 2 });
+    await expect(
+      t.mutation(api.market.create, { token: lea.token, item: 'wheat', qty: 20, unitPrice: 2 }),
+    ).rejects.toThrow(/limit/);
     const [first] = (await t.query(api.market.overview, { token: lea.token })).mine;
-    expect(await t.mutation(api.market.cancel, { token: lea.token, listingId: first!.id })).toEqual({ goods: 20 });
+    expect(await t.mutation(api.market.cancel, { token: lea.token, listingId: first!.id })).toEqual({
+      item: 'wheat',
+      qty: 20,
+    });
     vi.setSystemTime(new Date('2026-10-21T10:00:00Z'));
-    expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({ coins: 0, goods: 80, sold: 0 });
+    expect(await t.mutation(api.market.settle, { token: lea.token })).toEqual({
+      coins: 0,
+      items: { wheat: 80 },
+      sold: 0,
+    });
     vi.useRealTimers();
   });
 });
@@ -459,5 +475,53 @@ describe('page de confidentialité', () => {
     const html = await res.text();
     expect(html).toContain('Politique de confidentialité');
     expect(html).toContain('Supprimer mon compte');
+  });
+});
+
+describe('vie du quartier', () => {
+  async function neighbors(t: ReturnType<typeof convexTest>) {
+    const lea = await newPlayer(t, 1, 'Léa');
+    const paul = await newPlayer(t, 2, 'Paul');
+    await t.mutation(api.neighbors.add, { token: lea.token, neighborId: paul.playerId });
+    return { lea, paul };
+  }
+
+  it('demande un produit aux voisins et récupère ce qu’ils envoient', async () => {
+    const t = convexTest(schema, modules);
+    const { lea, paul } = await neighbors(t);
+    await t.mutation(api.social.createRequest, { token: lea.token, item: 'milk', qty: 20 });
+    await expect(t.mutation(api.social.createRequest, { token: lea.token, item: 'eggs', qty: 10 })).rejects.toThrow(
+      /limit/,
+    );
+    const requests = await t.query(api.social.neighborRequests, { token: paul.token });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ item: 'milk', qty: 20, received: 0 });
+    await t.mutation(api.social.giveToRequest, { token: paul.token, requestId: requests[0]!.id, qty: 15 });
+    await expect(
+      t.mutation(api.social.giveToRequest, { token: paul.token, requestId: requests[0]!.id, qty: 10 }),
+    ).rejects.toThrow(/limit/);
+    expect(await t.mutation(api.social.claimRequest, { token: lea.token })).toEqual({ item: 'milk', qty: 15 });
+    expect(await t.mutation(api.social.claimRequest, { token: lea.token })).toEqual({ item: 'milk', qty: 0 });
+  });
+
+  it('compte les « J’aime » une fois par ville et par semaine', async () => {
+    const t = convexTest(schema, modules);
+    const { lea, paul } = await neighbors(t);
+    expect(await t.mutation(api.social.like, { token: paul.token, playerId: lea.playerId })).toEqual({ likes: 1 });
+    await expect(t.mutation(api.social.like, { token: paul.token, playerId: lea.playerId })).rejects.toThrow(
+      /alreadyHelped/,
+    );
+    const ranking = await t.query(api.social.prettiest, { token: lea.token });
+    expect(ranking).toMatchObject({ myRank: 1, myLikes: 1 });
+  });
+
+  it('réussit le défi de quartier ensemble', async () => {
+    const t = convexTest(schema, modules);
+    const { lea, paul } = await neighbors(t);
+    await t.mutation(api.social.contribute, { token: lea.token, amount: 200 });
+    await t.mutation(api.social.contribute, { token: paul.token, amount: 150 });
+    expect(await t.query(api.social.community, { token: lea.token })).toMatchObject({ claimable: true, goal: 300 });
+    await t.mutation(api.social.claimCommunity, { token: lea.token });
+    await expect(t.mutation(api.social.claimCommunity, { token: lea.token })).rejects.toThrow(/notFound/);
   });
 });

@@ -5,7 +5,7 @@ import { dayOf, fail, isBlockedEitherWay, publicProfile, requirePlayer } from '.
 
 export const MAX_NEIGHBORS = 100;
 
-async function linkOf(ctx: QueryCtx, playerId: Id<'players'>, neighborId: Id<'players'>) {
+export async function linkOf(ctx: QueryCtx, playerId: Id<'players'>, neighborId: Id<'players'>) {
   return ctx.db
     .query('neighbors')
     .withIndex('by_pair', (q) => q.eq('playerId', playerId).eq('neighborId', neighborId))

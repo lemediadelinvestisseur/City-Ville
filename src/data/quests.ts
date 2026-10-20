@@ -19,8 +19,8 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'harvest',
     title: 'Jour de récolte',
     intro:
-      'Récoltez vos champs : les récoltes deviennent des marchandises, indispensables pour approvisionner les commerces. Un champ vide se replante en le touchant.',
-    icon: 'strawberry',
+      'Récoltez vos champs : le blé rejoint votre entrepôt, il servira à approvisionner les commerces et à nourrir la ville. Un champ vide se replante en le touchant.',
+    icon: 'wheat',
     // Actif dès le départ : les récoltes faites avant la fin de « Bienvenue » comptent aussi.
     tasks: [{ type: 'harvest', count: 4 }],
     labels: ['Récolter 4 champs'],
@@ -29,8 +29,7 @@ export const QUESTS: readonly QuestDef[] = [
   {
     id: 'plant',
     title: 'Semer l’avenir',
-    intro:
-      'Replantez vos champs ! Touchez un champ vide puis choisissez une culture. Les fraises poussent en 1 minute.',
+    intro: 'Replantez vos champs ! Touchez un champ vide puis choisissez une culture. Le blé pousse en 5 minutes.',
     icon: 'plot',
     requires: { quests: ['harvest'] },
     tasks: [{ type: 'plant', count: 4 }],
@@ -41,7 +40,7 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'bakery',
     title: 'Une boulangerie !',
     intro:
-      'Les habitants rêvent de croissants chauds. Construisez une boulangerie : le chantier dure une minute, touchez-la ensuite pour l’inaugurer. Approvisionnez-la en marchandises, puis encaissez la recette une fois les clients servis.',
+      'Les habitants rêvent de croissants chauds. Construisez une boulangerie : le chantier dure une minute, touchez-la ensuite pour l’inaugurer. Approvisionnez-la en blé, puis encaissez la recette une fois les clients servis.',
     icon: 'bakery',
     requires: { quests: ['harvest'] },
     tasks: [
@@ -57,6 +56,17 @@ export const QUESTS: readonly QuestDef[] = [
       'Encaisser la boulangerie',
     ],
     reward: { coins: 250, xp: 20, cash: 2 },
+  },
+  {
+    id: 'feast',
+    title: 'À table !',
+    intro:
+      'Une ville bien nourrie est une ville heureuse : de meilleurs loyers et plus d’habitants ! Touchez la mairie et servez un repas. Plus il est varié (céréales, fruits et légumes, viande et poisson, produits laitiers), plus les habitants sont contents.',
+    icon: 'town_hall',
+    requires: { quests: ['bakery'] },
+    tasks: [{ type: 'feedCity', count: 1 }],
+    labels: ['Servir un repas à la ville'],
+    reward: { coins: 150, xp: 15 },
   },
   {
     id: 'decor',
@@ -124,6 +134,45 @@ export const QUESTS: readonly QuestDef[] = [
     reward: { coins: 500, xp: 25, cash: 5 },
   },
   {
+    id: 'coop',
+    title: 'Œufs frais',
+    intro:
+      'Construisez un poulailler et nourrissez les poules avec du blé : elles pondent des œufs, un bon repas pour la ville et pour l’épicerie.',
+    icon: 'chicken_coop',
+    requires: { level: 3 },
+    tasks: [
+      { type: 'place', count: 1, defId: 'chicken_coop' },
+      { type: 'collectProduction', count: 1, recipeId: 'eggs' },
+    ],
+    labels: ['Acheter un poulailler', 'Ramasser des œufs'],
+    reward: { coins: 300, xp: 20 },
+  },
+  {
+    id: 'orders',
+    title: 'Commandes du jour',
+    intro:
+      'Chaque jour, des clients passent commande ! Touchez « Aujourd’hui » à droite de l’écran, onglet « Commandes », et livrez-leur ce qu’ils demandent.',
+    icon: 'goods',
+    requires: { level: 3 },
+    tasks: [{ type: 'deliverOrder', count: 2 }],
+    labels: ['Livrer 2 commandes'],
+    reward: { coins: 250, xp: 20 },
+  },
+  {
+    id: 'mill',
+    title: 'Au moulin',
+    intro:
+      'Le blé moulu donne de la farine, et la farine donne du pain au fournil ! Construisez un moulin et lancez votre première farine.',
+    icon: 'mill',
+    requires: { level: 4 },
+    tasks: [
+      { type: 'place', count: 1, defId: 'mill' },
+      { type: 'produce', count: 1, recipeId: 'flour' },
+    ],
+    labels: ['Acheter un moulin', 'Moudre de la farine'],
+    reward: { coins: 400, xp: 25 },
+  },
+  {
     id: 'neighbors',
     title: 'Bon voisinage',
     intro:
@@ -151,8 +200,7 @@ export const QUESTS: readonly QuestDef[] = [
   {
     id: 'trader',
     title: 'Négociant',
-    intro:
-      'Vos commerces ont faim de marchandises ? Achetez un lot à un autre maire au marché, et continuez de vendre vos surplus.',
+    intro: 'Il vous manque un produit ? Achetez un lot à un autre maire au marché, et continuez de vendre vos surplus.',
     icon: 'goods',
     requires: { quests: ['market'], level: 8 },
     tasks: [
@@ -209,7 +257,7 @@ export const QUESTS: readonly QuestDef[] = [
     id: 'fishing',
     title: 'Le large nous appelle',
     intro:
-      'Notre ville a la mer à ses pieds ! Construisez un ponton de pêche au bord de l’eau, puis envoyez la barque en mer : le poisson se transforme en marchandises.',
+      'Notre ville a la mer à ses pieds ! Construisez un ponton de pêche au bord de l’eau, puis envoyez la barque en mer : le poisson rejoint votre entrepôt.',
     icon: 'pier',
     requires: { quests: ['bakery'], level: 4 },
     tasks: [
@@ -267,12 +315,13 @@ export const QUESTS: readonly QuestDef[] = [
   {
     id: 'station',
     title: 'En voiture !',
-    intro: 'Une gare reliera notre ville au reste du pays et attirera de nouveaux habitants.',
+    intro:
+      'Une gare reliera notre ville au reste du pays ! Posez-la le long de la voie ferrée, à l’ouest de la ville : chaque jour, une grosse commande partira par le train.',
     icon: 'train_station',
-    requires: { level: 16 },
+    requires: { level: 10 },
     tasks: [{ type: 'build', count: 1, defId: 'train_station' }],
     labels: ['Inaugurer une gare'],
-    reward: { coins: 12000, cash: 5 },
+    reward: { coins: 4000, cash: 3 },
   },
   {
     id: 'bridge',

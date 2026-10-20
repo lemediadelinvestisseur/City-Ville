@@ -5,7 +5,12 @@ import { formatList, language, t, type Language } from '@/i18n';
 import { isNativeApp } from '@/services/native';
 import type { Backend, Me, Profile, Visit } from '@/services/online/Backend';
 import { h, icon, rich } from './dom';
-import { formatDuration } from './format';
+import { formatDuration, formatNumber } from './format';
+import { rewardChips } from './DailyPanel';
+import { itemChip, itemEmoji } from './items';
+import { itemName } from '@/i18n/content';
+import { producibleItems } from '@/core/orders';
+import { SOCIAL, communityReward } from '@/data/social';
 import { Icons } from './icons';
 import { MarketView } from './MarketView';
 import { backendErrorMessage, pseudoErrorMessage } from './messages';
@@ -50,6 +55,9 @@ export class SocialUi {
   readonly edgePill: HTMLButtonElement;
   private visiting: Visit | null = null;
   private loadingVisit = false;
+  private readonly market: MarketView;
+  /** Récoltes pas encore envoyées au défi de quartier. */
+  private pendingHarvests = 0;
   /** Profil du joueur connecté (rôle compris), connu après le premier appel au serveur. */
   me: Me | null = null;
 
@@ -60,14 +68,23 @@ export class SocialUi {
       help: (profile) => this.help(profile),
       toast: (text, kind) => toasts.show(text, kind),
       onToggle: () => deps.onLayoutChange(),
-      market: () => market.render(),
+      market: () => this.market.render(),
+      quarter: () => this.quarter(),
     });
-    const market = new MarketView(
+    this.market = new MarketView(
       deps.ctx.game,
       social.backend,
       (text, kind) => toasts.show(text, kind),
       () => this.panel.refresh(),
     );
+    // Chaque récolte compte pour le défi de quartier (envoyé par paquets).
+    deps.ctx.game.events.on('gameplay', (event) => {
+      if (event.type === 'harvest') this.pendingHarvests++;
+    });
+    window.setInterval(() => this.flushHarvests(), 60_000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') this.flushHarvests();
+    });
     this.visitBar = new VisitBar({
       help: async () => {
         if (this.visiting) await this.help(this.visiting.profile);
@@ -82,6 +99,11 @@ export class SocialUi {
         if (this.visiting) this.confirmBlock(this.visiting.profile.id, this.visiting.profile.pseudo, true);
       },
       leave: () => this.leaveVisit(),
+      like: async () => {
+        if (!this.visiting) return 0;
+        return social.backend.like(this.visiting.profile.id);
+      },
+      likeStatus: (id) => social.backend.likeStatus(id),
       toast: (text, kind) => toasts.show(text, kind),
     });
     this.edgePill = h(
@@ -102,6 +124,7 @@ export class SocialUi {
     if (social.backend.isRegistered()) {
       social.startSync();
       this.refreshMe();
+      this.claimRequest();
       next();
       return;
     }
@@ -141,6 +164,222 @@ export class SocialUi {
 
   setEdge(near: boolean): void {
     this.edgePill.classList.toggle('is-visible', near && !this.visiting && !this.panel.isOpen);
+  }
+
+  /** Ouvre le marché avec ce produit prêt à être mis en vente. */
+  openMarket(item: string): void {
+    this.market.preselect = item;
+    this.openNeighbors('market');
+  }
+
+  private flushHarvests(): void {
+    const { backend } = this.deps.social;
+    if (this.pendingHarvests <= 0 || !backend.isRegistered()) return;
+    const amount = this.pendingHarvests;
+    this.pendingHarvests = 0;
+    backend.contribute(amount).catch(() => {
+      this.pendingHarvests += amount;
+    });
+  }
+
+  /** Ce que les voisins ont envoyé pour ma demande arrive dans l'entrepôt. */
+  private claimRequest(): void {
+    const { social, ctx } = this.deps;
+    social.backend
+      .claimRequest()
+      .then(({ item, qty }) => {
+        if (!item || qty <= 0) return;
+        ctx.game.receiveItems({ [item]: qty });
+        this.deps
+          .notices()
+          .post(
+            'neighbor',
+            t('requests.received', { n: qty, item: `${itemEmoji(item)} ${itemName(item)}` }),
+            { kind: 'neighbors' },
+            Icons.population,
+            'success',
+          );
+      })
+      .catch(() => undefined);
+  }
+
+  /** En tête de l'onglet Voisins : défi de la semaine, ma demande, celles des voisins. */
+  private async quarter(): Promise<HTMLElement> {
+    const { social, ctx, toasts } = this.deps;
+    const { backend } = social;
+    const game = ctx.game;
+    this.flushHarvests();
+    const [community, mine, others] = await Promise.all([
+      backend.community(),
+      backend.myRequest(),
+      backend.neighborRequests(),
+    ]);
+    const wrap = h('div', { class: 'quarter' });
+
+    // Défi de quartier.
+    const ratio = Math.min(1, community.total / Math.max(1, community.goal));
+    const claim = h('button', {
+      class: 'btn btn--gold btn--small',
+      text: community.claimed ? t('daily.claimed') : t('daily.claim'),
+      onClick: () => {
+        claim.setAttribute('disabled', '');
+        backend
+          .claimCommunity()
+          .then(() => {
+            const reward = communityReward(game.state.level);
+            game.grantReward(reward);
+            toasts.show(t('community.claimed'), 'success');
+            this.panel.refresh();
+          })
+          .catch((e: unknown) => {
+            claim.removeAttribute('disabled');
+            toasts.show(backendErrorMessage(e), 'error');
+          });
+      },
+    });
+    if (!community.claimable) claim.setAttribute('disabled', '');
+    wrap.append(
+      h(
+        'div',
+        { class: 'quarter__card' },
+        h('div', { class: 'quarter__title' }, '🏘️ ', t('community.title')),
+        h('p', { class: 'muted small', text: t('community.intro') }),
+        h(
+          'div',
+          { class: 'daily__progress' },
+          h('div', { class: 'progress' }, h('div', { class: 'progress__fill', style: `width:${ratio * 100}%` })),
+          h('span', {
+            class: 'daily__count',
+            text: `${formatNumber(community.total)}/${formatNumber(community.goal)}`,
+          }),
+        ),
+        h(
+          'div',
+          { class: 'quarter__row' },
+          h('span', { class: 'muted small', text: t('community.mine', { n: formatNumber(community.mine) }) }),
+          rewardChips(communityReward(game.state.level)),
+          claim,
+        ),
+      ),
+    );
+
+    // Ma demande aux voisins.
+    const myCard = h(
+      'div',
+      { class: 'quarter__card' },
+      h('div', { class: 'quarter__title' }, '📮 ', t('requests.mine')),
+    );
+    if (mine && mine.received < mine.qty && mine.expiresAt > Date.now()) {
+      myCard.append(
+        h(
+          'div',
+          { class: 'quarter__row' },
+          itemChip(mine.item, mine.qty),
+          h('span', { class: 'muted small', text: t('requests.progress', { n: mine.received, total: mine.qty }) }),
+        ),
+      );
+    } else if (mine && mine.toClaim > 0) {
+      myCard.append(h('p', { class: 'muted small', text: t('requests.done') }));
+    } else {
+      myCard.append(this.requestForm(), h('p', { class: 'muted small', text: t('requests.hint') }));
+    }
+    if (mine && mine.toClaim > 0) {
+      myCard.append(
+        h('button', {
+          class: 'btn btn--gold btn--small',
+          text: t('requests.collect', { n: mine.toClaim }),
+          onClick: () => {
+            this.claimRequest();
+            setTimeout(() => this.panel.refresh(), 300);
+          },
+        }),
+      );
+    }
+    wrap.append(myCard);
+
+    // Demandes des voisins.
+    if (others.length > 0) {
+      const card = h(
+        'div',
+        { class: 'quarter__card' },
+        h('div', { class: 'quarter__title' }, '🤝 ', t('requests.others')),
+      );
+      for (const request of others) {
+        const left = request.qty - request.received;
+        const give = Math.min(left, game.itemCount(request.item));
+        const button = h('button', {
+          class: 'btn btn--primary btn--small',
+          text: give > 0 ? t('requests.give', { n: give }) : t('requests.none'),
+          onClick: () => {
+            button.setAttribute('disabled', '');
+            // Les produits quittent la ville seulement si le serveur accepte l'envoi.
+            if (game.itemCount(request.item) < give) return;
+            backend
+              .giveToRequest(request.id, give)
+              .then(() => {
+                const result = game.giveToNeighbor(request.item, give);
+                if (result.ok) {
+                  toasts.show(
+                    t('requests.thanks', { pseudo: request.profile.pseudo, coins: result.reward.coins ?? 0 }),
+                    'success',
+                  );
+                }
+                this.panel.refresh();
+              })
+              .catch((e: unknown) => {
+                button.removeAttribute('disabled');
+                toasts.show(backendErrorMessage(e), 'error');
+              });
+          },
+        });
+        if (give <= 0) button.setAttribute('disabled', '');
+        card.append(
+          h(
+            'div',
+            { class: 'quarter__row' },
+            h('strong', { text: request.profile.pseudo }),
+            itemChip(request.item, left, game),
+            h('span', {
+              class: 'muted small',
+              text: t('requests.progress', { n: request.received, total: request.qty }),
+            }),
+            button,
+          ),
+        );
+      }
+      wrap.append(card);
+    }
+    return wrap;
+  }
+
+  /** Petit formulaire « demander N × produit » (produits que la ville sait produire). */
+  private requestForm(): HTMLElement {
+    const { social, ctx, toasts } = this.deps;
+    const select = h('select', { class: 'field__input' });
+    for (const id of producibleItems(ctx.game.state)) {
+      select.append(h('option', { text: `${itemEmoji(id)} ${itemName(id)}`, attrs: { value: id } }));
+    }
+    const qty = h('select', { class: 'field__input' });
+    for (const n of [10, 20, 50, 100]) qty.append(h('option', { text: String(n), attrs: { value: String(n) } }));
+    qty.value = '20';
+    const send = h('button', {
+      class: 'btn btn--primary btn--small',
+      text: t('requests.ask'),
+      onClick: () => {
+        send.setAttribute('disabled', '');
+        social.backend
+          .createRequest(select.value, Math.max(SOCIAL.requestMinQty, Number(qty.value)))
+          .then(() => {
+            toasts.show(t('requests.sent'), 'success');
+            this.panel.refresh();
+          })
+          .catch((e: unknown) => {
+            send.removeAttribute('disabled');
+            toasts.show(backendErrorMessage(e), 'error');
+          });
+      },
+    });
+    return h('div', { class: 'quarter__row quarter__form' }, qty, select, send);
   }
 
   openNeighbors(tab: 'neighbors' | 'market' = 'neighbors'): void {
@@ -275,6 +514,21 @@ export class SocialUi {
     const names = helpers.length ? formatList(helpers) : t('helps.someone');
     // « Vos voisins » (personne de nommé) appelle aussi le pluriel.
     const text = t(helpers.length === 1 ? 'helps.one' : 'helps.many', { names, coins: reward.coins ?? 0 });
+    const gift = Object.entries(reward.items ?? {})
+      .map(([id, qty]) => `${qty} ${itemEmoji(id)}`)
+      .join(' ');
+    if (gift) {
+      this.deps
+        .notices()
+        .post(
+          'neighbor',
+          `${text} ${t('helps.gift', { items: gift })}`,
+          { kind: 'neighbors' },
+          Icons.population,
+          'success',
+        );
+      return;
+    }
     this.deps.notices().post('neighbor', text, { kind: 'neighbors' }, Icons.population, 'success');
   }
 

@@ -4,11 +4,16 @@
  * et réutilisable côté serveur plus tard (validation anti-triche).
  */
 
-export type Currency = 'coins' | 'cash' | 'goods' | 'energy';
+import type { ItemBag } from '@/data/items';
+
+export type { ItemBag };
+
+export type Currency = 'coins' | 'cash' | 'energy';
 export type RewardKind = Currency | 'xp';
 
 export type Cost = Partial<Record<Currency, number>>;
-export type Reward = Partial<Record<RewardKind, number>>;
+/** Gain : monnaies, XP et éventuellement des produits. */
+export type Reward = Partial<Record<RewardKind, number>> & { items?: ItemBag };
 
 export interface Size {
   w: number;
@@ -21,7 +26,18 @@ export interface Requirements {
 }
 
 export type BuildingCategory =
-  'house' | 'business' | 'community' | 'storage' | 'farm' | 'port' | 'station' | 'decoration' | 'road' | 'rail';
+  | 'house'
+  | 'business'
+  | 'community'
+  | 'storage'
+  | 'farm'
+  | 'port'
+  | 'ranch'
+  | 'workshop'
+  | 'station'
+  | 'decoration'
+  | 'road'
+  | 'rail';
 
 /** Nature du sol d'une case. */
 export type Terrain = 'grass' | 'sand' | 'water' | 'rock';
@@ -59,7 +75,8 @@ export interface HouseDef extends BaseDef {
 
 export interface BusinessDef extends BaseDef {
   category: 'business';
-  supplyGoods: number;
+  /** Produits livrés à chaque approvisionnement. */
+  inputs: ItemBag;
   customers: number;
   serveSec: number;
   payout: { coins: number; xp: number };
@@ -84,6 +101,11 @@ export interface PortDef extends BaseDef {
   category: 'port';
   /** Niveau du bateau : détermine les expéditions possibles. */
   boatTier: number;
+}
+
+/** Élevage (on nourrit les bêtes) ou atelier (on transforme des produits) : productions de src/data/recipes.ts. */
+export interface ProducerDef extends BaseDef {
+  category: 'ranch' | 'workshop';
 }
 
 /** Gare : se pose le long de la voie ferrée et expédie des marchandises par le train. */
@@ -113,6 +135,7 @@ export type BuildingDef =
   | StorageDef
   | FarmDef
   | PortDef
+  | ProducerDef
   | StationDef
   | DecorationDef
   | RoadDef
@@ -123,7 +146,8 @@ export interface CropDef {
   name: string;
   growSec: number;
   cost: number;
-  goods: number;
+  /** Produits récoltés (le produit porte l'identifiant de la culture). */
+  amount: number;
   xp: number;
   requires?: Requirements;
 }
@@ -135,23 +159,11 @@ export interface TripDef {
   durationSec: number;
   /** Coût en pièces (carburant, appâts). */
   cost: number;
-  goods: number;
+  /** Poisson rapporté. */
+  amount: number;
   xp: number;
   /** Niveau de bateau minimal. */
   boatTier: number;
-  requires?: Requirements;
-}
-
-/** Livraison par le train : des marchandises partent, des pièces reviennent. */
-export interface ShipmentDef {
-  id: string;
-  name: string;
-  durationSec: number;
-  /** Marchandises chargées au départ. */
-  goods: number;
-  /** Pièces reçues au retour du train. */
-  coins: number;
-  xp: number;
   requires?: Requirements;
 }
 
@@ -178,8 +190,37 @@ export interface Entity {
   farm?: { cropId: string | null; plantedAt: number; readyAt: number };
   /** `tripId` nul : le bateau est à quai. */
   port?: { tripId: string | null; startedAt: number; readyAt: number };
-  /** `shipmentId` nul : le train attend en gare. */
-  station?: { shipmentId: string | null; startedAt: number; readyAt: number };
+  /** `recipeId` nul : rien en cours (élevage, atelier). */
+  producer?: { recipeId: string | null; startedAt: number; readyAt: number };
+  /** `reward` nul : le train attend en gare ; sinon il livre une commande et revient avec la récompense. */
+  station?: { reward: Reward | null; startedAt: number; readyAt: number };
+}
+
+/** Une commande : des produits à livrer contre une récompense. */
+export interface Order {
+  items: ItemBag;
+  reward: Reward;
+  done: boolean;
+  /** Grosse commande livrée par le train (la récompense arrive à son retour). */
+  train: boolean;
+}
+
+export interface OrdersState {
+  /** Jour des commandes (AAAA-MM-JJ, heure locale) ; vide tant qu'elles ne sont pas débloquées. */
+  day: string;
+  list: Order[];
+  bonus: Reward;
+  bonusClaimed: boolean;
+}
+
+/** Visiteur de passage : il demande un produit et repart au bout de quelques heures. */
+export interface Visitor {
+  kind: 'tourist' | 'chef' | 'trucker' | 'grandma';
+  item: string;
+  qty: number;
+  reward: Reward;
+  arrivedAt: number;
+  leavesAt: number;
 }
 
 export interface QuestProgress {
@@ -214,7 +255,8 @@ export interface GameState {
   cash: number;
   xp: number;
   level: number;
-  goods: number;
+  /** Produits dans l'entrepôt. */
+  inventory: ItemBag;
   energy: number;
   /** Ouvriers : nombre de chantiers (constructions, améliorations) menés en même temps. */
   workers: number;
@@ -236,12 +278,20 @@ export interface GameState {
   daily: DailyState;
   /** Récompense de connexion : dernier jour réclamé (AAAA-MM-JJ, heure locale) et série en cours. */
   loginStreak: { lastDay: string | null; streak: number };
+  /** Dernier repas servi à la ville : jusqu'à quand elle est rassasiée et combien de familles d'aliments. */
+  meals: { lastAt: number; fedUntil: number; variety: number };
+  orders: OrdersState;
+  /** Coffre de la mairie : il se remplit depuis `since`. */
+  chest: { since: number };
+  visitor: Visitor | null;
+  nextVisitorAt: number;
+  /** Roue de la chance : tours utilisés et tours offerts (coups de main) pour le jour donné. */
+  wheel: { day: string; used: number; extra: number };
 }
 
 export type FailReason =
   | 'notEnoughCoins'
   | 'notEnoughCash'
-  | 'notEnoughGoods'
   | 'notEnoughEnergy'
   | 'levelLocked'
   | 'populationLocked'
@@ -264,9 +314,13 @@ export type FailReason =
   | 'onMountain'
   | 'needsRoad'
   | 'needsRail'
-  | 'noWorker';
+  | 'noWorker'
+  | 'notEnoughItems'
+  | 'noFood'
+  | 'empty';
 
-export type Result<T = object> = ({ ok: true } & T) | { ok: false; reason: FailReason; missing?: number };
+export type Result<T = object> =
+  ({ ok: true } & T) | { ok: false; reason: FailReason; missing?: number; /** Produit qui manque. */ item?: string };
 
 /** Action principale déclenchée par un toucher sur une construction. */
 export type PrimaryAction =
@@ -285,6 +339,10 @@ export type PrimaryAction =
   | { type: 'sendBoat' }
   | { type: 'waitBoat'; readyAt: number }
   | { type: 'unloadBoat' }
+  | { type: 'startProduction' }
+  | { type: 'waitProduction'; readyAt: number }
+  | { type: 'collectProduction' }
+  | { type: 'townHall' }
   | { type: 'sendTrain' }
   | { type: 'waitTrain'; readyAt: number }
   | { type: 'unloadTrain' }
@@ -301,7 +359,8 @@ export type QuestTask =
   | ({ type: 'place' | 'build' | 'supply' | 'collectBusiness' | 'collectRent'; count: number } & DefFilter)
   | { type: 'plant' | 'harvest'; count: number; cropId?: string }
   | { type: 'sendBoat' | 'unloadBoat'; count: number }
-  | { type: 'sendTrain' | 'unloadTrain'; count: number }
+  | { type: 'sendTrain' | 'unloadTrain' | 'feedCity' | 'deliverOrder'; count: number }
+  | { type: 'produce' | 'collectProduction'; count: number; recipeId?: string }
   | { type: 'expand'; count: number }
   | ({ type: 'upgrade'; count: number } & DefFilter)
   | { type: 'helpNeighbor' | 'visitNeighbor' | 'marketSell' | 'marketBuy'; count: number }
@@ -332,8 +391,16 @@ export type GameplayEvent =
   | { type: 'collectBusiness'; defId: string }
   | { type: 'sendBoat'; tripId: string }
   | { type: 'unloadBoat'; tripId: string }
-  | { type: 'sendTrain'; shipmentId: string }
-  | { type: 'unloadTrain'; shipmentId: string }
+  | { type: 'sendTrain' }
+  | { type: 'unloadTrain' }
+  | { type: 'produce'; recipeId: string }
+  | { type: 'collectProduction'; recipeId: string }
+  | { type: 'feedCity'; variety: number }
+  | { type: 'deliverOrder'; train: boolean }
+  | { type: 'sellItems'; item: string; qty: number }
+  | { type: 'visitor' }
+  | { type: 'spin' }
+  | { type: 'collectChest' }
   | { type: 'expand' }
   | { type: 'upgrade'; defId: string; category: BuildingCategory; stars: number }
   | { type: 'helpNeighbor' }

@@ -1,19 +1,25 @@
 import type { PseudoError } from '@/core/pseudo';
 import { PSEUDO_MAX, PSEUDO_MIN } from '@/core/pseudo';
 import type { FailReason } from '@/core/types';
-import { MARKET, type ListingProblem } from '@/data/market';
+import { MARKET, maxUnitPrice, type ListingProblem } from '@/data/market';
 import { t, tn } from '@/i18n';
+import { itemName } from '@/i18n/content';
 import { BackendError } from '@/services/online/Backend';
+import { itemEmoji } from './items';
 
 /** Message lisible pour un échec d'action. */
-export function failMessage(reason: FailReason, missing?: number): string {
+export function failMessage(reason: FailReason, missing?: number, item?: string): string {
   switch (reason) {
+    case 'notEnoughItems':
+      return item && missing
+        ? tn('fail.missingItem', missing, { item: `${itemEmoji(item)} ${itemName(item)}` })
+        : t('fail.notEnoughItems');
+    case 'noFood':
+      return missing ? tn('fail.missingFood', missing) : t('fail.noFood');
     case 'notEnoughCoins':
       return missing ? tn('fail.missingCoins', missing) : t('fail.notEnoughCoins');
     case 'notEnoughCash':
       return missing ? tn('fail.missingCash', missing) : t('fail.notEnoughCash');
-    case 'notEnoughGoods':
-      return missing ? tn('fail.missingGoods', missing) : t('fail.notEnoughGoods');
     default:
       return t(`fail.${reason}`);
   }
@@ -42,8 +48,8 @@ export function backendErrorMessage(error: unknown): string {
   }
 }
 
-export function listingProblemMessage(problem: ListingProblem): string {
+export function listingProblemMessage(problem: ListingProblem, item: string): string {
   return problem === 'qty'
     ? t('market.errorQty', { min: MARKET.minQty, max: MARKET.maxQty })
-    : t('market.errorPrice', { min: MARKET.minUnitPrice, max: MARKET.maxUnitPrice });
+    : t('market.errorPrice', { min: MARKET.minUnitPrice, max: maxUnitPrice(item) });
 }

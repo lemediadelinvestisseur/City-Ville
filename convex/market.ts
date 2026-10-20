@@ -1,5 +1,5 @@
 import { v } from 'convex/values';
-import { MARKET, checkListing, sellerIncome } from '../src/data/market';
+import { MARKET, checkListing, listingItem, sellerIncome } from '../src/data/market';
 import type { Doc } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import { fail, isBlockedEitherWay, requirePlayer } from './lib/util';
@@ -8,6 +8,7 @@ function mine(listing: Doc<'listings'>, now: number) {
   const expired = listing.status === 'open' && listing.expiresAt <= now;
   return {
     id: listing._id,
+    item: listingItem(listing.item),
     qty: listing.qty,
     unitPrice: listing.unitPrice,
     createdAt: listing.createdAt,
@@ -35,6 +36,7 @@ export const overview = query({
       if (await isBlockedEitherWay(ctx, me._id, seller._id)) continue;
       offers.push({
         id: listing._id,
+        item: listingItem(listing.item),
         qty: listing.qty,
         unitPrice: listing.unitPrice,
         seller: seller.pseudo,
@@ -50,14 +52,14 @@ export const overview = query({
   },
 });
 
-/** Mise en vente : le client a déjà mis les marchandises de côté. */
+/** Mise en vente : le client a déjà mis les produits de côté. */
 export const create = mutation({
-  args: { token: v.string(), qty: v.number(), unitPrice: v.number() },
-  handler: async (ctx, { token, qty, unitPrice }) => {
+  args: { token: v.string(), item: v.string(), qty: v.number(), unitPrice: v.number() },
+  handler: async (ctx, { token, item, qty, unitPrice }) => {
     const me = await requirePlayer(ctx, token);
     if (me.banned) fail('banned');
     if (me.level < MARKET.minLevel) fail('forbidden');
-    if (checkListing(qty, unitPrice)) fail('invalidSave');
+    if (checkListing(item, qty, unitPrice)) fail('invalidSave');
     const open = await ctx.db
       .query('listings')
       .withIndex('by_seller', (q) => q.eq('sellerId', me._id).eq('settled', false))
@@ -66,6 +68,7 @@ export const create = mutation({
     const now = Date.now();
     const id = await ctx.db.insert('listings', {
       sellerId: me._id,
+      item,
       qty,
       unitPrice,
       createdAt: now,
@@ -90,11 +93,11 @@ export const buy = mutation({
     if (listing.sellerId === me._id) fail('forbidden');
     if (await isBlockedEitherWay(ctx, me._id, listing.sellerId)) fail('blocked');
     await ctx.db.patch(listing._id, { status: 'sold', buyerId: me._id, soldAt: now });
-    return { qty: listing.qty, total: listing.qty * listing.unitPrice };
+    return { item: listingItem(listing.item), qty: listing.qty, total: listing.qty * listing.unitPrice };
   },
 });
 
-/** Retire un lot encore en vente : les marchandises reviennent au vendeur. */
+/** Retire un lot encore en vente : les produits reviennent au vendeur. */
 export const cancel = mutation({
   args: { token: v.string(), listingId: v.id('listings') },
   handler: async (ctx, { token, listingId }) => {
@@ -102,7 +105,7 @@ export const cancel = mutation({
     const listing = await ctx.db.get(listingId);
     if (!listing || listing.sellerId !== me._id || listing.status !== 'open' || listing.settled) fail('notFound');
     await ctx.db.patch(listing._id, { status: 'cancelled', settled: true });
-    return { goods: listing.qty };
+    return { item: listingItem(listing.item), qty: listing.qty };
   },
 });
 
@@ -117,7 +120,7 @@ export const settle = mutation({
       .withIndex('by_seller', (q) => q.eq('sellerId', me._id).eq('settled', false))
       .collect();
     let coins = 0;
-    let goods = 0;
+    const items: Record<string, number> = {};
     let sold = 0;
     for (const listing of pending) {
       if (listing.status === 'sold') {
@@ -125,10 +128,11 @@ export const settle = mutation({
         sold++;
         await ctx.db.patch(listing._id, { settled: true });
       } else if (listing.status === 'open' && listing.expiresAt <= now) {
-        goods += listing.qty;
+        const item = listingItem(listing.item);
+        items[item] = (items[item] ?? 0) + listing.qty;
         await ctx.db.patch(listing._id, { status: 'expired', settled: true });
       }
     }
-    return { coins, goods, sold };
+    return { coins, items, sold };
   },
 });

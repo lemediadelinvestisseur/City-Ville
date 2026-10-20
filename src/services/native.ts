@@ -45,19 +45,14 @@ export function mirroredStorage(base: KeyValueStorage): KeyValueStorage {
   };
 }
 
-/** Réglages propres à l'appli native : barre d'état, écran de démarrage, vibrations. */
+/** Réglages propres à l'appli native : barre d'état, écran de démarrage (vibrations : services/haptics.ts). */
 export async function setupNative(ctx: AppContext): Promise<void> {
   if (!isNativeApp()) return;
-  const [{ StatusBar, Style }, { SplashScreen }, { Haptics, ImpactStyle }] = await Promise.all([
+  const [{ StatusBar, Style }, { SplashScreen }] = await Promise.all([
     import('@capacitor/status-bar'),
     import('@capacitor/splash-screen'),
-    import('@capacitor/haptics'),
   ]);
   await StatusBar.setOverlaysWebView({ overlay: true }).catch(() => undefined);
   await StatusBar.setStyle({ style: Style.Dark }).catch(() => undefined);
   ctx.bus.on('world:ready', () => void SplashScreen.hide());
-  ctx.bus.on('world:action', ({ ok }) => {
-    if (ok) void Haptics.impact({ style: ImpactStyle.Light });
-  });
-  ctx.game.events.on('levelUp', () => void Haptics.impact({ style: ImpactStyle.Heavy }));
 }

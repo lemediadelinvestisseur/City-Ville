@@ -23,6 +23,7 @@ import type * as push from '../push.js';
 import type * as pushNode from '../pushNode.js';
 import type * as roles from '../roles.js';
 import type * as saves from '../saves.js';
+import type * as social from '../social.js';
 import type * as stats from '../stats.js';
 
 declare const fullApi: ApiFromModules<{
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   pushNode: typeof pushNode;
   roles: typeof roles;
   saves: typeof saves;
+  social: typeof social;
   stats: typeof stats;
 }>;
 export declare const api: FilterApi<typeof fullApi, FunctionReference<any, 'public'>>;

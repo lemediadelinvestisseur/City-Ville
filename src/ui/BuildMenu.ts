@@ -1,14 +1,31 @@
 import type { Game } from '@/core/game';
 import type { BuildingCategory, BuildingDef, FailReason } from '@/core/types';
-import { BUILDINGS, SHOP_CATEGORIES } from '@/data/buildings';
+import { BUILDINGS, SHOP_CATEGORIES, shopTabOf } from '@/data/buildings';
+import { recipesOf } from '@/data/recipes';
 import { t } from '@/i18n';
 import { buildingName, categoryLabel } from '@/i18n/content';
 import { ArtKey, type ArtLibrary } from '@/render/art/library';
 import { clear, h, icon } from './dom';
 import { formatDuration, formatNumber } from './format';
 import { Icons } from './icons';
+import { bagChips, itemChip } from './items';
 
-function effectLine(def: BuildingDef): string {
+/** Production d'un bâtiment : « 🌾 20 → 🥚 10 » (et « +1 » s'il en a plusieurs). */
+function recipeLine(def: BuildingDef): HTMLElement {
+  const recipes = recipesOf(def.id);
+  const first = recipes[0];
+  if (!first) return h('span');
+  return h(
+    'span',
+    { class: 'card__flow' },
+    bagChips(first.inputs),
+    ' → ',
+    itemChip(first.output.item, first.output.qty),
+    recipes.length > 1 ? ` +${recipes.length - 1}` : null,
+  );
+}
+
+function effectLine(def: BuildingDef): string | HTMLElement {
   switch (def.category) {
     case 'house':
       return t('build.effect.house', {
@@ -17,11 +34,17 @@ function effectLine(def: BuildingDef): string {
         duration: formatDuration(def.rent.intervalSec),
       });
     case 'business':
-      return t('build.effect.business', {
-        goods: def.supplyGoods,
-        coins: def.payout.coins,
-        duration: formatDuration(def.serveSec),
-      });
+      return h(
+        'span',
+        { class: 'card__flow' },
+        bagChips(def.inputs),
+        ' → ',
+        icon(Icons.coin),
+        ` ${formatNumber(def.payout.coins)} · ${formatDuration(def.serveSec)}`,
+      );
+    case 'ranch':
+    case 'workshop':
+      return recipeLine(def);
     case 'community':
       return t('build.effect.community', { n: def.popCap });
     case 'storage':
@@ -78,9 +101,9 @@ export class BuildMenu {
     this.hintDefId = focus?.defId ?? null;
     if (focus?.defId) {
       const def = BUILDINGS.find((d) => d.id === focus.defId);
-      if (def) this.tab = def.category;
+      if (def) this.tab = shopTabOf(def.category);
     } else if (focus?.category) {
-      this.tab = focus.category;
+      this.tab = shopTabOf(focus.category);
     }
     this.isOpen = true;
     this.render();
@@ -103,7 +126,8 @@ export class BuildMenu {
     clear(this.tabs);
     for (const category of SHOP_CATEGORIES) {
       const hasHint =
-        this.hintDefId !== null && BUILDINGS.some((d) => d.id === this.hintDefId && d.category === category.id);
+        this.hintDefId !== null &&
+        BUILDINGS.some((d) => d.id === this.hintDefId && shopTabOf(d.category) === category.id);
       this.tabs.append(
         h('button', {
           class: `tab${category.id === this.tab ? ' is-active' : ''}${hasHint ? ' is-hint' : ''}`,
@@ -119,7 +143,7 @@ export class BuildMenu {
     }
     const scroll = this.list.scrollLeft;
     clear(this.list);
-    const defs = BUILDINGS.filter((d) => d.category === this.tab && d.inShop !== false);
+    const defs = BUILDINGS.filter((d) => shopTabOf(d.category) === this.tab && d.inShop !== false);
     for (const def of defs) this.list.append(this.card(def));
     this.list.scrollLeft = scroll;
   }
@@ -132,15 +156,7 @@ export class BuildMenu {
       ? h('span', { class: 'cost cost--cash' }, icon(Icons.cash), formatNumber(def.cost.cash))
       : h('span', { class: 'cost' }, icon(Icons.coin), formatNumber(def.cost.coins ?? 0));
     if (reason === 'notEnoughCoins' || reason === 'notEnoughCash') cost.classList.add('is-short');
-    // Matériaux : marchandises demandées en plus des pièces.
-    const goods = def.cost.goods
-      ? h(
-          'span',
-          { class: `cost cost--goods${reason === 'notEnoughGoods' ? ' is-short' : ''}` },
-          icon(Icons.goods),
-          formatNumber(def.cost.goods),
-        )
-      : null;
+
     let lockText = '';
     if (reason === 'levelLocked') lockText = t('common.level', { level: def.requires?.level ?? 1 });
     else if (reason === 'populationLocked') lockText = t('build.lockPopulation', { n: def.requires?.population ?? 0 });
@@ -178,12 +194,11 @@ export class BuildMenu {
         h('img', { attrs: { src: this.art.iconUrl(ArtKey.building(def.id)), alt: '' } }),
       ),
       h('span', { class: 'card__name', text: buildingName(def) }),
-      h('span', { class: 'card__effect', text: effectLine(def) }),
+      h('span', { class: 'card__effect' }, effectLine(def)),
       h(
         'span',
         { class: 'card__footer' },
         cost,
-        goods,
         def.buildSec > 0
           ? h(
               'span',
