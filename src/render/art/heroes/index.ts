@@ -1,3 +1,4 @@
+import { HEROES as FARM } from './farm';
 import { HEROES as HOUSES } from './houses';
 import { HEROES as INDUSTRY } from './industry';
 import { HEROES as LANDMARKS } from './landmarks';
@@ -14,4 +15,5 @@ export const HEROES: Readonly<Record<string, Hero>> = {
   ...LANDMARKS,
   ...SERVICES,
   ...INDUSTRY,
+  ...FARM,
 };
