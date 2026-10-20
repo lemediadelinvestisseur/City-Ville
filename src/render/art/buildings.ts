@@ -1054,6 +1054,162 @@ const SPECS: Record<string, BuildingSpec> = {
   },
 
   // ——— Stockage (suite) ———
+  // ——— Élevage ———
+  chicken_coop: {
+    size: 2,
+    lot: '#c9b08a',
+    fence: '#f5f5f5',
+    body: { inset: 0.55, h: 30, wall: '#d7a86e', floors: 1 },
+    roof: { type: 'gableY', color: '#a0522d', h: 18 },
+    trim: '#8d5a2b',
+    door: { side: 'left', at: 0.5, color: '#6d4c41', width: 0.5 },
+    after: (p) => {
+      // Mangeoire et poules dans l'enclos.
+      p.box(0.25, 1.55, 0.75, 1.72, 0, 6, boxColors('#8d6e63'));
+      for (const [x, y] of [
+        [0.35, 1.25],
+        [1.2, 1.7],
+        [1.65, 1.35],
+        [0.75, 1.85],
+      ] as const) {
+        p.dot(x, y, 5, 4.2, '#ffffff', '#bdbdbd');
+        p.dot(x - 0.06, y - 0.02, 9, 2.2, '#ffffff');
+        p.dot(x - 0.09, y - 0.03, 10, 1.2, '#e53935');
+      }
+    },
+  },
+  cowshed: {
+    size: 3,
+    lot: '#b5a27a',
+    fence: '#ffffff',
+    body: { inset: 0.4, h: 46, wall: '#f5f5f5', floors: 1 },
+    roof: { type: 'gableX', color: '#455a64', h: 26 },
+    trim: '#c62828',
+    door: { side: 'left', at: 0.5, color: '#c62828', width: 0.9 },
+    after: (p, g) => {
+      // Une vache et une botte de foin devant l'étable.
+      p.box(1.95, g.y1 + 0.2, 2.6, g.y1 + 0.45, 6, 16, boxColors('#fafafa'));
+      p.box(2.48, g.y1 + 0.24, 2.7, g.y1 + 0.42, 10, 18, boxColors('#fafafa'));
+      p.dot(2.15, g.y1 + 0.45, 13, 3, '#212121');
+      p.dot(2.4, g.y1 + 0.45, 10, 2.5, '#212121');
+      for (const x of [2.0, 2.5]) p.box(x, g.y1 + 0.3, x + 0.05, g.y1 + 0.35, 0, 6, boxColors('#424242', false));
+      p.box(0.25, g.y1 + 0.2, 0.75, g.y1 + 0.5, 0, 14, boxColors('#e8c547'));
+    },
+  },
+  cattle_ranch: {
+    size: 3,
+    lot: '#9ccc65',
+    fence: '#8d6e63',
+    body: { inset: 0.25, h: 36, wall: '#8d6e63', floors: 1 },
+    roof: { type: 'gableY', color: '#5d4037', h: 22 },
+    trim: '#efebe9',
+    door: { side: 'right', at: 0.5, color: '#4e342e', width: 0.8 },
+    before: (p) => {
+      // Abreuvoir dans le pré.
+      p.box(2.1, 2.4, 2.8, 2.6, 0, 7, boxColors('#90a4ae'));
+      p.flat(2.14, 2.44, 2.76, 2.56, 7, '#4fc3f7');
+    },
+    after: (p) => {
+      for (const [x, y] of [
+        [0.4, 2.3],
+        [1.3, 2.6],
+      ] as const) {
+        p.box(x, y, x + 0.55, y + 0.24, 6, 17, boxColors('#795548'));
+        p.box(x + 0.45, y + 0.04, x + 0.68, y + 0.2, 11, 19, boxColors('#6d4c41'));
+        for (const dx of [0.05, 0.42])
+          p.box(x + dx, y + 0.08, x + dx + 0.06, y + 0.14, 0, 6, boxColors('#3e2723', false));
+      }
+    },
+  },
+  // ——— Ateliers ———
+  mill: {
+    size: 2,
+    lot: '#ded8cc',
+    body: { inset: 0.5, h: 72, wall: '#efe6d2', floors: 2 },
+    roof: { type: 'pyramid', color: '#8d6e63', h: 30 },
+    trim: '#a1887f',
+    windows: { glass: GLASS, frame: '#ffffff', perTile: 1 },
+    door: { side: 'left', at: 0.5, color: '#6d4c41' },
+    extraHeight: 46,
+    after: (p, g) => {
+      // Ailes du moulin, sur la façade.
+      const [cx, cy] = p.p((g.x0 + g.x1) / 2, g.y1 + 0.02, g.h + 6);
+      const { ctx } = p;
+      ctx.save();
+      ctx.strokeStyle = '#5d4037';
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 2.5;
+      for (let i = 0; i < 4; i++) {
+        const a = Math.PI / 4 + (i * Math.PI) / 2;
+        const ex = cx + Math.cos(a) * 54;
+        const ey = cy + Math.sin(a) * 54;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        const nx = -Math.sin(a) * 9;
+        const ny = Math.cos(a) * 9;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * 14, cy + Math.sin(a) * 14);
+        ctx.lineTo(ex, ey);
+        ctx.lineTo(ex + nx, ey + ny);
+        ctx.lineTo(cx + Math.cos(a) * 14 + nx, cy + Math.sin(a) * 14 + ny);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#5d4037';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    },
+  },
+  bakehouse: {
+    size: 2,
+    lot: '#ded8cc',
+    body: { inset: 0.3, h: 50, wall: '#f1c27d', floors: 1 },
+    roof: { type: 'gableX', color: '#b71c1c', h: 24 },
+    trim: '#ffffff',
+    windows: { glass: '#ffe0b2', frame: '#ffffff', perTile: 1.4 },
+    door: { side: 'left', at: 0.75, color: '#6d4c41' },
+    sign: { side: 'left', text: 'FOURNIL', bg: '#6d4c41', fg: '#ffe0b2' },
+    chimney: '#8d6e63',
+  },
+  dairy: {
+    size: 2,
+    lot: '#cfd8dc',
+    body: { inset: 0.3, h: 48, wall: '#e3f2fd', floors: 1 },
+    roof: { type: 'gableY', color: '#1e88e5', h: 22 },
+    trim: '#ffffff',
+    windows: { glass: GLASS, frame: '#ffffff', perTile: 1.4 },
+    door: { side: 'left', at: 0.7, color: '#1565c0' },
+    sign: { side: 'left', text: 'FROMAGERIE', bg: '#ffca28', fg: '#5d4037' },
+    after: (p, g) => {
+      // Bidons de lait devant la porte.
+      for (const x of [g.x0 + 0.1, g.x0 + 0.3]) {
+        p.box(x, g.y1 + 0.08, x + 0.14, g.y1 + 0.22, 0, 14, boxColors('#cfd8dc'));
+      }
+    },
+  },
+  cannery: {
+    size: 3,
+    lot: '#cfcac0',
+    body: { inset: 0.3, h: 56, wall: '#b0bec5', floors: 1 },
+    roof: { type: 'flat', color: '#78909c', h: 6 },
+    trim: '#eceff1',
+    windows: { glass: GLASS, frame: '#eceff1', perTile: 1.2, big: true },
+    door: { side: 'left', at: 0.85, color: '#455a64', width: 0.6 },
+    sign: { side: 'left', text: 'CONSERVES', bg: '#c62828', fg: '#ffffff' },
+    extraHeight: 50,
+    after: (p, g) => {
+      // Cheminées d'usine.
+      for (const x of [g.x0 + 0.4, g.x0 + 0.9]) {
+        p.box(x, g.y0 + 0.3, x + 0.25, g.y0 + 0.55, g.h, g.h + 46, boxColors('#8d6e63'));
+        p.box(x - 0.02, g.y0 + 0.28, x + 0.27, g.y0 + 0.57, g.h + 46, g.h + 50, boxColors('#5d4037'));
+      }
+    },
+  },
   silo: {
     size: 2,
     lot: '#c9b08a',

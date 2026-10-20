@@ -1,11 +1,12 @@
-import { START_RESOURCES, STARTING_CHUNKS } from '@/data/balance';
+import { MEAL, START_INVENTORY, START_RESOURCES, STARTING_CHUNKS, VISITOR } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
 import { getCropDef } from '@/data/crops';
 import { STARTING_TOWN, type StartingPlacement } from '@/data/startingTown';
 import { chunkKey } from './grid';
+import { emptyOrders } from './orders';
 import type { DailyState, Entity, GameState } from './types';
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 /** Ouvriers au début de la partie (un deuxième s'achète dans la boutique). */
 export const START_WORKERS = 1;
@@ -31,7 +32,11 @@ export function initBuiltState(entity: Entity, now: number): void {
       entity.port = { tripId: null, startedAt: 0, readyAt: 0 };
       break;
     case 'station':
-      entity.station = { shipmentId: null, startedAt: 0, readyAt: 0 };
+      entity.station = { reward: null, startedAt: 0, readyAt: 0 };
+      break;
+    case 'ranch':
+    case 'workshop':
+      entity.producer = { recipeId: null, startedAt: 0, readyAt: 0 };
       break;
     default:
       break;
@@ -49,8 +54,8 @@ function starterEntity(id: number, placement: StartingPlacement, now: number): E
   };
   initBuiltState(entity, now);
   if (placement.preset === 'rentReady' && entity.house) entity.house.readyAt = now;
-  if (placement.preset === 'ripeStrawberry' && entity.farm) {
-    const crop = getCropDef('strawberry');
+  if (placement.preset === 'ripeWheat' && entity.farm) {
+    const crop = getCropDef('wheat');
     entity.farm = { cropId: crop.id, plantedAt: now - crop.growSec * 1000, readyAt: now };
   }
   return entity;
@@ -68,7 +73,7 @@ export function createNewGame(now: number, cityName = 'Ma ville'): GameState {
     cash: START_RESOURCES.cash,
     xp: 0,
     level: 1,
-    goods: START_RESOURCES.goods,
+    inventory: { ...START_INVENTORY },
     energy: START_RESOURCES.energy,
     workers: START_WORKERS,
     energyUpdatedAt: now,
@@ -82,5 +87,20 @@ export function createNewGame(now: number, cityName = 'Ma ville'): GameState {
     tutorial: { introSeen: false },
     daily: emptyDaily(),
     loginStreak: { lastDay: null, streak: 0 },
+    ...cityLife(now),
+  };
+}
+
+/** Vie de la ville au départ : rassasiée pour la journée, coffre vide, premier visiteur dans quelques heures. */
+export function cityLife(
+  now: number,
+): Pick<GameState, 'meals' | 'orders' | 'chest' | 'visitor' | 'nextVisitorAt' | 'wheel'> {
+  return {
+    meals: { lastAt: now, fedUntil: now + MEAL.durationMs, variety: 2 },
+    orders: emptyOrders(),
+    chest: { since: now },
+    visitor: null,
+    nextVisitorAt: now + VISITOR.minGapMs,
+    wheel: { day: '', used: 0, extra: 0 },
   };
 }

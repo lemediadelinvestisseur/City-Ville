@@ -3,6 +3,7 @@ import { serialize, type KeyValueStorage } from '@/core/save';
 import { simulate } from '@/core/simulation';
 import { normalizePseudo, validatePseudo } from '@/core/pseudo';
 import { MARKET, sellerIncome } from '@/data/market';
+import { SOCIAL, communityGoal, weekOf } from '@/data/social';
 import { t, type MessageKey } from '@/i18n';
 import {
   BackendError,
@@ -13,7 +14,10 @@ import {
   type ChatPulse,
   type Leaderboard,
   type Me,
+  type CommunityStatus,
   type MarketOffer,
+  type MyRequest,
+  type NeighborRequest,
   type MyListing,
   type NeighborProfile,
   type Profile,
@@ -29,6 +33,12 @@ const CLAIMED_KEY = 'city-ville:local-claimed';
 const LISTINGS_KEY = 'city-ville:local-listings';
 const BOUGHT_KEY = 'city-ville:local-bought';
 const CHAT_KEY = 'city-ville:local-chat';
+const REQUEST_KEY = 'city-ville:local-request';
+const GIVEN_KEY = 'city-ville:local-given';
+const LIKES_KEY = 'city-ville:local-likes';
+const COMMUNITY_KEY = 'city-ville:local-community';
+/** Produits des lots, demandes et dons des voisins fictifs. */
+const DEMO_ITEMS = ['wheat', 'carrot', 'strawberry', 'corn', 'eggs', 'milk', 'bread', 'fish'];
 /** Dans la démo, un lot trouve preneur au bout de quelques minutes s'il n'est pas trop cher. */
 const DEMO_SALE_MS = 3 * 60_000;
 
@@ -161,7 +171,19 @@ export class LocalBackend implements Backend {
   }
 
   forget(): void {
-    for (const key of [PSEUDO_KEY, NEIGHBORS_KEY, HELPED_KEY, CLAIMED_KEY, LISTINGS_KEY, BOUGHT_KEY, CHAT_KEY]) {
+    for (const key of [
+      PSEUDO_KEY,
+      NEIGHBORS_KEY,
+      HELPED_KEY,
+      CLAIMED_KEY,
+      LISTINGS_KEY,
+      BOUGHT_KEY,
+      CHAT_KEY,
+      REQUEST_KEY,
+      GIVEN_KEY,
+      LIKES_KEY,
+      COMMUNITY_KEY,
+    ]) {
       this.storage.removeItem(key);
     }
   }
@@ -271,6 +293,7 @@ export class LocalBackend implements Backend {
     const offers: MarketOffer[] = DEMO.flatMap((d, i) =>
       [0, 1].map((k) => ({
         id: `${d.id}-${day}-${k}`,
+        item: DEMO_ITEMS[(i * 3 + k + day) % DEMO_ITEMS.length] ?? 'wheat',
         qty: 30 + ((i * 37 + k * 53 + day) % 8) * 20,
         unitPrice: 2 + ((i * 3 + k * 5 + day) % 6),
         seller: d.pseudo,
@@ -282,12 +305,13 @@ export class LocalBackend implements Backend {
     return { offers, mine: this.listings() };
   }
 
-  async marketCreate(qty: number, unitPrice: number): Promise<void> {
+  async marketCreate(item: string, qty: number, unitPrice: number): Promise<void> {
     const all = this.listings();
     if (all.filter((l) => l.status === 'open').length >= MARKET.maxListings) throw new BackendError('limit');
     const now = Date.now();
     all.push({
       id: `mine-${now}`,
+      item,
       qty,
       unitPrice,
       createdAt: now,
@@ -298,14 +322,14 @@ export class LocalBackend implements Backend {
     this.write(LISTINGS_KEY, all);
   }
 
-  async marketBuy(id: string): Promise<{ qty: number; total: number }> {
+  async marketBuy(id: string): Promise<{ item: string; qty: number; total: number }> {
     const offer = (await this.marketOverview()).offers.find((o) => o.id === id);
     if (!offer) throw new BackendError('notFound');
     this.write(BOUGHT_KEY, [...this.read<string[]>(BOUGHT_KEY, []), id].slice(-50));
-    return { qty: offer.qty, total: offer.qty * offer.unitPrice };
+    return { item: offer.item, qty: offer.qty, total: offer.qty * offer.unitPrice };
   }
 
-  async marketCancel(id: string): Promise<{ goods: number }> {
+  async marketCancel(id: string): Promise<{ item: string; qty: number }> {
     const all = this.listings();
     const listing = all.find((l) => l.id === id && l.status === 'open');
     if (!listing) throw new BackendError('notFound');
@@ -313,25 +337,149 @@ export class LocalBackend implements Backend {
       LISTINGS_KEY,
       all.filter((l) => l.id !== id),
     );
-    return { goods: listing.qty };
+    return { item: listing.item ?? 'wheat', qty: listing.qty };
   }
 
-  async marketSettle(): Promise<{ coins: number; goods: number; sold: number }> {
+  async marketSettle(): Promise<{ coins: number; items: Record<string, number>; sold: number }> {
     const all = this.listings();
     let coins = 0;
-    let goods = 0;
+    const items: Record<string, number> = {};
     let sold = 0;
     for (const l of all) {
       if (l.status === 'sold') {
         coins += l.income;
         sold++;
-      } else if (l.status === 'expired') goods += l.qty;
+      } else if (l.status === 'expired') {
+        const item = l.item ?? 'wheat';
+        items[item] = (items[item] ?? 0) + l.qty;
+      }
     }
     this.write(
       LISTINGS_KEY,
       all.filter((l) => l.status === 'open'),
     );
-    return { coins, goods, sold };
+    return { coins, items, sold };
+  }
+
+  // ——— Demandes, « J'aime » et défi de quartier (simulés) ———
+
+  /** Ma demande : les voisins fictifs y répondent petit à petit (5 unités toutes les 10 minutes). */
+  async myRequest(): Promise<MyRequest | null> {
+    const request = this.read<MyRequest | null>(REQUEST_KEY, null);
+    if (!request) return null;
+    const created = request.expiresAt - SOCIAL.requestDurationMs;
+    const received = Math.min(request.qty, Math.floor((Date.now() - created) / 600_000) * 5);
+    const claimed = request.received - request.toClaim;
+    if (request.expiresAt <= Date.now() && claimed >= received) return null;
+    return { ...request, received, toClaim: received - claimed };
+  }
+
+  async createRequest(item: string, qty: number): Promise<void> {
+    const current = await this.myRequest();
+    if (current && current.received < current.qty && current.expiresAt > Date.now()) throw new BackendError('limit');
+    const request: MyRequest = {
+      id: `request-${Date.now()}`,
+      item,
+      qty,
+      received: 0,
+      toClaim: 0,
+      expiresAt: Date.now() + SOCIAL.requestDurationMs,
+    };
+    this.write(REQUEST_KEY, request);
+  }
+
+  async claimRequest(): Promise<{ item: string | null; qty: number }> {
+    const request = await this.myRequest();
+    if (!request) return { item: null, qty: 0 };
+    this.write(REQUEST_KEY, { ...request, toClaim: 0 });
+    return { item: request.item, qty: request.toClaim };
+  }
+
+  /** Une demande par voisin fictif et par jour. */
+  async neighborRequests(): Promise<NeighborRequest[]> {
+    const day = Math.floor(Date.now() / 86_400_000);
+    const given = this.read<Record<string, number>>(GIVEN_KEY, {});
+    return (await this.neighbors())
+      .map((profile, i) => {
+        const id = `${profile.id}-request-${day}`;
+        const qty = 10 + ((i * 7 + day) % 4) * 5;
+        const received = Math.min(qty, given[id] ?? 0);
+        return {
+          id,
+          item: DEMO_ITEMS[(i * 5 + day) % DEMO_ITEMS.length] ?? 'wheat',
+          qty,
+          received,
+          toClaim: 0,
+          expiresAt: (day + 1) * 86_400_000,
+          profile,
+        };
+      })
+      .filter((r) => r.received < r.qty);
+  }
+
+  async giveToRequest(id: string, qty: number): Promise<void> {
+    const given = this.read<Record<string, number>>(GIVEN_KEY, {});
+    this.write(GIVEN_KEY, { ...given, [id]: (given[id] ?? 0) + qty });
+  }
+
+  private demoLikes(id: string): number {
+    const week = weekOf(Date.now());
+    let h = 0;
+    for (const c of `${id}${week}`) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return 2 + (h % 18);
+  }
+
+  async like(playerId: string): Promise<number> {
+    const week = weekOf(Date.now());
+    const likes = this.read<Record<string, string>>(LIKES_KEY, {});
+    if (likes[playerId] === week) throw new BackendError('alreadyHelped');
+    this.write(LIKES_KEY, { ...likes, [playerId]: week });
+    return this.demoLikes(playerId) + 1;
+  }
+
+  async likeStatus(playerId: string): Promise<{ likes: number; liked: boolean }> {
+    const liked = this.read<Record<string, string>>(LIKES_KEY, {})[playerId] === weekOf(Date.now());
+    return { likes: this.demoLikes(playerId) + (liked ? 1 : 0), liked };
+  }
+
+  async prettiest(): Promise<{ rows: Array<Profile & { likes: number }>; myRank: number | null; myLikes: number }> {
+    const liked = this.read<Record<string, string>>(LIKES_KEY, {});
+    const week = weekOf(Date.now());
+    const me = await this.me();
+    const myLikes = 3;
+    const rows = [
+      ...DEMO.map((d) => ({ ...this.profile(d), likes: this.demoLikes(d.id) + (liked[d.id] === week ? 1 : 0) })),
+      { ...me, likes: myLikes },
+    ].sort((a, b) => b.likes - a.likes);
+    return { rows, myRank: rows.findIndex((r) => r.id === me.id) + 1, myLikes };
+  }
+
+  /** Défi de quartier : les voisins fictifs avancent au fil de la semaine. */
+  async community(): Promise<CommunityStatus> {
+    const week = weekOf(Date.now());
+    const stored = this.read<{ week: string; mine: number; claimed: boolean }>(COMMUNITY_KEY, {
+      week,
+      mine: 0,
+      claimed: false,
+    });
+    const mine = stored.week === week ? stored.mine : 0;
+    const claimed = stored.week === week && stored.claimed;
+    const goal = communityGoal(6);
+    const elapsed = (Date.now() - Date.parse(`${week}T00:00:00Z`)) / (7 * 86_400_000);
+    const total = Math.min(goal * 2, Math.round(goal * 0.9 * elapsed) + mine);
+    return { week, total, goal, mine, claimable: total >= goal && mine > 0 && !claimed, claimed };
+  }
+
+  async contribute(amount: number): Promise<void> {
+    const status = await this.community();
+    const mine = Math.min(SOCIAL.communityMaxPerPlayer, status.mine + amount);
+    this.write(COMMUNITY_KEY, { week: status.week, mine, claimed: status.claimed });
+  }
+
+  async claimCommunity(): Promise<void> {
+    const status = await this.community();
+    if (!status.claimable) throw new BackendError('notFound');
+    this.write(COMMUNITY_KEY, { week: status.week, mine: status.mine, claimed: true });
   }
 
   // ——— Chat de démonstration (rien ne quitte l'appareil) ———

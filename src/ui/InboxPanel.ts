@@ -8,6 +8,8 @@ const KIND_ICONS: Record<InboxKind, string> = {
   build: Icons.build,
   boat: Icons.boat,
   train: Icons.train,
+  production: Icons.goods,
+  visitor: Icons.population,
   business: Icons.coin,
   quest: Icons.trophy,
   level: Icons.xp,

@@ -1,7 +1,7 @@
 import type { InboxKind, InboxStore, InboxTarget } from '@/app/inbox';
 import type { Game, ReadyItem, ReadyKind } from '@/core/game';
 import type { KeyValueStorage } from '@/core/save';
-import { formatList, t, tn } from '@/i18n';
+import { formatList, formatNumber, t, tn } from '@/i18n';
 import { questTitle } from '@/i18n/content';
 import { readyMessage } from '@/i18n/ready';
 import { Icons } from './icons';
@@ -17,6 +17,7 @@ const READY_ICONS: Record<ReadyKind, string> = {
   build: Icons.build,
   boat: Icons.boat,
   train: Icons.train,
+  production: Icons.goods,
   business: Icons.coin,
 };
 
@@ -111,10 +112,15 @@ export class Notices {
     const items = game.readySince(this.lastSeen, game.now());
     const counts = new Map<ReadyKind, number>();
     for (const item of items) counts.set(item.kind, (counts.get(item.kind) ?? 0) + 1);
-    if (counts.size === 0) return;
-    const parts = (['crop', 'build', 'boat', 'train', 'business'] as const)
+    const parts = (['crop', 'build', 'production', 'boat', 'train', 'business'] as const)
       .filter((kind) => counts.has(kind))
       .map((kind) => tn(`away.${kind}`, counts.get(kind) ?? 0));
+    // La vie de la ville pendant l'absence : impôts dans le coffre, faim, visiteur.
+    const chest = game.chestInfo();
+    if (chest.available && chest.coins > 0) parts.push(t('away.chest', { coins: formatNumber(chest.coins) }));
+    if (game.now() >= game.state.meals.fedUntil) parts.push(t('away.hungry'));
+    if (game.state.visitor) parts.push(t('away.visitor'));
+    if (parts.length === 0) return;
     const first = items[0];
     toasts.show(
       `${t('away.title')} ${t('away.summary', { list: formatList(parts) })}`,

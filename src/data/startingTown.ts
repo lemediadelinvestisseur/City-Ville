@@ -5,7 +5,7 @@ export interface StartingPlacement {
   x: number;
   y: number;
   /** État initial particulier : loyer prêt, culture mûre… */
-  preset?: 'rentReady' | 'ripeStrawberry';
+  preset?: 'rentReady' | 'ripeWheat';
 }
 
 const MAIN_ROAD_Y = 20;
@@ -30,10 +30,10 @@ export const STARTING_TOWN: readonly StartingPlacement[] = [
   // Bâtiments reliés aux routes (sinon ils ne fonctionnent pas).
   { defId: 'town_hall', x: 20, y: 16 },
   { defId: 'barn', x: 17, y: 11 },
-  { defId: 'plot', x: 13, y: 15, preset: 'ripeStrawberry' },
-  { defId: 'plot', x: 14, y: 15, preset: 'ripeStrawberry' },
-  { defId: 'plot', x: 13, y: 16, preset: 'ripeStrawberry' },
-  { defId: 'plot', x: 14, y: 16, preset: 'ripeStrawberry' },
+  { defId: 'plot', x: 13, y: 15, preset: 'ripeWheat' },
+  { defId: 'plot', x: 14, y: 15, preset: 'ripeWheat' },
+  { defId: 'plot', x: 13, y: 16, preset: 'ripeWheat' },
+  { defId: 'plot', x: 14, y: 16, preset: 'ripeWheat' },
   { defId: 'cottage', x: 17, y: 21, preset: 'rentReady' },
   { defId: 'cottage', x: 14, y: 21, preset: 'rentReady' },
   { defId: 'flower_bed', x: 24, y: 19 },

@@ -5,6 +5,8 @@ import { t, tn } from '@/i18n';
 import { clear, h, icon } from './dom';
 import { formatDuration, formatNumber } from './format';
 import { Icons } from './icons';
+import { itemEmoji } from './items';
+import { itemName } from '@/i18n/content';
 import type { Modals } from './Modals';
 
 /** Libellé d'un défi du jour (« Récolter 6 champs »). */
@@ -21,8 +23,10 @@ export function rewardChips(reward: Reward): HTMLElement {
     reward.coins ? chip(Icons.coin, `+${formatNumber(reward.coins)}`) : null,
     reward.cash ? chip(Icons.cash, `+${formatNumber(reward.cash)}`) : null,
     reward.xp ? chip(Icons.xp, `+${formatNumber(reward.xp)} XP`) : null,
-    reward.goods ? chip(Icons.goods, `+${formatNumber(reward.goods)}`) : null,
     reward.energy ? chip(Icons.energy, `+${formatNumber(reward.energy)}`) : null,
+    ...Object.entries(reward.items ?? {}).map(([id, qty]) =>
+      h('span', { class: 'chip', title: itemName(id) }, `${itemEmoji(id)} +${formatNumber(qty)}`),
+    ),
   );
 }
 
@@ -58,8 +62,11 @@ export class DailyPanel {
   }
 
   private render(): void {
-    const content = this.content;
-    if (!content) return;
+    if (this.content) this.renderInto(this.content);
+  }
+
+  /** Défis du jour dans un conteneur (fenêtre « Aujourd'hui »). */
+  renderInto(content: HTMLElement): void {
     clear(content);
     const info = this.game.dailyInfo();
     if (!info.available) {
@@ -73,7 +80,7 @@ export class DailyPanel {
         class: `btn btn--small ${task.claimed ? 'btn--secondary' : 'btn--gold'}`,
         text: task.claimed ? t('daily.claimed') : t('daily.claim'),
         onClick: () => {
-          if (this.game.claimDaily(index).ok) this.render();
+          this.game.claimDaily(index);
         },
       });
       claim.disabled = task.claimed || !task.done;
@@ -102,7 +109,7 @@ export class DailyPanel {
       class: `btn ${info.bonusClaimed ? 'btn--secondary' : 'btn--gold'}`,
       text: info.bonusClaimed ? t('daily.claimed') : t('daily.claim'),
       onClick: () => {
-        if (this.game.claimDailyBonus().ok) this.render();
+        this.game.claimDailyBonus();
       },
     });
     bonus.disabled = info.bonusClaimed || !allClaimed;

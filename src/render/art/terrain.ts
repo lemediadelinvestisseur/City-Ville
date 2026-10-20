@@ -331,6 +331,50 @@ export function cropOverlay(cropId: string, stage: CropStage): ArtPiece {
         }
         break;
       }
+      case 'flowers': {
+        ctx.strokeStyle = leafDark;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + j, sy);
+        ctx.lineTo(sx + j, sy - 14);
+        ctx.stroke();
+        const petals = ['#e91e63', '#ffeb3b', '#9c27b0', '#ff5722'][Math.floor(rand() * 4)] ?? '#e91e63';
+        ctx.fillStyle = petals;
+        for (let k = 0; k < 5; k++) {
+          const a = (k * Math.PI * 2) / 5;
+          ctx.beginPath();
+          ctx.ellipse(sx + j + Math.cos(a) * 3, sy - 16 + Math.sin(a) * 3, 2.6, 1.8, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#fff59d';
+        ctx.beginPath();
+        ctx.arc(sx + j, sy - 16, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case 'cotton': {
+        ctx.strokeStyle = '#6d4c41';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + j, sy);
+        ctx.lineTo(sx + j, sy - 18);
+        ctx.stroke();
+        ctx.fillStyle = leafDark;
+        ctx.beginPath();
+        ctx.ellipse(sx + j, sy - 9, 6, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        for (const [bx, by] of [
+          [-3, -17],
+          [3, -15],
+          [0, -21],
+        ] as const) {
+          ctx.beginPath();
+          ctx.arc(sx + bx + j, sy + by, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      }
       case 'apple': {
         ctx.fillStyle = '#6d4c41';
         ctx.fillRect(sx + j - 1.5, sy - 14, 3, 14);

@@ -39,13 +39,25 @@ La planche de tous les visuels générés est disponible en développement sur `
 ## Ce que contient la V1
 
 - **Carte isométrique** de 40 × 40 cases : déplacement au doigt avec inertie, zoom par pincement ou molette.
-- **Constructions** : habitations (loyers + habitants), commerces (marchandises → recettes), bâtiments publics
+- **Constructions** : habitations (loyers + habitants), commerces (produits → recettes), élevage et ateliers, bâtiments publics
   (population maximale), stockage, champs, décorations (bonus de revenus à proximité) et routes.
 - **Chantiers à minuteur** (de 30 s à 16 h selon le bâtiment), puis inauguration ; accélérables contre du cash.
   Un **ouvrier** par chantier (un au départ, un deuxième dans la boutique).
 - **Routes obligatoires** : un bâtiment ne fonctionne que relié à une route.
-- **Train** : gare le long de la voie ferrée (niveau 10), livraisons de marchandises contre des pièces.
-- **Cultures** : 9 cultures, des fraises (5 min) aux pommes (24 h) ; mode plantation en série.
+- **Train** : gare le long de la voie ferrée (niveau 10), une grosse commande par jour livrée en train.
+- **Cultures** : 11 cultures, du blé (5 min) aux pommes (24 h) ; mode plantation en série ; la pluie les
+  fait pousser plus vite.
+- **Produits et inventaire** : 21 produits (récoltes, poisson, œufs, lait, farine, pain, fromage…) dans
+  l'entrepôt, à vendre au marchand ou au marché. **Élevage** (poulailler, étable, ferme d'élevage) et
+  **ateliers** (moulin, fournil, fromagerie, conserverie) transforment les récoltes.
+- **Bonheur de la ville** : repas servis à la mairie (variés, c'est mieux), services et cadre de vie ; il
+  augmente ou baisse les loyers et le nombre d'habitants. Coffre d'impôts à la mairie.
+- **Chaque jour** (bouton « Aujourd'hui ») : défis et cadeau, commandes en camion et en train, roue de la
+  chance ; visiteur surprise ; résumé au retour.
+- **Quartier** : demandes de produits aux voisins, défi de quartier de la semaine, concours de la plus belle
+  ville (« J'aime »).
+- **Ambiance** : musique et bruits d'ambiance, vibrations (désactivables), voitures, train et bateaux animés,
+  météo, photo de la ville à partager.
 - **Pêche** : ville au bord de la mer, ponton / port de pêche / port industriel, sorties en mer.
 - **Progression jusqu'au niveau 30** (~3 semaines), 66 constructions, calibrée par un joueur simulé.
 - **Deux rives** séparées par un bras de mer, reliées par un pont (niveau 15) ; **cycle jour/nuit**.

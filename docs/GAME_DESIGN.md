@@ -9,11 +9,12 @@ chantier, on revient plus tard.
 ## Boucle principale
 
 ```
- Champs, bateaux ──► Marchandises ──approvisionnement──► Commerces ──recette──► Pièces
-   ▲                                                                          │
-   └──── graines ◄──────────── Habitations ──loyers──► Pièces ◄───────────────┘
-                                     │
-                                     └─ habitants (plafonnés par les bâtiments publics)
+ Champs, bateaux, élevage ──► Produits ──► Ateliers (farine, pain, fromage…) ──► Produits transformés
+        ▲                         │                                                      │
+        │                         ├──► Commerces ──recette──► Pièces ◄── loyers ── Habitations
+        │                         ├──► Repas de la ville ──► Bonheur ──► loyers et habitants max
+        │                         └──► Commandes, visiteurs, voisins, marchand ──► Pièces, XP
+        └──── graines, nourriture des bêtes ◄──────────── Pièces
  Pièces ──► nouvelles constructions, agrandissements ──► XP ──► niveaux ──► déblocages
 ```
 
@@ -34,13 +35,16 @@ chantier, on revient plus tard.
   purement visuel (fenêtres et lampadaires allumés). Option « heure réelle » ou « toujours le jour ».
 - **Voisins** : on ajoute des voisins, on visite leur ville et on les aide une fois par jour (pièces pour les
   deux). Classements par niveau et par population.
-- **Marché** (niveau 5) : vente de lots de 10 à 500 marchandises, de 1 à 12 pièces l'unité, 5 lots au plus,
-  taxe de 10 %, invendus rendus après 48 h.
+- **Marché** (niveau 5) : vente de lots de 10 à 500 unités d'un produit, à un prix plafonné selon le produit
+  (12 pièces l'unité pour un produit brut, plus pour un produit transformé), 5 lots au plus, taxe de 10 %,
+  invendus rendus après 48 h.
 - **Pêche** : la ville est au bord de la mer. Un ponton, un port de pêche ou un port industriel se pose au bord
-  de l'eau ; son bateau part en mer (choix de la sortie, comme une culture) et rapporte des marchandises.
+  de l'eau ; son bateau part en mer (choix de la sortie, comme une culture) et rapporte du poisson.
 - **Habitants** : apportés par les habitations, plafonnés par les bâtiments publics (mairie, école…). Certains
   commerces exigent un nombre d'habitants minimum.
-- **Marchandises** : produites par les champs, stockées (grange, entrepôt), consommées par les commerces.
+- **Produits** : blé, fraises, poisson, œufs, farine, pain, fromage… (21 produits) rangés dans l'entrepôt
+  (capacité : grange, entrepôts). Ils approvisionnent les commerces, nourrissent la ville, se livrent en
+  commande, se donnent aux voisins, se vendent au marché ou au marchand (3 pièces par point de valeur).
 - **Décorations** : bonus de revenus (%) sur les habitations et commerces proches (plafond +50 %).
 - **Agrandissements** : zones de 8 × 8 cases voisines de celles déjà achetées. Plus la zone est loin de la ville
   de départ, plus elle est chère et tardive ; chaque achat renchérit un peu les suivants.
@@ -56,8 +60,9 @@ chantier, on revient plus tard.
 | Cash         | Monnaie premium : accélérations, objets premium, échanges, énergie |
 | Énergie      | Limite le nombre d'actions par session                             |
 | XP / niveaux | Progression, déblocages, recharge d'énergie, 1 cash par niveau     |
-| Marchandises | Lien entre agriculture et commerce                                 |
+| Produits     | Lien entre ferme, ateliers, commerces et repas de la ville         |
 | Habitants    | Débloquent les commerces, plafonnés par les services publics       |
+| Bonheur      | Note sur 100 (repas, services, cadre de vie) : loyers et habitants |
 
 ## Contenu et équilibrage
 
@@ -81,23 +86,23 @@ avance, plus les chantiers, les cultures et les sorties en mer sont longs, et pl
 | Manoir            | 4×4    | 120 000 pièces | niv. 28   | 16 h     | 800       | 8 500 / 12 h |
 | Chalet de luxe    | 2×2    | 25 cash        | niv. 1    | immédiat | 60        | 220 / 10 min |
 
-| Commerce           | Taille | Prix           | Débloqué            | Chantier | Marchandises | Service             | Recette |
-| ------------------ | ------ | -------------- | ------------------- | -------- | ------------ | ------------------- | ------- |
-| Boulangerie        | 2×2    | 500 pièces     | niv. 1              | 1 min    | 20           | 10 clients / 3 min  | 150     |
-| Fleuriste          | 2×2    | 900 pièces     | niv. 2, 40 hab.     | 3 min    | 30           | 15 clients / 10 min | 270     |
-| Café               | 2×2    | 1 600 pièces   | niv. 3, 70 hab.     | 5 min    | 45           | 20 clients / 30 min | 480     |
-| Pizzeria           | 2×2    | 2 600 pièces   | niv. 5, 120 hab.    | 15 min   | 65           | 25 clients / 1 h    | 780     |
-| Épicerie           | 3×3    | 5 000 pièces   | niv. 7, 200 hab.    | 30 min   | 110          | 40 clients / 2 h    | 1 450   |
-| Cinéma             | 3×3    | 9 000 pièces   | niv. 10, 350 hab.   | 1 h      | 170          | 60 clients / 3 h    | 2 600   |
-| Boutique de mode   | 2×2    | 11 000 pièces  | niv. 11, 450 hab.   | 1 h 30   | 200          | 50 clients / 3 h    | 3 100   |
-| Librairie          | 2×2    | 15 000 pièces  | niv. 13, 600 hab.   | 2 h      | 240          | 60 clients / 4 h    | 3 900   |
-| Restaurant         | 3×3    | 18 000 pièces  | niv. 14, 700 hab.   | 2 h 30   | 280          | 80 clients / 4 h    | 4 700   |
-| Supermarché        | 3×3    | 28 000 pièces  | niv. 17, 1 000 hab. | 4 h      | 420          | 120 clients / 6 h   | 7 600   |
-| Hôtel              | 3×3    | 38 000 pièces  | niv. 19, 1 300 hab. | 5 h      | 520          | 100 clients / 6 h   | 9 800   |
-| Centre commercial  | 4×4    | 60 000 pièces  | niv. 22, 1 800 hab. | 8 h      | 820          | 200 clients / 8 h   | 16 500  |
-| Bowling            | 3×3    | 75 000 pièces  | niv. 24, 2 200 hab. | 10 h     | 950          | 160 clients / 10 h  | 19 500  |
-| Parc d’attractions | 4×4    | 110 000 pièces | niv. 27, 2 800 hab. | 14 h     | 1350         | 300 clients / 12 h  | 29 000  |
-| Stade              | 4×4    | 160 000 pièces | niv. 30, 3 500 hab. | 24 h     | 2000         | 500 clients / 24 h  | 46 000  |
+| Commerce           | Taille | Prix           | Débloqué            | Chantier | Produits                          | Service             | Recette |
+| ------------------ | ------ | -------------- | ------------------- | -------- | --------------------------------- | ------------------- | ------- |
+| Boulangerie        | 2×2    | 500 pièces     | niv. 1              | 1 min    | 20 blé                            | 10 clients / 3 min  | 150     |
+| Fleuriste          | 2×2    | 900 pièces     | niv. 2, 40 hab.     | 3 min    | 30 fleurs                         | 15 clients / 10 min | 270     |
+| Café               | 2×2    | 1 600 pièces   | niv. 3, 70 hab.     | 5 min    | 45 fraises                        | 20 clients / 30 min | 480     |
+| Pizzeria           | 2×2    | 2 600 pièces   | niv. 5, 120 hab.    | 15 min   | 35 farine                         | 25 clients / 1 h    | 780     |
+| Épicerie           | 3×3    | 5 000 pièces   | niv. 7, 200 hab.    | 30 min   | 55 carottes, 35 œufs              | 40 clients / 2 h    | 1 450   |
+| Cinéma             | 3×3    | 9 000 pièces   | niv. 10, 350 hab.   | 1 h      | 170 maïs                          | 60 clients / 3 h    | 2 600   |
+| Boutique de mode   | 2×2    | 11 000 pièces  | niv. 11, 450 hab.   | 1 h 30   | 200 coton                         | 50 clients / 3 h    | 3 100   |
+| Librairie          | 2×2    | 15 000 pièces  | niv. 13, 600 hab.   | 2 h      | 40 gâteaux                        | 60 clients / 4 h    | 3 900   |
+| Restaurant         | 3×3    | 18 000 pièces  | niv. 14, 700 hab.   | 2 h 30   | 45 viande, 140 tomates            | 80 clients / 4 h    | 4 700   |
+| Supermarché        | 3×3    | 28 000 pièces  | niv. 17, 1 000 hab. | 4 h      | 45 conserves, 95 lait, 45 pain    | 120 clients / 6 h   | 7 600   |
+| Hôtel              | 3×3    | 38 000 pièces  | niv. 19, 1 300 hab. | 5 h      | 60 pain, 45 fromage, 60 confiture | 100 clients / 6 h   | 9 800   |
+| Centre commercial  | 4×4    | 60 000 pièces  | niv. 22, 1 800 hab. | 8 h      | 410 coton, 410 tournesols         | 200 clients / 8 h   | 16 500  |
+| Bowling            | 3×3    | 75 000 pièces  | niv. 24, 2 200 hab. | 10 h     | 475 maïs, 160 viande              | 160 clients / 10 h  | 19 500  |
+| Parc d’attractions | 4×4    | 110 000 pièces | niv. 27, 2 800 hab. | 14 h     | 110 gâteaux, 675 pommes           | 300 clients / 12 h  | 29 000  |
+| Stade              | 4×4    | 160 000 pièces | niv. 30, 3 500 hab. | 24 h     | 220 viande, 220 pain, 665 maïs    | 500 clients / 24 h  | 46 000  |
 
 | Service public / stockage | Prix           | Débloqué | Chantier | Effet           |
 | ------------------------- | -------------- | -------- | -------- | --------------- |
@@ -124,14 +129,14 @@ avance, plus les chantiers, les cultures et les sorties en mer sont longs, et pl
 | Port de pêche           | 3×3    | 15 000 pièces | niv. 12  | 2 h      | niveau 2 |
 | Port industriel         | 3×3    | 50 000 pièces | niv. 22  | 8 h      | niveau 3 |
 
-| Sortie en mer           | Durée  | Coût  | Marchandises | XP  | Bateau    | Débloquée |
-| ----------------------- | ------ | ----- | ------------ | --- | --------- | --------- |
-| Sortie côtière          | 30 min | 40    | 45           | 3   | niveau 1+ | niv. 1    |
-| Pêche au large          | 3 h    | 150   | 180          | 8   | niveau 1+ | niv. 8    |
-| Marée de nuit           | 8 h    | 350   | 420          | 15  | niveau 1+ | niv. 15   |
-| Campagne de chalut      | 6 h    | 700   | 750          | 25  | niveau 2+ | niv. 12   |
-| Grande campagne         | 12 h   | 1 200 | 1 400        | 40  | niveau 2+ | niv. 18   |
-| Expédition industrielle | 24 h   | 3 000 | 3 200        | 90  | niveau 3+ | niv. 22   |
+| Sortie en mer           | Durée  | Coût  | Poissons | XP  | Bateau    | Débloquée |
+| ----------------------- | ------ | ----- | -------- | --- | --------- | --------- |
+| Sortie côtière          | 30 min | 40    | 45       | 3   | niveau 1+ | niv. 1    |
+| Pêche au large          | 3 h    | 150   | 180      | 8   | niveau 1+ | niv. 8    |
+| Marée de nuit           | 8 h    | 350   | 420      | 15  | niveau 1+ | niv. 15   |
+| Campagne de chalut      | 6 h    | 700   | 750      | 25  | niveau 2+ | niv. 12   |
+| Grande campagne         | 12 h   | 1 200 | 1 400    | 40  | niveau 2+ | niv. 18   |
+| Expédition industrielle | 24 h   | 3 000 | 3 200    | 90  | niveau 3+ | niv. 22   |
 
 | Décoration           | Prix          | Débloquée | Bonus           |
 | -------------------- | ------------- | --------- | --------------- |
@@ -152,17 +157,19 @@ avance, plus les chantiers, les cultures et les sorties en mer sont longs, et pl
 | Arc de triomphe      | 45 000 pièces | niv. 28   | +15 % (rayon 4) |
 | Fontaine             | 15 cash       | niv. 1    | +10 % (rayon 3) |
 
-| Culture     | Pousse | Graines | Marchandises | XP  | Débloquée |
-| ----------- | ------ | ------- | ------------ | --- | --------- |
-| Fraises     | 5 min  | 10      | 10           | 1   | niv. 1    |
-| Blé         | 30 min | 25      | 30           | 2   | niv. 2    |
-| Carottes    | 1 h    | 45      | 50           | 3   | niv. 3    |
-| Maïs        | 2 h    | 80      | 85           | 4   | niv. 5    |
-| Tomates     | 4 h    | 120     | 140          | 6   | niv. 7    |
-| Citrouilles | 8 h    | 180     | 240          | 8   | niv. 10   |
-| Tournesols  | 12 h   | 250     | 330          | 10  | niv. 14   |
-| Raisin      | 16 h   | 320     | 430          | 12  | niv. 19   |
-| Pommes      | 24 h   | 450     | 620          | 16  | niv. 24   |
+| Culture     | Pousse | Graines | Récolte | XP  | Débloquée |
+| ----------- | ------ | ------- | ------- | --- | --------- |
+| Blé         | 5 min  | 10      | 10      | 1   | niv. 1    |
+| Fraises     | 30 min | 25      | 30      | 2   | niv. 2    |
+| Fleurs      | 15 min | 15      | 20      | 2   | niv. 2    |
+| Carottes    | 1 h    | 45      | 50      | 3   | niv. 3    |
+| Maïs        | 2 h    | 80      | 85      | 4   | niv. 5    |
+| Tomates     | 4 h    | 120     | 140     | 6   | niv. 7    |
+| Coton       | 6 h    | 150     | 180     | 7   | niv. 9    |
+| Citrouilles | 8 h    | 180     | 240     | 8   | niv. 10   |
+| Tournesols  | 12 h   | 250     | 330     | 10  | niv. 14   |
+| Raisin      | 16 h   | 320     | 430     | 12  | niv. 19   |
+| Pommes      | 24 h   | 450     | 620     | 16  | niv. 24   |
 
 | Niveau | XP cumulée | Énergie max |
 | ------ | ---------- | ----------- |
@@ -173,15 +180,15 @@ avance, plus les chantiers, les cultures et les sorties en mer sont longs, et pl
 | 5      | 210        | 20          |
 | 6      | 400        | 21          |
 | 8      | 760        | 23          |
-| 10     | 1 350      | 25          |
-| 12     | 2 500      | 27          |
-| 15     | 4 700      | 30          |
-| 18     | 6 650      | 33          |
-| 20     | 8 100      | 35          |
-| 22     | 9 700      | 37          |
-| 25     | 12 200     | 40          |
-| 28     | 15 000     | 43          |
-| 30     | 17 000     | 45          |
+| 10     | 1 250      | 25          |
+| 12     | 2 200      | 27          |
+| 15     | 5 300      | 30          |
+| 18     | 9 350      | 33          |
+| 20     | 11 300     | 35          |
+| 22     | 14 450     | 37          |
+| 25     | 20 350     | 40          |
+| 28     | 27 150     | 43          |
+| 30     | 33 200     | 45          |
 
 | Distance à la ville (zones) | Prix (premier achat) | Niveau requis |
 | --------------------------- | -------------------- | ------------- |
@@ -194,7 +201,7 @@ avance, plus les chantiers, les cultures et les sorties en mer sont longs, et pl
 
 Chaque zone déjà achetée renchérit les suivantes de 8 % (et retarde d'un niveau toutes les quatre zones).
 
-Autres règles : départ avec 3 000 pièces, 5 cash, 40 marchandises ; vente d'une construction = 20 % du prix en
+Autres règles : départ avec 3 000 pièces, 5 cash, 20 blé ; vente d'une construction = 20 % du prix en
 pièces ; terminer une attente coûte `⌈0,8 × √minutes restantes⌉` cash (1 cash pour quelques minutes, 6 cash pour
 une journée). Les zones de l'extrême est sont la mer : elles ne s'achètent pas.
 
@@ -215,7 +222,7 @@ fait clignoter le bouton « Voisins » et ouvre le bon onglet.
 ## Améliorations ★ et limites par type
 
 Chaque maison, commerce, service, entrepôt et port peut recevoir jusqu'à 3 étoiles (★ au niveau 6, ★★ au 12,
-★★★ au 20). Une étoile se paie en pièces et en marchandises, puis lance un chantier à minuteur (ouvrier, marteau,
+★★★ au 20). Une étoile se paie en pièces, puis lance un chantier à minuteur (ouvrier, marteau,
 pièces à ramasser à la fin) :
 
 | Catégorie | Gain par étoile                |
@@ -226,7 +233,7 @@ pièces à ramasser à la fin) :
 | Entrepôts | +30 % de capacité              |
 | Ports     | −15 % de durée des expéditions |
 
-Coût d'une étoile : 20 %, 30 % puis 40 % du prix d'achat (et 1 marchandise par 100 pièces, minimum 5). La 1re
+Coût d'une étoile : 20 %, 30 % puis 40 % du prix d'achat. La 1re
 étoile est plus rentable que racheter le bâtiment, la 3e un peu moins : améliorer n'est jamais un piège, mais ne
 remplace pas totalement la construction.
 
@@ -238,12 +245,9 @@ remplace pas totalement la construction.
 - **Ouvriers** : un chantier à minuteur (construction ou amélioration) occupe un ouvrier jusqu'à son
   inauguration. On commence avec un ouvrier ; un deuxième s'achète une fois dans la boutique. Routes, champs
   et décorations (immédiats) n'en demandent pas.
-- **Matériaux** : commerces, services et gare coûtent aussi des marchandises (1 pour 40 pièces, au plus 400).
-- **Gare** (niveau 10, 6 000 pièces + 150 marchandises, 30 min) : se pose le long de la voie ferrée qui
-  descend des montagnes à l'ouest de la ville. Le train emporte des marchandises et revient avec des pièces
-  (5 à 7 pièces par marchandise, moins qu'un commerce, mais sans limite) : livraison locale (40 → 220, 30 min),
-  train régional (120 → 720, 2 h), train de marchandises (320 → 2 000, 6 h, niv. 14), grand convoi
-  (700 → 4 600, 12 h, niv. 20).
+- **Gare** (niveau 10, 6 000 pièces, 30 min) : se pose le long de la voie ferrée qui descend des montagnes à
+  l'ouest de la ville. Chaque jour, une grosse commande part en train (onglet « Commandes ») : le train
+  s'en va avec les produits et revient 2 h plus tard avec les pièces et l'XP, à décharger en touchant la gare.
 - **Champs** : une case chacun (en proportion avec les bâtiments).
 
 Le nombre d'exemplaires d'un même bâtiment est limité selon le niveau : maisons 4 + niveau/3, commerces
@@ -259,11 +263,76 @@ Un jour manqué fait repartir la série au jour 1 ; une date antérieure à la d
 
 ## Ville de départ
 
-Mairie, grange, 4 champs de fraises mûres, 2 maisonnettes avec loyer prêt, deux routes en croix, quelques
+Mairie, grange, 4 champs de blé mûr, 2 maisonnettes avec loyer prêt, deux routes en croix, quelques
 arbres, palmiers et massifs. La ville est une île : une plage la borde et la mer s'étend à l'est. Une forêt
 couvre les zones à acheter.
 
+## Élevage et ateliers
+
+On nourrit les bêtes ou on lance une production en touchant le bâtiment (bulle 📦 quand il est à l'arrêt) ;
+une production à la fois, à ramasser quand elle est prête. Les ateliers et l'élevage doivent toucher une route.
+
+| Bâtiment        | Prix          | Débloqué | Production           | Entrées → sortie                           | Durée  |
+| --------------- | ------------- | -------- | -------------------- | ------------------------------------------ | ------ |
+| Poulailler      | 1 200 pièces  | niv. 3   | Œufs frais           | 10 blé → 10 œufs                           | 30 min |
+| Étable          | 4 500 pièces  | niv. 6   | Traite               | 20 maïs → 20 lait                          | 2 h    |
+| Ferme d’élevage | 15 000 pièces | niv. 12  | Viande               | 30 maïs  20 blé → 25 viande                | 4 h    |
+| Moulin          | 1 500 pièces  | niv. 4   | Farine               | 20 blé → 10 farine                         | 10 min |
+| Fournil         | 2 500 pièces  | niv. 5   | Pain                 | 10 farine → 8 pain                         | 20 min |
+| Fournil         | 2 500 pièces  | niv. 8   | Gâteaux aux fraises  | 10 farine  10 œufs  10 fraises → 8 gâteaux | 1 h    |
+| Fromagerie      | 6 000 pièces  | niv. 9   | Fromage              | 20 lait → 8 fromage                        | 1 h    |
+| Conserverie     | 10 000 pièces | niv. 11  | Conserves de tomates | 30 tomates → 10 conserves                  | 1 h    |
+| Conserverie     | 10 000 pièces | niv. 13  | Confiture de fraises | 30 fraises → 10 confiture                  | 1 h    |
+
+## Bonheur de la ville
+
+La mairie affiche une note de bonheur sur 100 : **repas** (jusqu'à 50 points, selon le dernier repas servi et
+sa variété), **services** (25 points quand il reste de la place sous le plafond d'habitants) et **cadre de vie**
+(jusqu'à 25 points, décorations près des maisons).
+
+- **Repas** : en touchant la mairie, on sert un repas qui rassasie la ville 12 h (10 parts par tranche de
+  100 habitants, 5 au moins ; on peut resservir 2 h avant la fin). Les produits transformés comptent plus, et
+  chaque famille d'aliments présente (céréales, fruits et légumes, viande et poisson, produits laitiers) rend
+  le repas plus réjouissant.
+- **Effets** : ville ravie (80+) : loyers +20 %, habitants max +10 % ; heureuse (60+) : +10 % / +5 % ;
+  contente (40+) : aucun effet ; mécontente (20+) : loyers −10 % ; malheureuse : loyers −20 %.
+- **Coffre de la mairie** (niveau 2) : il se remplit avec les impôts, jusqu'à 8 h de réserve.
+
+## Rendez-vous quotidiens
+
+Le bouton « Aujourd'hui » regroupe trois onglets (une pastille signale ce qui attend) :
+
+- **Défis** : les défis du jour et le cadeau de série (voir plus bas).
+- **Commandes** (niveau 3) : trois livraisons en camion et une grosse commande par le train (gare), tirées
+  chaque jour parmi les produits que le joueur sait produire ; bonus quand tous les camions sont livrés.
+- **Roue de la chance** (niveau 2) : un tour gratuit par jour, plus un tour par voisin aidé (deux au plus) :
+  pièces, énergie, produits, XP, cash ou gros lot.
+
+Autres rendez-vous :
+
+- **Visiteur surprise** (niveau 3) : toutes les 5 à 9 h, un personnage (touriste, chef, routier, grand-mère)
+  passe en ville et demande un produit contre une récompense ; il repart au bout de 4 h.
+- **Météo** : pluie ou neige de temps en temps, commune à tous ; une culture plantée sous la pluie pousse 15 %
+  plus vite.
+- **Retour en jeu** : un résumé de ce qui s'est passé pendant l'absence (récoltes, productions, coffre,
+  visiteur, ville affamée).
+
+## Quartier
+
+- **Aider** un voisin rapporte des pièces, un petit cadeau en produits et un tour de roue.
+- **Demandes** : chacun peut demander un produit (5 à 200 unités) à ses voisins pendant 48 h ; les voisins
+  qui en envoient reçoivent des pièces.
+- **Défi de quartier de la semaine** : toutes les récoltes des maires comptent (objectif 150 par participant,
+  300 au moins) ; réussi, il récompense chaque participant.
+- **Plus belle ville** : en visite, on peut aimer la ville d'un voisin (une fois par semaine) ; un classement
+  des « J'aime » de la semaine s'affiche dans les voisins.
+
+## Ambiance
+
+Musique générative (désactivable), bruitages, bruits d'ambiance (vagues, oiseaux, grillons la nuit),
+vibrations variées selon l'action (désactivables), voitures sur les routes, train et bateaux qui partent et
+reviennent, photo de la ville à partager.
+
 ## Ce qui n'est pas (encore) dans la V1
 
-Voisins et visites, trains et cadeaux, collections, matériaux de construction, événements saisonniers,
-musique. Voir [ROADMAP.md](ROADMAP.md).
+Saisons et événements, collections, succès. Voir [ROADMAP.md](ROADMAP.md).

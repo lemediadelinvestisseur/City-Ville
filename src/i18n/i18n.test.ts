@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { BUILDINGS, SHOP_CATEGORIES } from '@/data/buildings';
-import { CROPS, SHIPMENTS, TRIPS } from '@/data/crops';
+import { CROPS, TRIPS } from '@/data/crops';
+import { ITEMS } from '@/data/items';
+import { RECIPES } from '@/data/recipes';
 import { LANGUAGES, matchLanguage } from '@/data/languages';
 import { CASH_OFFERS, STORE_PRODUCTS } from '@/data/products';
 import { QUESTS } from '@/data/quests';
@@ -35,6 +37,9 @@ const SIGNS = [
   'BOWLING',
   'BIBLIOTHÈQUE',
   'GARE',
+  'FOURNIL',
+  'FROMAGERIE',
+  'CONSERVES',
   'MUSÉE',
   'CONGRÈS',
   'AÉROPORT',
@@ -110,7 +115,8 @@ describe('traductions', () => {
         for (const c of SHOP_CATEGORIES) expect(content.categories[c.id], `${code} : catégorie ${c.id}`).toBeTruthy();
         for (const c of CROPS) expect(content.crops[c.id], `${code} : culture ${c.id}`).toBeTruthy();
         for (const trip of TRIPS) expect(content.trips[trip.id], `${code} : expédition ${trip.id}`).toBeTruthy();
-        for (const s of SHIPMENTS) expect(content.shipments[s.id], `${code} : livraison ${s.id}`).toBeTruthy();
+        for (const item of ITEMS) expect(content.items[item.id], `${code} : produit ${item.id}`).toBeTruthy();
+        for (const r of RECIPES) expect(content.recipes[r.id], `${code} : production ${r.id}`).toBeTruthy();
         for (const q of QUESTS) {
           const quest = content.quests[q.id];
           expect(quest?.title && quest.intro, `${code} : objectif ${q.id}`).toBeTruthy();
@@ -144,7 +150,8 @@ describe('textes', () => {
         categories: {},
         crops: {},
         trips: {},
-        shipments: {},
+        items: {},
+        recipes: {},
         quests: { welcome: { title: 'Welcome, Mayor!', intro: '…', labels: ['Collect 2 rents'] } },
         products: {},
         offers: {},

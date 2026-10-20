@@ -22,16 +22,31 @@ import {
   levelUpReward,
   speedUpCashCost,
   xpForLevel,
+  CHEST,
+  HAPPINESS_TIERS,
+  MEAL,
+  ORDERS,
+  RAIN_GROWTH_BONUS,
+  VISITOR,
+  WHEEL,
+  chestRatePerHour,
+  mealNeed,
+  type HappinessTier,
 } from '@/data/balance';
 import { BUILDINGS, getBuildingDef, needsRoad } from '@/data/buildings';
-import { CROPS, SHIPMENTS, TRIPS, getCropDef, getShipmentDef, getTripDef } from '@/data/crops';
+import { CROPS, TRIPS, getCropDef, getTripDef } from '@/data/crops';
+import { FOOD_FAMILIES, ITEMS, bagCount, findItemDef, getItemDef, isFood, sellPrice, type ItemBag } from '@/data/items';
+import { RECIPES, getRecipeDef } from '@/data/recipes';
+import { WHEEL_PRIZES, wheelReward } from '@/data/wheel';
 import { DAILY_MIN_LEVEL } from '@/data/daily';
 import { MARKET } from '@/data/market';
 import { findCashOffer, findStoreProduct } from '@/data/products';
 import { QUESTS, getQuestDef } from '@/data/quests';
 import { sceneryOf } from '@/data/scenery';
 import { chunkHasLand, chunkHasMountain, isEastChunk, isWater, terrainAt } from '@/data/terrain';
-import { dailyMatches, drawDaily, localDay, nextLocalMidnight } from './daily';
+import { dailyMatches, drawDaily, localDay, nextLocalMidnight, random, seedOf } from './daily';
+import { drawOrders, producibleItems } from './orders';
+import { weatherAt } from './weather';
 import { Emitter } from './emitter';
 import { CHUNKS_X, CHUNKS_Y, OccupancyGrid, chunkKey, chunkOf, footprintDistance, inBounds } from './grid';
 import { initBuiltState } from './newGame';
@@ -50,6 +65,7 @@ import type {
   Requirements,
   Result,
   Reward,
+  Visitor,
 } from './types';
 
 export interface Clock {
@@ -82,10 +98,15 @@ export interface GameEvents {
   /** Un défi du jour vient d'être rempli (récompense à réclamer). */
   dailyCompleted: { index: number };
   dailyClaimed: { index: number | 'bonus'; reward: Reward };
+  /** Un visiteur arrive en ville (ou repart sans avoir été servi). */
+  visitorArrived: Visitor;
+  visitorLeft: undefined;
+  /** Nouvelles commandes du jour. */
+  ordersRefreshed: undefined;
 }
 
 /** Ce qui peut devenir « prêt » avec le temps (notifications, messages en jeu). */
-export type ReadyKind = 'build' | 'crop' | 'boat' | 'train' | 'business';
+export type ReadyKind = 'build' | 'crop' | 'boat' | 'train' | 'production' | 'business';
 
 export interface ReadyItem {
   entityId: number;
@@ -135,7 +156,7 @@ export type UpgradeInfo =
   | {
       status: 'available';
       stars: number;
-      cost: { coins: number; goods: number };
+      cost: { coins: number };
       level: number;
       durationSec: number;
       reason: FailReason | null;
@@ -148,13 +169,18 @@ export interface Derived {
   population: number;
   /** Population en comptant les habitations en chantier. */
   populationProjected: number;
+  /** Plafond de population, bonus de bonheur compris. */
   popCap: number;
+  /** Plafond donné par les services seuls (sans le bonheur). */
+  basePopCap: number;
+  /** Capacité de l'entrepôt (toutes sortes de produits). */
   goodsCap: number;
   energyMax: number;
   /** Chantiers en cours (constructions et améliorations) : un ouvrier chacun. */
   busyWorkers: number;
   /** Fin du chantier le plus proche, ou null. */
   nextWorkerFreeAt: number | null;
+  happiness: Happiness;
 }
 
 /** Ouvriers : occupés (chantiers en cours) sur le total. */
@@ -165,18 +191,67 @@ export interface WorkersInfo {
   nextFreeAt: number | null;
 }
 
+/** Bonheur de la ville (0 à 100) et ce qui le compose. */
+export interface Happiness {
+  score: number;
+  tier: HappinessTier;
+  /** Nourriture (0 à 50) : repas récent et varié. */
+  food: number;
+  /** Services (0 à 25) : de la place pour tout le monde. */
+  services: number;
+  /** Cadre de vie (0 à 25) : maisons embellies par des décorations. */
+  living: number;
+  /** Effet sur les loyers (+0,2 = +20 %) et le plafond de population. */
+  rent: number;
+  popCap: number;
+}
+
+/** Repas que la ville mangerait maintenant (aperçu de la mairie). */
+export interface MealPlan {
+  need: number;
+  /** Points de repas disponibles dans l'entrepôt. */
+  available: number;
+  basket: ItemBag;
+  variety: number;
+  /** La ville a encore faim ou arrive à la fin de son repas (on peut servir). */
+  canServe: boolean;
+  fedUntil: number;
+}
+
+export interface OrdersInfo {
+  available: boolean;
+  list: Array<{ items: ItemBag; reward: Reward; done: boolean; train: boolean; ready: boolean }>;
+  bonus: Reward;
+  bonusClaimed: boolean;
+  /** Commandes livrables tout de suite (bonus compris). */
+  deliverable: number;
+  resetsAt: number;
+}
+
+export interface WheelInfo {
+  available: boolean;
+  spinsLeft: number;
+}
+
 export type ExpansionInfo =
   | { status: 'unlocked' }
   | { status: 'unavailable' }
   | { status: 'purchasable'; coins: number; level: number; reason: FailReason | null };
 
-const fail = (reason: FailReason, missing?: number): { ok: false; reason: FailReason; missing?: number } =>
-  missing === undefined ? { ok: false, reason } : { ok: false, reason, missing };
+const fail = (
+  reason: FailReason,
+  missing?: number,
+  item?: string,
+): { ok: false; reason: FailReason; missing?: number; item?: string } => ({
+  ok: false,
+  reason,
+  ...(missing === undefined ? {} : { missing }),
+  ...(item === undefined ? {} : { item }),
+});
 
 const CURRENCY_REASON: Record<Currency, FailReason> = {
   coins: 'notEnoughCoins',
   cash: 'notEnoughCash',
-  goods: 'notEnoughGoods',
   energy: 'notEnoughEnergy',
 };
 
@@ -190,6 +265,8 @@ export class Game {
   private readonly byId = new Map<number, Entity>();
   private unlocked = new Set<string>();
   private derivedCache: Derived | null = null;
+  /** Minute du calcul en cache : le bonheur évolue avec le temps (faim). */
+  private derivedMinute = 0;
   /** Dernier contrôle des attentes terminées (voir `tick`). */
   private lastReadyCheck: number;
 
@@ -202,6 +279,7 @@ export class Game {
     this.regenEnergy();
     this.syncQuests();
     this.refreshDaily();
+    this.refreshOrders();
   }
 
   now(): number {
@@ -224,7 +302,9 @@ export class Game {
   // ———————————————————————————— Lecture ————————————————————————————
 
   derived(): Derived {
-    if (this.derivedCache) return this.derivedCache;
+    const minute = Math.floor(this.now() / 60_000);
+    if (this.derivedCache && this.derivedMinute === minute) return this.derivedCache;
+    this.derivedMinute = minute;
     let population = 0;
     let populationProjected = 0;
     let popCap = BASE_POP_CAP;
@@ -250,16 +330,363 @@ export class Game {
         goodsCap += Math.round(def.goodsCap * this.upgradeFactor(entity));
       }
     }
+    const happiness = this.computeHappiness(population, popCap);
     this.derivedCache = {
       population,
       populationProjected,
-      popCap,
+      popCap: Math.round(popCap * (1 + happiness.popCap)),
+      basePopCap: popCap,
       goodsCap,
       energyMax: energyMaxForLevel(this.state.level),
       busyWorkers,
       nextWorkerFreeAt,
+      happiness,
     };
     return this.derivedCache;
+  }
+
+  // ———————————————————————————— Inventaire ————————————————————————————
+
+  itemCount(id: string): number {
+    return this.state.inventory[id] ?? 0;
+  }
+
+  /** Nombre total de produits dans l'entrepôt. */
+  stock(): number {
+    return bagCount(this.state.inventory);
+  }
+
+  /** Place libre dans l'entrepôt. */
+  freeSpace(): number {
+    return Math.max(0, this.derived().goodsCap - this.stock());
+  }
+
+  /** Premier produit qui manque pour ce lot (et combien), ou null. */
+  missingItem(bag: ItemBag): { item: string; missing: number } | null {
+    for (const [item, qty] of Object.entries(bag)) {
+      const have = this.itemCount(item);
+      if (have < qty) return { item, missing: qty - have };
+    }
+    return null;
+  }
+
+  private removeItems(bag: ItemBag): void {
+    for (const [item, qty] of Object.entries(bag)) {
+      const left = this.itemCount(item) - qty;
+      if (left > 0) this.state.inventory[item] = left;
+      else delete this.state.inventory[item];
+    }
+  }
+
+  /** Range des produits (dans la limite de la place, sauf `overflow`) ; renvoie ce qui a été rangé. */
+  private addItems(bag: ItemBag, overflow = false): ItemBag {
+    const added: ItemBag = {};
+    let room = overflow ? Infinity : this.freeSpace();
+    for (const [item, qty] of Object.entries(bag)) {
+      const n = Math.min(qty, room);
+      if (n <= 0 || !findItemDef(item)) continue;
+      this.state.inventory[item] = this.itemCount(item) + n;
+      added[item] = n;
+      room -= n;
+    }
+    return added;
+  }
+
+  /** Vend des produits au marchand de passage. */
+  sellItems(item: string, qty: number): Result<{ coins: number }> {
+    const def = findItemDef(item);
+    if (!def || !Number.isInteger(qty) || qty <= 0) return fail('invalid');
+    if (this.itemCount(item) < qty) return fail('notEnoughItems', qty - this.itemCount(item), item);
+    this.removeItems({ [item]: qty });
+    const coins = sellPrice(def) * qty;
+    this.give({ coins }, null);
+    this.track({ type: 'sellItems', item, qty });
+    this.changed();
+    return { ok: true, coins };
+  }
+
+  // ———————————————————————————— Bonheur et repas ————————————————————————————
+
+  private computeHappiness(population: number, basePopCap: number): Happiness {
+    const now = this.now();
+    const { fedUntil, variety } = this.state.meals;
+    let food: number;
+    if (now < fedUntil) food = 25 + (Math.max(1, Math.min(4, variety)) - 1) * (25 / 3);
+    else food = Math.max(0, 25 * (1 - (now - fedUntil) / MEAL.durationMs));
+    const services = population <= basePopCap * 0.9 ? 25 : 15;
+    let houses = 0;
+    let decorated = 0;
+    for (const entity of this.state.entities) {
+      if (!entity.built || getBuildingDef(entity.defId).category !== 'house') continue;
+      houses++;
+      if (this.decorationBonus(entity) > 0) decorated++;
+    }
+    const living = houses > 0 ? (decorated / houses) * 25 : 0;
+    const score = Math.round(food + services + living);
+    const tier = HAPPINESS_TIERS.find((t) => score >= t.min) ?? HAPPINESS_TIERS[HAPPINESS_TIERS.length - 1]!;
+    return {
+      score,
+      tier: tier.id,
+      food: Math.round(food),
+      services,
+      living: Math.round(living),
+      rent: tier.rent,
+      popCap: tier.popCap,
+    };
+  }
+
+  happiness(): Happiness {
+    return this.derived().happiness;
+  }
+
+  /** Repas que la ville mangerait maintenant : on varie les familles d'aliments. */
+  mealPlan(): MealPlan {
+    const need = mealNeed(this.derived().population);
+    const { fedUntil } = this.state.meals;
+    const canServe = this.now() >= fedUntil - MEAL.earlyMs;
+    const stock = new Map<string, number>();
+    let available = 0;
+    for (const item of ITEMS) {
+      const qty = this.itemCount(item.id);
+      if (qty <= 0 || !isFood(item)) continue;
+      stock.set(item.id, qty);
+      available += qty * item.value;
+    }
+    const basket: ItemBag = {};
+    const families = new Set<string>();
+    let points = 0;
+    // Tour à tour dans chaque famille, le produit le plus abondant : un repas aussi varié que possible.
+    while (points < need) {
+      let progressed = false;
+      for (const family of FOOD_FAMILIES) {
+        if (points >= need) break;
+        let best: string | null = null;
+        for (const [id, qty] of stock) {
+          if (qty <= 0 || getItemDef(id).family !== family) continue;
+          if (best === null || qty > (stock.get(best) ?? 0)) best = id;
+        }
+        if (best === null) continue;
+        stock.set(best, (stock.get(best) ?? 0) - 1);
+        basket[best] = (basket[best] ?? 0) + 1;
+        points += getItemDef(best).value;
+        families.add(family);
+        progressed = true;
+      }
+      if (!progressed) break;
+    }
+    return { need, available, basket, variety: families.size, canServe, fedUntil };
+  }
+
+  /** Sert un repas à la ville (depuis la mairie). */
+  feedCity(): Result<{ basket: ItemBag; variety: number }> {
+    const plan = this.mealPlan();
+    if (!plan.canServe) return fail('notReady');
+    if (plan.available < plan.need) return fail('noFood', Math.ceil(plan.need - plan.available));
+    this.removeItems(plan.basket);
+    const now = this.now();
+    this.state.meals = { lastAt: now, fedUntil: now + MEAL.durationMs, variety: plan.variety };
+    this.derivedCache = null;
+    this.give({ xp: 4 + plan.variety * 2 }, null);
+    this.track({ type: 'feedCity', variety: plan.variety });
+    this.changed();
+    return { ok: true, basket: plan.basket, variety: plan.variety };
+  }
+
+  // ———————————————————————————— Coffre de la mairie ————————————————————————————
+
+  chestInfo(): { available: boolean; coins: number; full: boolean; fullAt: number } {
+    const available = this.state.level >= CHEST.minLevel;
+    const rate = chestRatePerHour(this.derived().population);
+    const maxMs = CHEST.maxHours * 3600_000;
+    const elapsed = Math.min(maxMs, Math.max(0, this.now() - this.state.chest.since));
+    return {
+      available,
+      coins: available ? Math.floor((rate * elapsed) / 3600_000) : 0,
+      full: elapsed >= maxMs,
+      fullAt: this.state.chest.since + maxMs,
+    };
+  }
+
+  collectChest(): Result<{ coins: number }> {
+    const info = this.chestInfo();
+    if (!info.available) return fail('levelLocked');
+    if (info.coins <= 0) return fail('empty');
+    this.state.chest.since = this.now();
+    this.give({ coins: info.coins }, null);
+    this.track({ type: 'collectChest' });
+    this.changed();
+    return { ok: true, coins: info.coins };
+  }
+
+  // ———————————————————————————— Commandes du jour ————————————————————————————
+
+  private hasIdleStation(): Entity | undefined {
+    return this.state.entities.find((e) => e.built && e.station && e.station.reward === null && this.isConnected(e));
+  }
+
+  /** Tire les commandes si le jour a changé. Renvoie vrai s'il y a eu un tirage. */
+  private refreshOrders(): boolean {
+    if (this.state.level < ORDERS.minLevel) return false;
+    const day = localDay(this.now());
+    if (this.state.orders.day === day) return false;
+    const hasStation = this.state.entities.some((e) => e.built && e.station);
+    this.state.orders = drawOrders(this.state, day, hasStation);
+    this.events.emit('ordersRefreshed', undefined);
+    return true;
+  }
+
+  ordersInfo(): OrdersInfo {
+    const { orders } = this.state;
+    const available = this.state.level >= ORDERS.minLevel && orders.list.length > 0;
+    const idleStation = this.hasIdleStation() !== undefined;
+    const list = orders.list.map((order) => ({
+      ...order,
+      ready: !order.done && this.missingItem(order.items) === null && (!order.train || idleStation),
+    }));
+    const regular = orders.list.filter((o) => !o.train);
+    const bonusReady = regular.length > 0 && regular.every((o) => o.done) && !orders.bonusClaimed;
+    return {
+      available,
+      list,
+      bonus: orders.bonus,
+      bonusClaimed: orders.bonusClaimed,
+      deliverable: available ? list.filter((o) => o.ready).length + (bonusReady ? 1 : 0) : 0,
+      resetsAt: nextLocalMidnight(this.now()),
+    };
+  }
+
+  /** Livre une commande : tout de suite (camion) ou par le train, qui revient avec la récompense. */
+  deliverOrder(index: number): Result<object> {
+    const order = this.state.orders.list[index];
+    if (!order || order.done) return fail('invalid');
+    const missing = this.missingItem(order.items);
+    if (missing) return fail('notEnoughItems', missing.missing, missing.item);
+    let station: Entity | undefined;
+    if (order.train) {
+      station = this.hasIdleStation();
+      if (!station?.station) return fail('notReady');
+    }
+    this.removeItems(order.items);
+    order.done = true;
+    if (station?.station) {
+      const now = this.now();
+      station.station = { reward: order.reward, startedAt: now, readyAt: now + ORDERS.trainTripMs };
+      this.events.emit('entityUpdated', station);
+      this.track({ type: 'sendTrain' });
+    } else {
+      this.give(order.reward, null);
+    }
+    this.track({ type: 'deliverOrder', train: order.train });
+    this.changed();
+    return { ok: true };
+  }
+
+  claimOrdersBonus(): Result<{ reward: Reward }> {
+    const { orders } = this.state;
+    const regular = orders.list.filter((o) => !o.train);
+    if (orders.bonusClaimed || regular.length === 0) return fail('invalid');
+    if (!regular.every((o) => o.done)) return fail('notReady');
+    orders.bonusClaimed = true;
+    this.give(orders.bonus, null);
+    this.changed();
+    return { ok: true, reward: orders.bonus };
+  }
+
+  // ———————————————————————————— Visiteurs ————————————————————————————
+
+  /** Fait venir ou repartir le visiteur selon l'heure. Renvoie vrai si quelque chose a changé. */
+  private refreshVisitor(): boolean {
+    const now = this.now();
+    const { visitor } = this.state;
+    if (visitor && now >= visitor.leavesAt) {
+      this.state.visitor = null;
+      this.events.emit('visitorLeft', undefined);
+      return true;
+    }
+    if (visitor || this.state.level < VISITOR.minLevel || now < this.state.nextVisitorAt) return false;
+    const rand = random(seedOf(`visitor:${this.state.nextVisitorAt}:${this.state.createdAt}`));
+    const items = producibleItems(this.state);
+    const item = items[Math.floor(rand() * items.length)] ?? 'wheat';
+    const def = getItemDef(item);
+    const qty = Math.max(5, Math.round((10 + this.state.level * 3) / def.value / 5) * 5);
+    const kinds: Visitor['kind'][] = ['tourist', 'chef', 'trucker', 'grandma'];
+    const value = qty * def.value;
+    const reward: Reward = { coins: Math.round((value * 7) / 10) * 10, xp: Math.max(3, Math.round(value / 10)) };
+    if (rand() < 0.15) reward.cash = 1;
+    this.state.visitor = {
+      kind: kinds[Math.floor(rand() * kinds.length)] ?? 'tourist',
+      item,
+      qty,
+      reward,
+      arrivedAt: now,
+      leavesAt: now + VISITOR.stayMs,
+    };
+    this.state.nextVisitorAt = now + VISITOR.stayMs + VISITOR.minGapMs + rand() * (VISITOR.maxGapMs - VISITOR.minGapMs);
+    this.events.emit('visitorArrived', this.state.visitor);
+    return true;
+  }
+
+  /** Donne au visiteur ce qu'il demande. */
+  serveVisitor(): Result<{ reward: Reward }> {
+    const visitor = this.state.visitor;
+    if (!visitor) return fail('invalid');
+    if (this.itemCount(visitor.item) < visitor.qty) {
+      return fail('notEnoughItems', visitor.qty - this.itemCount(visitor.item), visitor.item);
+    }
+    this.removeItems({ [visitor.item]: visitor.qty });
+    this.state.visitor = null;
+    this.give(visitor.reward, null);
+    this.events.emit('visitorLeft', undefined);
+    this.track({ type: 'visitor' });
+    this.changed();
+    return { ok: true, reward: visitor.reward };
+  }
+
+  dismissVisitor(): void {
+    if (!this.state.visitor) return;
+    this.state.visitor = null;
+    this.events.emit('visitorLeft', undefined);
+    this.changed();
+  }
+
+  // ———————————————————————————— Roue de la chance ————————————————————————————
+
+  wheelInfo(): WheelInfo {
+    const available = this.state.level >= WHEEL.minLevel;
+    const { day, used, extra } = this.state.wheel;
+    const today = localDay(this.now());
+    const spinsLeft = day === today ? WHEEL.freeSpins + extra - used : WHEEL.freeSpins;
+    return { available, spinsLeft: available ? Math.max(0, spinsLeft) : 0 };
+  }
+
+  private wheelToday(): { day: string; used: number; extra: number } {
+    const today = localDay(this.now());
+    if (this.state.wheel.day !== today) this.state.wheel = { day: today, used: 0, extra: 0 };
+    return this.state.wheel;
+  }
+
+  /** Tourne la roue ; `roll` (0 à 1) vient de l'interface, qui l'anime jusqu'à la case gagnée. */
+  spinWheel(roll: number): Result<{ index: number; reward: Reward }> {
+    if (!this.wheelInfo().available) return fail('levelLocked');
+    if (this.wheelInfo().spinsLeft <= 0) return fail('notReady');
+    const wheel = this.wheelToday();
+    const total = WHEEL_PRIZES.reduce((sum, prize) => sum + prize.weight, 0);
+    let target = Math.max(0, Math.min(0.999999, roll)) * total;
+    let index = 0;
+    for (; index < WHEEL_PRIZES.length - 1; index++) {
+      target -= WHEEL_PRIZES[index]!.weight;
+      if (target < 0) break;
+    }
+    const items = producibleItems(this.state);
+    const item = items[Math.floor(roll * 997) % items.length] ?? 'wheat';
+    const reward = wheelReward(WHEEL_PRIZES[index]!.id, this.state.level, item);
+    wheel.used += 1;
+    if (reward.items) this.addItems(reward.items, true);
+    this.give({ ...reward, items: undefined }, null);
+    if (reward.items) this.events.emit('reward', { entityId: null, reward: { items: reward.items } });
+    this.track({ type: 'spin' });
+    this.changed();
+    return { ok: true, index, reward };
   }
 
   /** Prochaine unité d'énergie (timestamp) ou null si l'énergie est pleine. */
@@ -349,7 +776,7 @@ export class Game {
   }
 
   private missingFor(cost: Cost): { currency: Currency; missing: number } | null {
-    for (const currency of ['coins', 'cash', 'goods', 'energy'] as const) {
+    for (const currency of ['coins', 'cash', 'energy'] as const) {
       const amount = cost[currency] ?? 0;
       if (amount > this.state[currency]) return { currency, missing: amount - this.state[currency] };
     }
@@ -442,7 +869,9 @@ export class Game {
   rentFor(entity: Entity): { coins: number; xp: number } {
     const def = getBuildingDef(entity.defId);
     if (def.category !== 'house') return { coins: 0, xp: 0 };
-    return { coins: this.withBonus(entity, def.rent.coins * this.upgradeFactor(entity)), xp: def.rent.xp };
+    // Une ville heureuse paie de meilleurs loyers (et une ville affamée, de moins bons).
+    const mood = 1 + this.happiness().rent;
+    return { coins: this.withBonus(entity, def.rent.coins * this.upgradeFactor(entity) * mood), xp: def.rent.xp };
   }
 
   payoutFor(entity: Entity): { coins: number; xp: number } {
@@ -472,9 +901,12 @@ export class Game {
       const { endsAt } = entity.upgrade;
       return now >= endsAt ? { type: 'finishUpgrade' } : { type: 'waitUpgrade', readyAt: endsAt };
     }
-    // Un commerce déjà approvisionné finit de servir ses clients ; le reste attend la route.
-    const serving = entity.business && entity.business.readyAt !== null;
-    if (!serving && !this.isConnected(entity)) return { type: 'needsRoad' };
+    // La mairie ouvre son panneau (repas, coffre, bonheur).
+    if (entity.defId === 'town_hall') return { type: 'townHall' };
+    // Ce qui a déjà commencé se termine ; le reste attend la route.
+    const busy =
+      (entity.business && entity.business.readyAt !== null) || !!entity.producer?.recipeId || !!entity.station?.reward;
+    if (!busy && !this.isConnected(entity)) return { type: 'needsRoad' };
     if (entity.house) {
       return now >= entity.house.readyAt
         ? { type: 'collectRent' }
@@ -495,9 +927,14 @@ export class Game {
       if (tripId === null) return { type: 'sendBoat' };
       return now >= readyAt ? { type: 'unloadBoat' } : { type: 'waitBoat', readyAt };
     }
+    if (entity.producer) {
+      const { recipeId, readyAt } = entity.producer;
+      if (recipeId === null) return { type: 'startProduction' };
+      return now >= readyAt ? { type: 'collectProduction' } : { type: 'waitProduction', readyAt };
+    }
     if (entity.station) {
-      const { shipmentId, readyAt } = entity.station;
-      if (shipmentId === null) return { type: 'sendTrain' };
+      const { reward, readyAt } = entity.station;
+      if (reward === null) return { type: 'sendTrain' };
       return now >= readyAt ? { type: 'unloadTrain' } : { type: 'waitTrain', readyAt };
     }
     return { type: 'info' };
@@ -514,6 +951,7 @@ export class Game {
       case 'waitCustomers':
       case 'waitBoat':
       case 'waitTrain':
+      case 'waitProduction':
         return speedUpCashCost((action.readyAt - this.now()) / 1000);
       default:
         return null;
@@ -546,7 +984,7 @@ export class Game {
     for (const def of BUILDINGS) if (def.inShop !== false && def.requires?.level === level) ids.push(def.id);
     for (const crop of CROPS) if (crop.requires?.level === level) ids.push(crop.id);
     for (const trip of TRIPS) if (trip.requires?.level === level) ids.push(trip.id);
-    for (const shipment of SHIPMENTS) if (shipment.requires?.level === level) ids.push(shipment.id);
+    for (const recipe of RECIPES) if (recipe.requires?.level === level) ids.push(recipe.id);
     return ids;
   }
 
@@ -569,7 +1007,7 @@ export class Game {
 
   private spend(cost: Cost): void {
     const energyBefore = this.state.energy;
-    for (const currency of ['coins', 'cash', 'goods', 'energy'] as const) {
+    for (const currency of ['coins', 'cash', 'energy'] as const) {
       const amount = cost[currency] ?? 0;
       if (amount > 0) this.state[currency] -= amount;
     }
@@ -580,13 +1018,19 @@ export class Game {
   }
 
   private give(reward: Reward, entityId: number | null): void {
-    const { coins = 0, cash = 0, goods = 0, energy = 0, xp = 0 } = reward;
+    const { coins = 0, cash = 0, energy = 0, xp = 0 } = reward;
     this.state.coins += coins;
     this.state.cash += cash;
     this.state.energy += energy;
-    if (goods > 0) this.state.goods = Math.min(this.derived().goodsCap, this.state.goods + goods);
+    const items = reward.items ? this.addItems(reward.items) : {};
+    const gotItems = Object.keys(items).length > 0;
     this.state.xp += xp;
-    if (coins || cash || goods || energy || xp) this.events.emit('reward', { entityId, reward });
+    if (coins || cash || energy || xp || gotItems) {
+      this.events.emit('reward', {
+        entityId,
+        reward: gotItems ? { ...reward, items } : { ...reward, items: undefined },
+      });
+    }
     if (xp > 0) this.checkLevelUp();
   }
 
@@ -622,6 +1066,8 @@ export class Game {
   tick(): void {
     let changed = this.regenEnergy();
     if (this.refreshDaily()) changed = true;
+    if (this.refreshOrders()) changed = true;
+    if (this.refreshVisitor()) changed = true;
     const now = this.now();
     const items = this.readySince(this.lastReadyCheck, now);
     this.lastReadyCheck = now;
@@ -639,7 +1085,8 @@ export class Game {
       if (!entity.built && entity.construction) push(entity, 'build', entity.construction.endsAt);
       if (entity.farm?.cropId) push(entity, 'crop', entity.farm.readyAt);
       if (entity.port?.tripId) push(entity, 'boat', entity.port.readyAt);
-      if (entity.station?.shipmentId) push(entity, 'train', entity.station.readyAt);
+      if (entity.station?.reward) push(entity, 'train', entity.station.readyAt);
+      if (entity.producer?.recipeId) push(entity, 'production', entity.producer.readyAt);
       if (entity.business && entity.business.readyAt !== null) push(entity, 'business', entity.business.readyAt);
     }
     return items.sort((a, b) => a.at - b.at);
@@ -723,7 +1170,6 @@ export class Game {
     this.byId.delete(id);
     this.state.entities = this.state.entities.filter((e) => e.id !== id);
     this.derivedCache = null;
-    this.state.goods = Math.min(this.state.goods, this.derived().goodsCap);
     this.events.emit('entityRemoved', entity);
     if (refund > 0) this.give({ coins: refund }, null);
     this.changed();
@@ -780,28 +1226,30 @@ export class Game {
     if (this.state.coins < crop.cost) return fail('notEnoughCoins', crop.cost - this.state.coins);
     this.spend({ coins: crop.cost });
     const now = this.now();
-    entity.farm = { cropId, plantedAt: now, readyAt: now + crop.growSec * 1000 };
+    // Planté sous la pluie, ça pousse plus vite.
+    const rain = weatherAt(now) === 'rain' ? 1 - RAIN_GROWTH_BONUS : 1;
+    entity.farm = { cropId, plantedAt: now, readyAt: now + Math.round(crop.growSec * rain) * 1000 };
     this.events.emit('entityUpdated', entity);
     this.track({ type: 'plant', cropId });
     this.changed();
     return { ok: true };
   }
 
-  harvest(id: number): Result<{ goods: number }> {
+  harvest(id: number): Result<{ qty: number }> {
     const entity = this.byId.get(id);
     if (!entity?.farm || entity.farm.cropId === null) return fail('invalid');
     if (this.now() < entity.farm.readyAt) return fail('notReady');
-    if (this.state.goods >= this.derived().goodsCap) return fail('storageFull');
+    if (this.freeSpace() <= 0) return fail('storageFull');
     const energy = this.useEnergy();
     if (!energy.ok) return energy;
     const crop = getCropDef(entity.farm.cropId);
-    const goods = Math.min(crop.goods, this.derived().goodsCap - this.state.goods);
+    const qty = Math.min(crop.amount, this.freeSpace());
     entity.farm = { cropId: null, plantedAt: 0, readyAt: 0 };
-    this.give({ goods, xp: crop.xp }, entity.id);
+    this.give({ items: { [crop.id]: qty }, xp: crop.xp }, entity.id);
     this.events.emit('entityUpdated', entity);
     this.track({ type: 'harvest', cropId: crop.id });
     this.changed();
-    return { ok: true, goods };
+    return { ok: true, qty };
   }
 
   /** Envoie le bateau d'un port en expédition (coût en pièces). */
@@ -824,55 +1272,76 @@ export class Game {
   }
 
   /** Décharge la pêche d'un bateau revenu (1 énergie). */
-  unloadBoat(id: number): Result<{ goods: number }> {
+  unloadBoat(id: number): Result<{ qty: number }> {
     const entity = this.byId.get(id);
     if (!entity?.port || entity.port.tripId === null) return fail('invalid');
     if (this.now() < entity.port.readyAt) return fail('notReady');
-    if (this.state.goods >= this.derived().goodsCap) return fail('storageFull');
+    if (this.freeSpace() <= 0) return fail('storageFull');
     const energy = this.useEnergy();
     if (!energy.ok) return energy;
     const trip = getTripDef(entity.port.tripId);
-    const goods = Math.min(trip.goods, this.derived().goodsCap - this.state.goods);
+    const qty = Math.min(trip.amount, this.freeSpace());
     entity.port = { tripId: null, startedAt: 0, readyAt: 0 };
-    this.give({ goods, xp: trip.xp }, entity.id);
+    this.give({ items: { fish: qty }, xp: trip.xp }, entity.id);
     this.events.emit('entityUpdated', entity);
     this.track({ type: 'unloadBoat', tripId: trip.id });
     this.changed();
-    return { ok: true, goods };
+    return { ok: true, qty };
   }
 
-  /** Charge un train en gare : les marchandises partent, les pièces reviennent avec lui. */
-  sendTrain(id: number, shipmentId: string): Result<object> {
+  /** Le train est rentré : on encaisse la récompense de la commande livrée (1 énergie). */
+  unloadTrain(id: number): Result<{ reward: Reward }> {
     const entity = this.byId.get(id);
-    if (!entity?.station || !entity.built || entity.station.shipmentId !== null) return fail('invalid');
-    if (!this.isConnected(entity)) return fail('needsRoad');
-    const shipment = getShipmentDef(shipmentId);
-    const requirement = this.checkRequirements(shipment.requires);
-    if (requirement) return fail(requirement);
-    if (this.state.goods < shipment.goods) return fail('notEnoughGoods', shipment.goods - this.state.goods);
-    this.spend({ goods: shipment.goods });
-    const now = this.now();
-    entity.station = { shipmentId, startedAt: now, readyAt: now + shipment.durationSec * 1000 };
+    const reward = entity?.station?.reward;
+    if (!entity?.station || !reward) return fail('invalid');
+    if (this.now() < entity.station.readyAt) return fail('notReady');
+    const energy = this.useEnergy();
+    if (!energy.ok) return energy;
+    entity.station = { reward: null, startedAt: 0, readyAt: 0 };
+    this.give(reward, entity.id);
     this.events.emit('entityUpdated', entity);
-    this.track({ type: 'sendTrain', shipmentId });
+    this.track({ type: 'unloadTrain' });
+    this.changed();
+    return { ok: true, reward };
+  }
+
+  // ———————————————————————————— Élevage et ateliers ————————————————————————————
+
+  /** Lance une production (nourrir les bêtes, transformer des produits). */
+  startProduction(id: number, recipeId: string): Result<object> {
+    const entity = this.byId.get(id);
+    if (!entity?.producer || !entity.built || entity.producer.recipeId !== null) return fail('invalid');
+    const recipe = getRecipeDef(recipeId);
+    if (recipe.building !== entity.defId) return fail('invalid');
+    if (!this.isConnected(entity)) return fail('needsRoad');
+    const requirement = this.checkRequirements(recipe.requires);
+    if (requirement) return fail(requirement);
+    const missing = this.missingItem(recipe.inputs);
+    if (missing) return fail('notEnoughItems', missing.missing, missing.item);
+    this.removeItems(recipe.inputs);
+    const now = this.now();
+    entity.producer = { recipeId, startedAt: now, readyAt: now + recipe.durationSec * 1000 };
+    this.events.emit('entityUpdated', entity);
+    this.track({ type: 'produce', recipeId });
     this.changed();
     return { ok: true };
   }
 
-  /** Encaisse la livraison d'un train revenu (1 énergie). */
-  unloadTrain(id: number): Result<{ coins: number }> {
+  /** Récupère une production terminée (1 énergie, place dans l'entrepôt). */
+  collectProduction(id: number): Result<{ item: string; qty: number }> {
     const entity = this.byId.get(id);
-    if (!entity?.station || entity.station.shipmentId === null) return fail('invalid');
-    if (this.now() < entity.station.readyAt) return fail('notReady');
+    if (!entity?.producer || entity.producer.recipeId === null) return fail('invalid');
+    if (this.now() < entity.producer.readyAt) return fail('notReady');
+    const recipe = getRecipeDef(entity.producer.recipeId);
+    if (this.freeSpace() < recipe.output.qty) return fail('storageFull');
     const energy = this.useEnergy();
     if (!energy.ok) return energy;
-    const shipment = getShipmentDef(entity.station.shipmentId);
-    entity.station = { shipmentId: null, startedAt: 0, readyAt: 0 };
-    this.give({ coins: shipment.coins, xp: shipment.xp }, entity.id);
+    entity.producer = { recipeId: null, startedAt: 0, readyAt: 0 };
+    this.give({ items: { [recipe.output.item]: recipe.output.qty }, xp: recipe.xp }, entity.id);
     this.events.emit('entityUpdated', entity);
-    this.track({ type: 'unloadTrain', shipmentId: shipment.id });
+    this.track({ type: 'collectProduction', recipeId: recipe.id });
     this.changed();
-    return { ok: true, coins: shipment.coins };
+    return { ok: true, item: recipe.output.item, qty: recipe.output.qty };
   }
 
   supply(id: number): Result<object> {
@@ -881,8 +1350,9 @@ export class Game {
     const def = getBuildingDef(entity.defId);
     if (def.category !== 'business') return fail('invalid');
     if (!this.isConnected(entity)) return fail('needsRoad');
-    if (this.state.goods < def.supplyGoods) return fail('notEnoughGoods', def.supplyGoods - this.state.goods);
-    this.spend({ goods: def.supplyGoods });
+    const missing = this.missingItem(def.inputs);
+    if (missing) return fail('notEnoughItems', missing.missing, missing.item);
+    this.removeItems(def.inputs);
     const now = this.now();
     entity.business = { readyAt: now + def.serveSec * 1000, suppliedAt: now };
     this.give({ xp: 1 }, entity.id);
@@ -924,7 +1394,8 @@ export class Game {
       if (entity.farm && entity.farm.cropId !== null) entity.farm.readyAt = now;
       if (entity.business && entity.business.readyAt !== null) entity.business.readyAt = now;
       if (entity.port && entity.port.tripId !== null) entity.port.readyAt = now;
-      if (entity.station && entity.station.shipmentId !== null) entity.station.readyAt = now;
+      if (entity.station?.reward) entity.station.readyAt = now;
+      if (entity.producer && entity.producer.recipeId !== null) entity.producer.readyAt = now;
       this.events.emit('entityUpdated', entity);
     }
     this.changed();
@@ -1086,12 +1557,21 @@ export class Game {
       case 'sendTrain':
       case 'unloadTrain':
         return true;
+      case 'produce':
+      case 'collectProduction': {
+        const filter = task as { recipeId?: string };
+        return !filter.recipeId || filter.recipeId === event.recipeId;
+      }
       case 'expand':
       case 'helpNeighbor':
       case 'visitNeighbor':
       case 'marketSell':
       case 'marketBuy':
+      case 'feedCity':
+      case 'deliverOrder':
         return true;
+      default:
+        return false;
     }
   }
 
@@ -1254,9 +1734,6 @@ export class Game {
     if (!reason && this.state.coins < cost.coins) {
       reason = 'notEnoughCoins';
       missing = cost.coins - this.state.coins;
-    } else if (!reason && this.state.goods < cost.goods) {
-      reason = 'notEnoughGoods';
-      missing = cost.goods - this.state.goods;
     }
     return { status: 'available', stars, cost, level, durationSec, reason, ...(missing ? { missing } : {}) };
   }
@@ -1331,10 +1808,13 @@ export class Game {
 
   /**
    * Récompense d'un coup de main donné à un voisin. Le serveur garantit la
-   * limite d'un coup de main par voisin et par jour.
+   * limite d'un coup de main par voisin et par jour. Chaque coup de main offre
+   * aussi un tour de roue (deux au plus par jour).
    */
   rewardHelpGiven(): Reward {
     const reward = helpGivenReward(this.state.level);
+    const wheel = this.wheelToday();
+    wheel.extra = Math.min(WHEEL.maxExtra, wheel.extra + 1);
     this.give(reward, null);
     this.track({ type: 'helpNeighbor' });
     this.changed();
@@ -1347,57 +1827,96 @@ export class Game {
     this.changed();
   }
 
-  /** Crédite les coups de main reçus pendant l'absence du joueur. */
+  /** Cadeau joint à chaque coup de main reçu : des produits que le joueur sait produire. */
+  helpGift(count: number): ItemBag {
+    const items = producibleItems(this.state);
+    const rand = random(seedOf(`gift:${localDay(this.now())}:${this.state.createdAt}:${count}`));
+    const gift: ItemBag = {};
+    for (let i = 0; i < count; i++) {
+      const id = items[Math.floor(rand() * items.length)] ?? 'wheat';
+      gift[id] = (gift[id] ?? 0) + Math.max(5, Math.round((5 + this.state.level) / getItemDef(id).value));
+    }
+    return gift;
+  }
+
+  /** Crédite les coups de main reçus pendant l'absence du joueur (pièces, XP et un cadeau). */
   receiveHelps(count: number): Reward {
     if (count <= 0) return {};
     const one = helpReceivedReward(this.state.level);
-    const reward = { coins: one.coins * count, xp: one.xp * count };
-    this.give(reward, null);
+    const items = this.addItems(this.helpGift(count), true);
+    const reward: Reward = { coins: one.coins * count, xp: one.xp * count, items };
+    this.give({ coins: reward.coins, xp: reward.xp }, null);
+    this.events.emit('reward', { entityId: null, reward: { items } });
     this.changed();
     return reward;
   }
 
+  /** Envoie des produits à un voisin qui en demande (le serveur les lui remet). */
+  giveToNeighbor(item: string, qty: number): Result<{ reward: Reward }> {
+    const def = findItemDef(item);
+    if (!def || !Number.isInteger(qty) || qty <= 0) return fail('invalid');
+    if (this.itemCount(item) < qty) return fail('notEnoughItems', qty - this.itemCount(item), item);
+    this.removeItems({ [item]: qty });
+    const reward: Reward = { coins: Math.round(sellPrice(def) * qty * 1.5), xp: Math.max(2, Math.round(qty / 10)) };
+    this.give(reward, null);
+    this.track({ type: 'helpNeighbor' });
+    this.changed();
+    return { ok: true, reward };
+  }
+
+  /** Produits reçus d'autres joueurs (demandes, défi de quartier), même au-delà de la capacité. */
+  receiveItems(bag: ItemBag): void {
+    const added = this.addItems(bag, true);
+    if (Object.keys(added).length === 0) return;
+    this.events.emit('reward', { entityId: null, reward: { items: added } });
+    this.changed();
+  }
+
+  /** Récompense gagnée hors de la ville (défi de quartier…). */
+  grantReward(reward: Reward): void {
+    if (reward.items) this.receiveItems(reward.items);
+    this.give({ ...reward, items: undefined }, null);
+    this.changed();
+  }
+
   // ———————————————————————————— Marché ————————————————————————————
 
-  /** Met de côté des marchandises pour un lot mis en vente. */
-  marketReserve(qty: number): Result<object> {
+  /** Met de côté des produits pour un lot mis en vente. */
+  marketReserve(item: string, qty: number): Result<object> {
     if (this.state.level < MARKET.minLevel) return fail('levelLocked');
-    if (!Number.isInteger(qty) || qty <= 0) return fail('invalid');
-    if (this.state.goods < qty) return fail('notEnoughGoods', qty - this.state.goods);
-    this.state.goods -= qty;
+    if (!findItemDef(item) || !Number.isInteger(qty) || qty <= 0) return fail('invalid');
+    if (this.itemCount(item) < qty) return fail('notEnoughItems', qty - this.itemCount(item), item);
+    this.removeItems({ [item]: qty });
     this.changed();
     return { ok: true };
   }
 
-  /** Lot accepté par le serveur (les marchandises ont été mises de côté par `marketReserve`). */
+  /** Lot accepté par le serveur (les produits ont été mis de côté par `marketReserve`). */
   marketListed(): void {
     this.track({ type: 'marketSell' });
     this.changed();
   }
 
-  /** Rend des marchandises (lot retiré ou expiré), même au-delà de la capacité. */
-  marketReturn(qty: number): void {
-    if (qty <= 0) return;
-    this.state.goods += qty;
-    this.events.emit('reward', { entityId: null, reward: { goods: qty } });
-    this.changed();
+  /** Rend des produits (lot retiré ou expiré), même au-delà de la capacité. */
+  marketReturn(bag: ItemBag): void {
+    this.receiveItems(bag);
   }
 
   /** Vérifie qu'un achat est possible (pièces et place dans l'entrepôt). */
   checkMarketPurchase(qty: number, total: number): Result<object> {
     if (this.state.level < MARKET.minLevel) return fail('levelLocked');
     if (this.state.coins < total) return fail('notEnoughCoins', total - this.state.coins);
-    if (this.state.goods + qty > this.derived().goodsCap) return fail('storageFull');
+    if (qty > this.freeSpace()) return fail('storageFull');
     return { ok: true };
   }
 
-  /** Achat confirmé par le serveur : paie et reçoit les marchandises. */
-  marketBuy(qty: number, total: number): Result<object> {
+  /** Achat confirmé par le serveur : paie et reçoit les produits. */
+  marketBuy(item: string, qty: number, total: number): Result<object> {
     const check = this.checkMarketPurchase(qty, total);
     if (!check.ok) return check;
     this.spend({ coins: total });
-    this.state.goods += qty;
-    this.events.emit('reward', { entityId: null, reward: { goods: qty } });
+    const added = this.addItems({ [item]: qty }, true);
+    this.events.emit('reward', { entityId: null, reward: { items: added } });
     this.track({ type: 'marketBuy' });
     this.changed();
     return { ok: true };
@@ -1432,9 +1951,13 @@ export class Game {
         entity.port.readyAt -= ms;
         entity.port.startedAt -= ms;
       }
-      if (entity.station && entity.station.shipmentId !== null) {
+      if (entity.station?.reward) {
         entity.station.readyAt -= ms;
         entity.station.startedAt -= ms;
+      }
+      if (entity.producer && entity.producer.recipeId !== null) {
+        entity.producer.readyAt -= ms;
+        entity.producer.startedAt -= ms;
       }
       if (entity.house) entity.house.readyAt -= ms;
       if (entity.farm && entity.farm.cropId !== null) {
@@ -1447,7 +1970,12 @@ export class Game {
       }
     }
     this.state.energyUpdatedAt -= ms;
+    this.state.meals.fedUntil -= ms;
+    this.state.chest.since -= ms;
+    this.state.nextVisitorAt -= ms;
+    if (this.state.visitor) this.state.visitor.leavesAt -= ms;
     this.lastReadyCheck -= ms;
+    this.derivedCache = null;
     this.regenEnergy();
     for (const entity of this.state.entities) this.events.emit('entityUpdated', entity);
     this.changed();

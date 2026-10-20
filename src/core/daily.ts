@@ -17,7 +17,7 @@ export function nextLocalMidnight(ms: number): number {
 }
 
 /** Hachage FNV-1a : tirage stable pour un joueur et un jour donnés. */
-function seedOf(text: string): number {
+export function seedOf(text: string): number {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);
@@ -26,7 +26,7 @@ function seedOf(text: string): number {
   return hash;
 }
 
-function random(seed: number): () => number {
+export function random(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;

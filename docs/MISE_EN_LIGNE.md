@@ -87,7 +87,8 @@ dans la démo hors ligne, tout reste visible.
 | `saves.ts`       | Sauvegarde avec révisions (conflits entre appareils), relue par le moteur du jeu             |
 | `neighbors.ts`   | Voisins, recherche, suggestions, visites, coup de main quotidien                             |
 | `leaderboard.ts` | Classements par niveau et par population                                                     |
-| `market.ts`      | Marché : lots de marchandises, achat atomique, taxe, invendus                                |
+| `market.ts`      | Marché : lots d'un produit, achat atomique, taxe, invendus                                   |
+| `social.ts`      | Quartier : demandes de produits aux voisins, défi de la semaine, « J'aime » et classement    |
 | `moderation.ts`  | Blocage et signalement (exigés par Apple pour le contenu entre joueurs)                      |
 | `chat.ts`        | Chat (salon Monde + salon par langue), annonces, modération, purge à 30 jours (`crons.ts`)   |
 | `roles.ts`       | Rôles : administrateur unique (ligne de commande), modérateurs nommés depuis l'admin         |

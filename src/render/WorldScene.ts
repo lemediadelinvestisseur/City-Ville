@@ -5,8 +5,10 @@ import { CHUNKS_X, CHUNKS_Y, chunkOf, roadMask } from '@/core/grid';
 import type { Entity, FailReason, Reward } from '@/core/types';
 import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
 import { getBuildingDef } from '@/data/buildings';
+import { findItemDef } from '@/data/items';
 import { RAIL_END_Y } from '@/data/scenery';
-import { isWater } from '@/data/terrain';
+import { forestDensity } from '@/data/scenery';
+import { isWater, visualTerrainAt } from '@/data/terrain';
 import { ArtKey, CLOUD_VARIANTS, MAX_CONSTRUCTION_SIZE } from './art/library';
 import { DEEP_SEA } from './groundStyle';
 import { LOCKED_TINT, MapLayer } from './MapLayer';
@@ -19,7 +21,9 @@ import { DropSystem } from './Drops';
 import { MovingVan } from './MovingVan';
 import { NightLayer } from './NightLayer';
 import { treeLook } from './trees';
+import { CarSystem } from './CarSystem';
 import { WalkerSystem } from './WalkerSystem';
+import { WeatherLayer } from './WeatherLayer';
 import { t } from '@/i18n';
 
 const DEPTH_ROAD = 2;
@@ -84,6 +88,11 @@ export class WorldScene extends Phaser.Scene {
   private overlay!: Phaser.GameObjects.Graphics;
   private signs = new Map<string, Phaser.GameObjects.Image>();
   private walkers!: WalkerSystem;
+  private cars!: CarSystem;
+  private weather!: WeatherLayer;
+  /** Visiteur de passage, debout au bord d'une route, avec sa bulle « ! ». */
+  private visitor: { sprite: Phaser.GameObjects.Image; badge: Phaser.GameObjects.Image; baseY: number } | null = null;
+  private ambienceAt = 0;
   private night!: NightLayer;
   private drops!: DropSystem;
   private van!: MovingVan;
@@ -145,6 +154,8 @@ export class WorldScene extends Phaser.Scene {
     this.limits = this.add.graphics().setDepth(DEPTH_LIMITS);
     this.overlay = this.add.graphics().setDepth(DEPTH_GHOST - 1);
     this.walkers = new WalkerSystem(this);
+    this.cars = new CarSystem(this);
+    this.weather = new WeatherLayer(this, DEPTH_CLOUDS + 1);
     this.drops = new DropSystem(this, (wx, wy, reward) => {
       const screen = this.camCtl.worldToScreen(wx, wy);
       this.ctx.bus.emit('fx:pickup', { screen: this.toCss(screen.x, screen.y), reward });
@@ -209,10 +220,19 @@ export class WorldScene extends Phaser.Scene {
       this.checkEdge();
     }
     this.walkers.update(delta, time);
+    this.cars.update(delta);
+    this.weather.update(delta, time);
+    if (this.visitor) {
+      this.visitor.badge.y = this.visitor.baseY + Math.sin(time / 260) * 5 * this.overlayScale;
+    }
+    if (time >= this.ambienceAt && !this.readOnly) {
+      this.ambienceAt = time + 2000;
+      this.emitAmbience();
+    }
     const bob = Math.sin(time / 260) * 5;
     for (const view of this.views.values()) {
       if (view.badge) view.badge.y = view.badgeBaseY + bob * this.overlayScale;
-      if (view.boat?.visible && view.boatHome)
+      if (view.boat?.visible && view.boatHome && !view.boat.getData('leaving'))
         view.boat.y = view.boatHome.y + Math.sin(time / 600 + view.entity.id) * 2;
     }
     this.map.animate(time);
@@ -337,8 +357,14 @@ export class WorldScene extends Phaser.Scene {
         return 'fish';
       case 'unloadTrain':
         return 'train';
+      case 'collectProduction':
+        return 'harvest';
+      case 'startProduction':
+        return 'goods';
       case 'needsRoad':
         return 'road';
+      case 'townHall':
+        return this.game_.mealPlan().canServe || this.game_.chestInfo().full ? 'meal' : null;
       case 'collectRent':
       case 'collectBusiness':
         return 'coin';
@@ -575,7 +601,6 @@ export class WorldScene extends Phaser.Scene {
     const works = worksOf(entity);
     if (works && now < works.endsAt) return works.endsAt;
     if (entity.port?.tripId && now < entity.port.readyAt) return entity.port.readyAt;
-    if (entity.station?.shipmentId && now < entity.station.readyAt) return entity.station.readyAt;
     return null;
   }
 
@@ -674,7 +699,24 @@ export class WorldScene extends Phaser.Scene {
     const pos = tileToWorld(spot.x, spot.y);
     view.boatHome = pos;
     const atSea = !!entity.port?.tripId && this.game_.now() < (entity.port?.readyAt ?? 0);
-    view.boat
+    const boat = view.boat;
+    if (boat.getData('leaving')) return;
+    if (atSea && boat.visible && !this.readOnly) {
+      // Le bateau prend le large (à l'opposé du port) avant de disparaître.
+      const out = tileToWorld(spot.x + (spot.x - entity.x) * 3, spot.y + (spot.y - entity.y) * 3);
+      boat.setData('leaving', true);
+      this.tweens.add({
+        targets: boat,
+        x: out.x,
+        y: out.y,
+        alpha: 0,
+        duration: 2400,
+        ease: 'Sine.easeIn',
+        onComplete: () => boat.setData('leaving', false).setAlpha(1).setVisible(false).setPosition(pos.x, pos.y),
+      });
+      return;
+    }
+    boat
       .setPosition(pos.x, pos.y)
       .setDepth(depthOf(spot.x, spot.y, 1, 1))
       .setVisible(!atSea);
@@ -710,11 +752,98 @@ export class WorldScene extends Phaser.Scene {
       view.train = this.add.image(0, 0, ArtKey.train).setOrigin(piece.originX, piece.originY);
     }
     const pos = tileToWorld(spot.x, spot.y);
-    const away = !!entity.station?.shipmentId && this.game_.now() < (entity.station?.readyAt ?? 0);
-    view.train
+    const away = !!entity.station?.reward && this.game_.now() < (entity.station?.readyAt ?? 0);
+    const train = view.train;
+    if (train.getData('leaving')) return;
+    if (away && train.visible && !this.readOnly) {
+      // Le train s'en va vers le nord (le tunnel des montagnes) avant de disparaître.
+      train.setData('leaving', true);
+      const end = tileToWorld(spot.x, spot.y - 8);
+      this.tweens.add({
+        targets: train,
+        x: end.x,
+        y: end.y,
+        alpha: 0,
+        duration: 2600,
+        ease: 'Sine.easeIn',
+        onComplete: () => {
+          train.setData('leaving', false).setAlpha(1).setVisible(false).setPosition(pos.x, pos.y);
+        },
+      });
+      return;
+    }
+    train
       .setPosition(pos.x, pos.y)
       .setDepth(depthOf(spot.x, spot.y, 1, 3))
       .setVisible(!away);
+  }
+
+  /** Paysage autour de la caméra : part de mer et de forêt (sons d'ambiance). */
+  private emitAmbience(): void {
+    const center = worldToTile(this.cameras.main.midPoint.x, this.cameras.main.midPoint.y);
+    let sea = 0;
+    let forest = 0;
+    let total = 0;
+    for (let dy = -6; dy <= 6; dy += 2) {
+      for (let dx = -6; dx <= 6; dx += 2) {
+        const x = Math.floor(center.x + dx);
+        const y = Math.floor(center.y + dy);
+        total++;
+        if (visualTerrainAt(x, y) === 'water') sea++;
+        else if (forestDensity(x, y) > 0.3 || this.game_.entityAt(x, y)?.defId.startsWith('tree_')) forest++;
+      }
+    }
+    this.ctx.bus.emit('world:ambience', { sea: sea / total, forest: forest / total });
+  }
+
+  /** Le visiteur attend sur une route près de la mairie. */
+  private syncVisitor(): void {
+    const visitor = this.game_.state.visitor;
+    if (!visitor || this.readOnly) {
+      this.visitor?.sprite.destroy();
+      this.visitor?.badge.destroy();
+      this.visitor = null;
+      return;
+    }
+    if (this.visitor) return;
+    const hall = this.game_.state.entities.find((e) => e.defId === 'town_hall');
+    const roads = this.game_.state.entities.filter((e) => e.defId === 'road' && this.game_.isTileUnlocked(e.x, e.y));
+    if (roads.length === 0) return;
+    const ref = hall ?? roads[0]!;
+    roads.sort((a, b) => Math.hypot(a.x - ref.x, a.y - ref.y) - Math.hypot(b.x - ref.x, b.y - ref.y));
+    const spot = roads[Math.min(roads.length - 1, 2)]!;
+    const pos = tileToWorld(spot.x + 0.7, spot.y + 0.7);
+    const sprite = this.add
+      .image(pos.x, pos.y, ArtKey.walker(3))
+      .setOrigin(0.5, 41 / 44)
+      .setScale(1.25)
+      .setDepth(depthOf(spot.x, spot.y, 1, 1) + 0.6);
+    const baseY = pos.y - 60 * this.overlayScale;
+    const badge = this.add
+      .image(pos.x, baseY, ArtKey.badge('visitor'))
+      .setOrigin(0.5, 1)
+      .setScale(this.overlayScale * 0.8)
+      .setDepth(DEPTH_OVERLAY + depthOf(spot.x, spot.y, 1, 1));
+    this.visitor = { sprite, badge, baseY };
+  }
+
+  /** Touché le visiteur (ou sa bulle) ? */
+  private hitsVisitor(screenX: number, screenY: number): boolean {
+    if (!this.visitor) return false;
+    const world = this.camCtl.screenToWorld(screenX, screenY);
+    const { sprite } = this.visitor;
+    return (
+      Math.abs(world.x - sprite.x) < 45 * this.overlayScale &&
+      world.y < sprite.y + 15 &&
+      world.y > sprite.y - 140 * this.overlayScale
+    );
+  }
+
+  /** Photo de la ville : l'image du canevas, sans l'interface. */
+  private takePhoto(): void {
+    this.game.renderer.snapshot((image) => {
+      if (image instanceof HTMLImageElement) this.ctx.bus.emit('world:photo', { url: image.src });
+    });
   }
 
   /** Haut visuel d'une construction (en coordonnées monde). */
@@ -730,18 +859,19 @@ export class WorldScene extends Phaser.Scene {
   private refreshDynamic(): void {
     this.night.refresh(Date.now(), this.game_.state.entities, (e) => this.game_.isTileUnlocked(e.x, e.y));
     for (const view of this.views.values()) {
-      if (view.timer || worksOf(view.entity) || view.entity.port?.tripId || view.entity.station?.shipmentId)
+      const e0 = view.entity;
+      if (view.timer || worksOf(e0) || e0.port?.tripId || e0.station?.reward || e0.producer?.recipeId)
         this.syncTimer(view);
       const e = view.entity;
-      const roadIssue = view.badgeKind === 'road' || !this.game_.isConnected(e);
-      if (e.house || e.business || e.farm || e.port || e.station || worksOf(e) || roadIssue) {
+      const roadIssue = view.badgeKind === 'road' || !this.game_.isConnected(e) || e.defId === 'town_hall';
+      if (e.house || e.business || e.farm || e.port || e.station || e.producer || worksOf(e) || roadIssue) {
         const badge = this.badgeFor(e);
         const progress = this.buildProgress(e);
         const barChanged = progress !== null && !view.barKey.startsWith(`${progress}@`);
         const atSea = !!e.port?.tripId && this.game_.now() < e.port.readyAt;
-        const boatChanged = !!view.boat && view.boat.visible === atSea;
-        const away = !!e.station?.shipmentId && this.game_.now() < e.station.readyAt;
-        const trainChanged = !!view.train && view.train.visible === away;
+        const boatChanged = !!view.boat && view.boat.visible === atSea && !view.boat.getData('leaving');
+        const away = !!e.station?.reward && this.game_.now() < e.station.readyAt;
+        const trainChanged = !!view.train && view.train.visible === away && !view.train.getData('leaving');
         if (
           badge !== view.badgeKind ||
           this.cropKeyFor(e) !== view.cropKey ||
@@ -765,8 +895,12 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     this.map.refreshRoads();
-    this.walkers.setRoads(roads.filter((r) => this.game_.isTileUnlocked(r.x, r.y)));
+    const unlockedRoads = roads.filter((r) => this.game_.isTileUnlocked(r.x, r.y));
+    this.walkers.setRoads(unlockedRoads);
     this.walkers.setTarget(Math.min(28, Math.round(this.game_.derived().population / 7)));
+    this.cars.setRoads(unlockedRoads.filter((r) => this.game_.entityAt(r.x, r.y)?.defId === 'road'));
+    this.cars.setTarget(Math.min(10, Math.floor(this.game_.derived().population / 80)));
+    this.syncVisitor();
   }
 
   /** Signale quand la caméra quitte la ville (bord des zones débloquées). */
@@ -920,6 +1054,9 @@ export class WorldScene extends Phaser.Scene {
         this.refreshHint();
       }),
     );
+    on(bus.on('ui:photo', () => this.takePhoto()));
+    on(game.events.on('visitorArrived', () => this.syncVisitor()));
+    on(game.events.on('visitorLeft', () => this.syncVisitor()));
     on(
       bus.on('ui:plantMode', ({ cropId }) => {
         this.plantCropId = cropId;
@@ -1161,6 +1298,10 @@ export class WorldScene extends Phaser.Scene {
       else this.select(null);
       return;
     }
+    if (this.hitsVisitor(x, y)) {
+      this.ctx.bus.emit('world:visitorTap', undefined);
+      return;
+    }
     if (this.drops.count > 0) {
       const world = this.camCtl.screenToWorld(x, y);
       if (this.drops.collectNear(world.x, world.y, 80 * this.overlayScale)) return;
@@ -1186,7 +1327,7 @@ export class WorldScene extends Phaser.Scene {
     const view = this.views.get(entity.id);
     if (view) this.bounce(view);
     const action = game.primaryAction(entity);
-    let result: { ok: boolean; reason?: FailReason; missing?: number } | null = null;
+    let result: { ok: boolean; reason?: FailReason; missing?: number; item?: string } | null = null;
     switch (action.type) {
       case 'finishBuild':
         result = game.finishBuild(entity.id);
@@ -1200,6 +1341,10 @@ export class WorldScene extends Phaser.Scene {
         break;
       case 'unloadTrain':
         result = game.unloadTrain(entity.id);
+        break;
+      case 'collectProduction':
+        result = game.collectProduction(entity.id);
+        if (result.ok && view) this.supplyFx(view);
         break;
       case 'collectRent':
         result = game.collectRent(entity.id);
@@ -1223,7 +1368,7 @@ export class WorldScene extends Phaser.Scene {
     }
     if (result) bus.emit('world:action', { type: action.type, ok: result.ok });
     if (result && !result.ok && result.reason) {
-      bus.emit('world:fail', { reason: result.reason, missing: result.missing, screen });
+      bus.emit('world:fail', { reason: result.reason, missing: result.missing, item: result.item, screen });
     }
   }
 
@@ -1514,7 +1659,10 @@ export class WorldScene extends Phaser.Scene {
     const s = this.overlayScale;
     const lines: Array<[string, string]> = [];
     if (reward.coins) lines.push([`+${reward.coins}`, '#ffd54f']);
-    if (reward.goods) lines.push([`+${reward.goods}`, '#ffb74d']);
+    // Produits : « +10 🌾 » au-dessus du bâtiment.
+    for (const [id, qty] of Object.entries(reward.items ?? {})) {
+      lines.push([`+${qty} ${findItemDef(id)?.emoji ?? ''}`, '#ffb74d']);
+    }
     if (reward.xp) lines.push([`+${reward.xp} XP`, '#81d4fa']);
     lines.forEach(([text, color], i) => this.fx.popText(a.x, a.top + 20 + i * 38 * s, text, color, i * 120, s));
     // Pièces et XP tombent au sol (à ramasser) ; le reste s'envole directement.
@@ -1526,8 +1674,9 @@ export class WorldScene extends Phaser.Scene {
       const spread = Math.max(a.w, a.d) * HALF_W * 0.9;
       this.drops.spawn(a.x, a.top + 40 * s, front + 10 * s, spread, ground, s);
     }
-    const rest: Reward = { goods: reward.goods, cash: reward.cash, energy: reward.energy };
+    const rest: Reward = { items: reward.items, cash: reward.cash, energy: reward.energy };
     const screen = this.entityScreenPoint(entityId);
-    if (screen && (rest.goods || rest.cash || rest.energy)) this.ctx.bus.emit('fx:reward', { screen, reward: rest });
+    const hasItems = Object.keys(reward.items ?? {}).length > 0;
+    if (screen && (hasItems || rest.cash || rest.energy)) this.ctx.bus.emit('fx:reward', { screen, reward: rest });
   }
 }

@@ -1,6 +1,8 @@
-import type { BuildingCategory, BuildingDef, CropDef, QuestDef, ShipmentDef, TripDef } from '@/core/types';
+import type { BuildingCategory, BuildingDef, CropDef, QuestDef, TripDef } from '@/core/types';
 import { findBuildingDef, SHOP_CATEGORIES } from '@/data/buildings';
-import { findCropDef, findShipmentDef, findTripDef } from '@/data/crops';
+import { findCropDef, findTripDef } from '@/data/crops';
+import { findItemDef } from '@/data/items';
+import { findRecipeDef } from '@/data/recipes';
 import type { CashOffer, StoreProduct } from '@/data/products';
 import { findQuestDef } from '@/data/quests';
 import { contentTranslations } from './index';
@@ -36,10 +38,16 @@ export function tripName(trip: TripDef | string): string {
   return contentTranslations()?.trips[d.id] ?? d.name;
 }
 
-export function shipmentName(shipment: ShipmentDef | string): string {
-  const d = typeof shipment === 'string' ? findShipmentDef(shipment) : shipment;
-  if (!d) return String(shipment);
-  return contentTranslations()?.shipments[d.id] ?? d.name;
+export function itemName(id: string): string {
+  const item = findItemDef(id);
+  if (!item) return id;
+  return contentTranslations()?.items[id] ?? item.name;
+}
+
+export function recipeName(id: string): string {
+  const recipe = findRecipeDef(id);
+  if (!recipe) return id;
+  return contentTranslations()?.recipes[id] ?? recipe.name;
 }
 
 export function questTitle(quest: QuestDef | string): string {

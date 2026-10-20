@@ -152,3 +152,27 @@ export function movingTruckArt(axis: 'x' | 'y'): ArtPiece {
   box(0.82, 0.9, 0.36, 0.64, 13, 22, '#81d4fa');
   return finish();
 }
+
+export const CAR_COLORS = ['#e53935', '#1e88e5', '#fdd835', '#43a047', '#fafafa', '#8e24aa'];
+
+/** Petite voiture vue en isométrique, orientée le long de l'axe x ou y. */
+export function carArt(axis: 'x' | 'y', color: string): ArtPiece {
+  const { painter: p, finish } = isoCanvas(1, 1, 30);
+  const at = (a: number, b: number): [number, number] => (axis === 'x' ? [a, b] : [b, a]);
+  const box = (a0: number, a1: number, b0: number, b1: number, z0: number, z1: number, c: string) => {
+    const [x0, y0] = at(a0, b0);
+    const [x1, y1] = at(a1, b1);
+    p.box(Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1), z0, z1, boxColors(c));
+  };
+  p.groundEllipse(0.5, 0.5, 0, 0.3, 'rgba(0,0,0,0.2)');
+  for (const a of [0.3, 0.7]) {
+    for (const b of [0.36, 0.64]) {
+      const [x, y] = at(a, b);
+      p.dot(x, y, 3, 3.2, '#263238');
+    }
+  }
+  box(0.2, 0.8, 0.34, 0.66, 3, 11, color);
+  box(0.36, 0.68, 0.37, 0.63, 11, 18, '#b3e5fc');
+  box(0.36, 0.68, 0.37, 0.63, 18, 19, color);
+  return finish();
+}

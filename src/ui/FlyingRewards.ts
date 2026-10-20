@@ -16,7 +16,7 @@ export class FlyingRewards {
   launch(from: ScreenPoint, reward: Reward, onArrive?: () => void): void {
     const entries: Array<[HudTarget, string, number]> = [];
     if (reward.coins) entries.push(['coins', Icons.coin, Math.min(6, 2 + Math.floor(reward.coins / 60))]);
-    if (reward.goods) entries.push(['goods', Icons.goods, 3]);
+    if (Object.keys(reward.items ?? {}).length > 0) entries.push(['goods', Icons.goods, 3]);
     if (reward.xp) entries.push(['level', Icons.xp, Math.min(4, 1 + Math.floor(reward.xp / 4))]);
     if (reward.cash) entries.push(['cash', Icons.cash, 2]);
     if (reward.energy) entries.push(['energy', Icons.energy, 2]);

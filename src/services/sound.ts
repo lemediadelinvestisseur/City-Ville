@@ -13,6 +13,8 @@ export type SoundName =
   | 'complete'
   | 'quest'
   | 'levelUp'
+  | 'whistle'
+  | 'chime'
   | 'error';
 
 const MUTE_KEY = 'city-ville:muted';
@@ -157,6 +159,18 @@ export class SoundFx {
       case 'levelUp':
         [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, i * 0.09, 0.24, 'square', 0.06));
         [1568, 2093].forEach((f, i) => this.tone(f, 0.5 + i * 0.08, 0.3, 'sine', 0.08));
+        break;
+      case 'whistle':
+        // Sifflet du train qui part.
+        this.tone(740, 0, 0.5, 'square', 0.04, 760);
+        this.tone(932, 0, 0.5, 'square', 0.03, 950);
+        this.tone(740, 0.6, 0.8, 'square', 0.04, 700);
+        this.tone(932, 0.6, 0.8, 'square', 0.03, 880);
+        break;
+      case 'chime':
+        // Quelqu'un arrive : petite sonnette.
+        this.tone(1319, 0, 0.25, 'sine', 0.12);
+        this.tone(1047, 0.18, 0.35, 'sine', 0.12);
         break;
       case 'error':
         this.tone(240, 0, 0.16, 'sawtooth', 0.06, 160);

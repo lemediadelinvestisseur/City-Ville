@@ -7,6 +7,7 @@ import { ArtKey, type ArtLibrary } from '@/render/art/library';
 import { clear, h, icon } from './dom';
 import { formatDuration, formatNumber } from './format';
 import { Icons } from './icons';
+import { itemEmoji } from './items';
 
 /** Choix de la culture à planter. */
 export class CropPicker {
@@ -72,8 +73,7 @@ export class CropPicker {
             { class: 'card__effect' },
             icon(Icons.clock),
             ` ${formatDuration(crop.growSec)} · `,
-            icon(Icons.goods),
-            ` ${crop.goods}`,
+            ` ${itemEmoji(crop.id)} ${crop.amount}`,
           ),
           h(
             'span',

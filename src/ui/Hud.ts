@@ -1,10 +1,19 @@
 import type { Game } from '@/core/game';
+import type { HappinessTier } from '@/data/balance';
 import { t } from '@/i18n';
 import { h, icon } from './dom';
 import { formatClock, formatNumber } from './format';
 import { Icons } from './icons';
 
 export type HudTarget = 'level' | 'coins' | 'cash' | 'energy' | 'goods' | 'population' | 'workers';
+
+const MOODS: Record<HappinessTier, string> = {
+  delighted: '😄',
+  happy: '🙂',
+  content: '😐',
+  unhappy: '🙁',
+  miserable: '😫',
+};
 
 /** Barre de ressources en haut de l'écran. */
 export class Hud {
@@ -15,6 +24,8 @@ export class Hud {
   private xpText = h('span', { class: 'gauge__text xpbar__text' });
   private levelNum = h('span', { class: 'level__num' });
   private energyTimer = h('span', { class: 'pill__sub' });
+  /** Humeur de la ville, à côté des habitants. */
+  private mood = h('span', { class: 'pill__mood', attrs: { 'aria-hidden': 'true' } });
   /** Jauge d'énergie (même rendu que la barre d'XP). */
   private energyFill = h('div', { class: 'gauge__fill gauge__fill--energy' });
   private lastEnergy: number | null = null;
@@ -24,6 +35,8 @@ export class Hud {
   constructor(
     private readonly game: Game,
     onPlus: (target: 'coins' | 'cash' | 'energy') => void,
+    /** Toucher l'entrepôt ouvre l'inventaire, les habitants ouvrent la mairie. */
+    onOpen: (target: 'goods' | 'population' | 'workers') => void,
   ) {
     const level = h(
       'div',
@@ -38,6 +51,7 @@ export class Hud {
       const isEnergy = target === 'energy';
       const value = h('span', { class: isEnergy ? 'pill__value gauge__text' : 'pill__value' });
       this.values.set(target, value);
+      const opens = target === 'goods' || target === 'population' || target === 'workers';
       // L'énergie s'affiche dans une jauge, avec le minuteur de recharge en dessous.
       const text = isEnergy
         ? h(
@@ -48,10 +62,15 @@ export class Hud {
           )
         : h('span', { class: 'pill__text' }, value);
       const el = h(
-        'div',
-        { class: `pill pill--${target}`, attrs: { 'aria-label': label } },
+        opens ? 'button' : 'div',
+        {
+          class: `pill pill--${target}${opens ? ' pill--tap' : ''}`,
+          attrs: { 'aria-label': label },
+          onClick: opens ? () => onOpen(target) : undefined,
+        },
         icon(svg, 'pill__icon'),
         text,
+        target === 'population' ? this.mood : null,
         plus
           ? h(
               'button',
@@ -118,13 +137,16 @@ export class Hud {
     this.energyFill.style.width = `${Math.round(energyRatio * 100)}%`;
     if (this.lastEnergy !== null && state.energy < this.lastEnergy) this.bump('energy');
     this.lastEnergy = state.energy;
-    this.set('goods', `${formatNumber(state.goods)}/${formatNumber(derived.goodsCap)}`);
+    const stock = this.game.stock();
+    this.set('goods', `${formatNumber(stock)}/${formatNumber(derived.goodsCap)}`);
+    const mood = MOODS[derived.happiness.tier];
+    if (this.mood.textContent !== mood) this.mood.textContent = mood;
     this.set('population', `${formatNumber(derived.population)}/${formatNumber(derived.popCap)}`);
     // Ouvriers disponibles : « 0/1 » quand le seul ouvrier est sur un chantier.
     const workers = this.game.workersInfo();
     this.set('workers', `${workers.total - workers.busy}/${workers.total}`);
     this.pills.get('workers')?.classList.toggle('is-warn', workers.busy >= workers.total);
-    const goodsFull = state.goods >= derived.goodsCap;
+    const goodsFull = stock >= derived.goodsCap;
     this.pills.get('goods')?.classList.toggle('is-warn', goodsFull);
     this.pills.get('population')?.classList.toggle('is-warn', derived.populationProjected >= derived.popCap);
     this.pills.get('energy')?.classList.toggle('is-warn', state.energy === 0);

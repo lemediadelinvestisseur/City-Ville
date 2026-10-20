@@ -210,9 +210,9 @@ describe('pêche', () => {
     expect(game.unloadBoat(pier.id)).toMatchObject({ ok: false, reason: 'notReady' });
     clock.advance(trip.durationSec);
     expect(game.primaryAction(pier).type).toBe('unloadBoat');
-    const goods = game.state.goods;
-    expect(game.unloadBoat(pier.id)).toMatchObject({ ok: true, goods: trip.goods });
-    expect(game.state.goods).toBe(goods + trip.goods);
+    const fish = game.itemCount('fish');
+    expect(game.unloadBoat(pier.id)).toMatchObject({ ok: true, qty: trip.amount });
+    expect(game.itemCount('fish')).toBe(fish + trip.amount);
     expect(game.primaryAction(pier).type).toBe('sendBoat');
   });
 });
@@ -249,18 +249,24 @@ describe('les deux rives', () => {
 describe('marché', () => {
   it('met de côté, rend, achète et encaisse', () => {
     const { game } = setup();
-    expect(game.marketReserve(10)).toMatchObject({ ok: false, reason: 'levelLocked' });
+    expect(game.marketReserve('wheat', 10)).toMatchObject({ ok: false, reason: 'levelLocked' });
     game.state.level = 5;
-    game.state.goods = 100;
-    expect(game.marketReserve(150)).toMatchObject({ ok: false, reason: 'notEnoughGoods', missing: 50 });
-    expect(game.marketReserve(60).ok).toBe(true);
-    expect(game.state.goods).toBe(40);
-    game.marketReturn(60);
-    expect(game.state.goods).toBe(100);
+    game.state.inventory = { wheat: 100 };
+    expect(game.marketReserve('wheat', 150)).toMatchObject({
+      ok: false,
+      reason: 'notEnoughItems',
+      missing: 50,
+      item: 'wheat',
+    });
+    expect(game.marketReserve('wheat', 60).ok).toBe(true);
+    expect(game.itemCount('wheat')).toBe(40);
+    game.marketReturn({ wheat: 60 });
+    expect(game.itemCount('wheat')).toBe(100);
     const coins = game.state.coins;
-    expect(game.marketBuy(50, 200).ok).toBe(true);
-    expect(game.state).toMatchObject({ goods: 150, coins: coins - 200 });
-    expect(game.marketBuy(500, 10)).toMatchObject({ ok: false, reason: 'storageFull' });
+    expect(game.marketBuy('carrot', 50, 200).ok).toBe(true);
+    expect(game.itemCount('carrot')).toBe(50);
+    expect(game.state.coins).toBe(coins - 200);
+    expect(game.marketBuy('carrot', 500, 10)).toMatchObject({ ok: false, reason: 'storageFull' });
     game.marketIncome(90);
     expect(game.state.coins).toBe(coins - 110);
   });
@@ -286,21 +292,21 @@ describe('boucle économique', () => {
 
   it('récolte, replante et fait pousser une culture', () => {
     const plot = byDef(game, 'plot')[0]!;
-    const goods = game.state.goods;
-    const strawberry = getCropDef('strawberry');
-    expect(game.harvest(plot.id)).toMatchObject({ ok: true, goods: strawberry.goods });
-    expect(game.state.goods).toBe(goods + strawberry.goods);
+    const wheatBefore = game.itemCount('wheat');
+    const wheat = getCropDef('wheat');
+    expect(game.harvest(plot.id)).toMatchObject({ ok: true, qty: wheat.amount });
+    expect(game.itemCount('wheat')).toBe(wheatBefore + wheat.amount);
     expect(game.primaryAction(plot).type).toBe('plant');
-    expect(game.plant(plot.id, 'wheat')).toMatchObject({ ok: false, reason: 'levelLocked' });
-    expect(game.plant(plot.id, 'strawberry').ok).toBe(true);
+    expect(game.plant(plot.id, 'strawberry')).toMatchObject({ ok: false, reason: 'levelLocked' });
+    expect(game.plant(plot.id, 'wheat').ok).toBe(true);
     expect(game.primaryAction(plot).type).toBe('waitCrop');
-    clock.advance(strawberry.growSec);
+    clock.advance(wheat.growSec);
     expect(game.primaryAction(plot).type).toBe('harvest');
   });
 
   it('refuse la récolte quand l’entrepôt est plein', () => {
     const plot = byDef(game, 'plot')[0]!;
-    game.state.goods = game.derived().goodsCap;
+    game.state.inventory = { carrot: game.derived().goodsCap };
     expect(game.harvest(plot.id)).toMatchObject({ ok: false, reason: 'storageFull' });
   });
 
@@ -311,11 +317,11 @@ describe('boucle économique', () => {
     game.speedUp(placed.entity.id);
     const bakery = placed.entity;
     expect(game.primaryAction(bakery).type).toBe('supply');
-    game.state.goods = 10;
-    expect(game.supply(bakery.id)).toMatchObject({ ok: false, reason: 'notEnoughGoods', missing: 10 });
-    game.state.goods = 50;
+    game.state.inventory = { wheat: 10 };
+    expect(game.supply(bakery.id)).toMatchObject({ ok: false, reason: 'notEnoughItems', missing: 10, item: 'wheat' });
+    game.state.inventory = { wheat: 50 };
     expect(game.supply(bakery.id).ok).toBe(true);
-    expect(game.state.goods).toBe(30);
+    expect(game.itemCount('wheat')).toBe(30);
     const def = getBuildingDef('bakery');
     if (def.category !== 'business') throw new Error();
     clock.advance(def.serveSec / 2);
@@ -406,7 +412,7 @@ describe('objectifs', () => {
     expect(fresh.questTaskStatus(bakeryQuest().progress).map((t) => t.done)).toEqual([true, false, false, false]);
     clock.advance(getBuildingDef('bakery').buildSec);
     fresh.finishBuild(placed.entity.id);
-    fresh.state.goods = 100;
+    fresh.state.inventory = { wheat: 100 };
     fresh.supply(placed.entity.id);
     expect(fresh.questTaskStatus(bakeryQuest().progress).map((t) => t.done)).toEqual([true, true, true, false]);
     clock.advance(3 * 60);
@@ -428,7 +434,7 @@ describe('aides des objectifs', () => {
     const plots = byDef(game, 'plot');
     game.harvest(plots[0]!.id);
     for (const plot of plots.slice(1)) {
-      plot.farm = { cropId: 'strawberry', plantedAt: game.now(), readyAt: game.now() + 60_000 };
+      plot.farm = { cropId: 'wheat', plantedAt: game.now(), readyAt: game.now() + 60_000 };
     }
     const harvest = game.state.quests.active.find((q) => q.id === 'harvest')!;
     expect(findQuestHint(game, harvest)).toEqual({ kind: 'entity', entityId: plots[0]!.id });
@@ -590,7 +596,7 @@ describe('sauvegarde', () => {
     const { game, clock } = setup();
     const plot = byDef(game, 'plot')[0]!;
     game.harvest(plot.id);
-    game.plant(plot.id, 'strawberry');
+    game.plant(plot.id, 'wheat');
     const raw = serialize(game.state, clock.now());
     clock.advance(3600);
     const reloaded = new Game(deserialize(raw)!, clock);
@@ -643,7 +649,7 @@ describe('récompense quotidienne', () => {
 describe('objectifs voisins et marché', () => {
   it('progressent avec les visites, l’aide et le marché', () => {
     const { game } = setup();
-    game.devGrant({ xp: 2000, goods: 50 });
+    game.devGrant({ xp: 2000, items: { wheat: 50 } });
     const active = () => game.state.quests.active.map((q) => q.id);
     expect(active()).toContain('neighbors');
     expect(active()).toContain('market');
@@ -661,12 +667,12 @@ describe('objectifs voisins et marché', () => {
     game.rewardHelpGiven();
     expect(game.state.quests.completed).toContain('neighbors');
 
-    expect(game.marketReserve(10).ok).toBe(true);
+    expect(game.marketReserve('wheat', 10).ok).toBe(true);
     game.marketListed();
     expect(game.state.quests.completed).toContain('market');
     if (game.state.level >= 8) {
       expect(active()).toContain('trader');
-      expect(game.marketBuy(10, 20).ok).toBe(true);
+      expect(game.marketBuy('wheat', 10, 20).ok).toBe(true);
       const trader = game.state.quests.active.find((q) => q.id === 'trader')!;
       expect(trader.counts[0]).toBe(1);
     }
@@ -696,7 +702,7 @@ describe('limites et améliorations', () => {
     const def = getBuildingDef('cottage');
     if (def.category !== 'house') throw new Error();
     expect(game.upgradeInfo(house)).toMatchObject({ status: 'available', stars: 0, reason: 'levelLocked' });
-    game.devGrant({ xp: 20_000, coins: 50_000, goods: 100 });
+    game.devGrant({ xp: 20_000, coins: 50_000 });
     // Assez de place pour les nouveaux habitants.
     const school = freeSpot(game, 'hospital');
     game.place('hospital', school.x, school.y);
@@ -806,7 +812,7 @@ describe('routes, ouvriers et train', () => {
 
   it('pose la gare le long de la voie ferrée et échange des marchandises contre des pièces', () => {
     const { game, clock } = setup();
-    game.devGrant({ coins: 100_000, xp: xpForLevel(10), goods: 200 });
+    game.devGrant({ coins: 100_000, xp: xpForLevel(10) });
     const g = game;
     // La voie ferrée arrive avec la zone qu'elle traverse.
     expect(g.buyExpansion(0, 1).ok).toBe(true);
@@ -822,14 +828,20 @@ describe('routes, ouvriers et train', () => {
     g.place('road', spot.x + station.size.w, spot.y);
     g.speedUp(placed.entity.id);
     expect(g.primaryAction(placed.entity).type).toBe('sendTrain');
-    const goods = g.state.goods;
-    expect(g.sendTrain(placed.entity.id, 'local').ok).toBe(true);
-    expect(g.state.goods).toBe(goods - 40);
+    // La commande du train du jour (tirée une fois la gare construite, le lendemain).
+    clock.advance(24 * 3600);
+    g.tick();
+    const index = g.state.orders.list.findIndex((o) => o.train);
+    const order = g.state.orders.list[index]!;
+    expect(g.deliverOrder(index)).toMatchObject({ ok: false, reason: 'notEnoughItems' });
+    g.state.inventory = { ...order.items };
+    expect(g.deliverOrder(index).ok).toBe(true);
+    expect(g.stock()).toBe(0);
     expect(g.primaryAction(placed.entity).type).toBe('waitTrain');
-    clock.advance(30 * 60);
+    clock.advance(2 * 3600);
     const coins = g.state.coins;
-    expect(g.unloadTrain(placed.entity.id)).toMatchObject({ ok: true, coins: 220 });
-    expect(g.state.coins).toBe(coins + 220);
+    expect(g.unloadTrain(placed.entity.id)).toMatchObject({ ok: true, reward: order.reward });
+    expect(g.state.coins).toBe(coins + (order.reward.coins ?? 0));
   });
 
   it('ne vend pas les zones de montagne', () => {
@@ -856,5 +868,117 @@ describe('migration v6 → v7', () => {
     expect(rails.map((e) => e.y).sort((a, b) => a - b)).toEqual([8, 9, 10, 11, 12, 13, 14, 15]);
     expect(restored!.entities.some((e) => e.id === 999)).toBe(false);
     expect(new Set(restored!.entities.map((e) => e.id)).size).toBe(restored!.entities.length);
+  });
+});
+
+describe('produits et vie de la ville', () => {
+  it('nourrit les poules et ramasse les œufs', () => {
+    const { game, clock } = setup();
+    game.devGrant({ coins: 5000, xp: xpForLevel(3) });
+    const spot = freeSpot(game, 'chicken_coop');
+    const placed = game.place('chicken_coop', spot.x, spot.y);
+    if (!placed.ok) throw new Error(placed.reason);
+    game.speedUp(placed.entity.id);
+    expect(game.primaryAction(placed.entity).type).toBe('startProduction');
+    game.state.inventory = { wheat: 5 };
+    expect(game.startProduction(placed.entity.id, 'eggs')).toMatchObject({ reason: 'notEnoughItems', item: 'wheat' });
+    expect(game.startProduction(placed.entity.id, 'flour')).toMatchObject({ reason: 'invalid' });
+    game.state.inventory = { wheat: 10 };
+    expect(game.startProduction(placed.entity.id, 'eggs').ok).toBe(true);
+    expect(game.itemCount('wheat')).toBe(0);
+    clock.advance(30 * 60);
+    expect(game.collectProduction(placed.entity.id)).toMatchObject({ ok: true, item: 'eggs', qty: 10 });
+    expect(game.itemCount('eggs')).toBe(10);
+  });
+
+  it('sert un repas varié : la ville est plus heureuse et paie de meilleurs loyers', () => {
+    const { game, clock } = setup();
+    const house = byDef(game, 'cottage')[0]!;
+    // Repas servi au début de la partie : plus faim avant la fin.
+    expect(game.feedCity()).toMatchObject({ ok: false, reason: 'notReady' });
+    clock.advance(12 * 3600);
+    const hungry = game.happiness().score;
+    const rentHungry = game.rentFor(house).coins;
+    game.state.inventory = { wheat: 2, carrot: 2, fish: 2, milk: 2 };
+    expect(game.mealPlan()).toMatchObject({ need: 5, variety: 4, canServe: true });
+    expect(game.feedCity()).toMatchObject({ ok: true, variety: 4 });
+    expect(game.happiness().score).toBeGreaterThan(hungry);
+    expect(game.happiness().food).toBe(50);
+    expect(game.rentFor(house).coins).toBeGreaterThanOrEqual(rentHungry);
+    // Douze heures plus tard, sans repas, la faim revient.
+    clock.advance(24 * 3600);
+    expect(game.happiness().food).toBe(0);
+    game.state.inventory = {};
+    expect(game.feedCity()).toMatchObject({ ok: false, reason: 'noFood' });
+  });
+
+  it('remplit le coffre de la mairie (8 h au plus)', () => {
+    const { game, clock } = setup();
+    game.devGrant({ xp: xpForLevel(2) });
+    clock.advance(20 * 3600);
+    const info = game.chestInfo();
+    expect(info.full).toBe(true);
+    const coins = game.state.coins;
+    expect(game.collectChest()).toMatchObject({ ok: true, coins: info.coins });
+    expect(game.state.coins).toBe(coins + info.coins);
+    expect(game.collectChest()).toMatchObject({ ok: false, reason: 'empty' });
+  });
+
+  it('accueille un visiteur qui demande un produit, puis repart', () => {
+    const { game, clock } = setup();
+    game.devGrant({ xp: xpForLevel(3) });
+    clock.advance(6 * 3600);
+    game.tick();
+    const visitor = game.state.visitor!;
+    expect(visitor).not.toBeNull();
+    game.state.inventory = { [visitor.item]: visitor.qty };
+    expect(game.serveVisitor().ok).toBe(true);
+    expect(game.state.visitor).toBeNull();
+    clock.advance(10 * 3600);
+    game.tick();
+    expect(game.state.visitor).not.toBeNull();
+    clock.advance(5 * 3600);
+    game.tick();
+    expect(game.state.visitor).toBeNull();
+  });
+
+  it('tourne la roue une fois par jour, plus une fois par voisin aidé', () => {
+    const { game } = setup();
+    game.devGrant({ xp: xpForLevel(2) });
+    expect(game.wheelInfo().spinsLeft).toBe(1);
+    expect(game.spinWheel(0.1).ok).toBe(true);
+    expect(game.spinWheel(0.1)).toMatchObject({ ok: false, reason: 'notReady' });
+    game.rewardHelpGiven();
+    expect(game.wheelInfo().spinsLeft).toBe(1);
+    expect(game.spinWheel(0.99)).toMatchObject({ ok: true, index: 6 });
+  });
+
+  it('vend des produits au marchand et livre les commandes du jour', () => {
+    const { game, clock } = setup();
+    game.state.inventory = { carrot: 10 };
+    const coins = game.state.coins;
+    expect(game.sellItems('carrot', 10)).toMatchObject({ ok: true, coins: 30 });
+    expect(game.state.coins).toBe(coins + 30);
+    game.devGrant({ xp: xpForLevel(3) });
+    clock.advance(24 * 3600);
+    game.tick();
+    const info = game.ordersInfo();
+    expect(info.list).toHaveLength(3);
+    for (const order of game.state.orders.list) {
+      game.state.inventory = { ...order.items };
+      expect(game.deliverOrder(game.state.orders.list.indexOf(order)).ok).toBe(true);
+    }
+    expect(game.claimOrdersBonus().ok).toBe(true);
+  });
+
+  it('migre une sauvegarde v8 : les marchandises deviennent du blé', () => {
+    const { game } = setup();
+    const state = JSON.parse(JSON.stringify(game.state)) as Record<string, unknown>;
+    for (const key of ['inventory', 'meals', 'orders', 'chest', 'visitor', 'nextVisitorAt', 'wheel']) delete state[key];
+    state.goods = 75;
+    const restored = deserialize(JSON.stringify({ version: 8, savedAt: game.now(), state }));
+    expect(restored?.inventory).toEqual({ wheat: 75 });
+    expect(restored?.meals.fedUntil).toBeGreaterThan(game.now());
+    expect(restored?.visitor).toBeNull();
   });
 });

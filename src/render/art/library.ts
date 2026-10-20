@@ -1,6 +1,6 @@
 import { BUILDINGS } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
-import { boatArt, bridgeArt, movingTruckArt, BOAT_TIERS } from './boats';
+import { CAR_COLORS, boatArt, bridgeArt, carArt, movingTruckArt, BOAT_TIERS } from './boats';
 import { BUILDING_ART_IDS, buildingArt } from './buildings';
 import { DECORATION_ART_IDS, decorationArt } from './decorations';
 import type { ShoreKind } from './ground';
@@ -51,6 +51,7 @@ export const ArtKey = {
   boat: (tier: number) => `boat_${tier}`,
   rail: (end: boolean) => (end ? 'rail_end' : 'rail'),
   train: 'train',
+  car: (axis: 'x' | 'y', color: number) => `car_${axis}_${color}`,
   truck: (axis: 'x' | 'y') => `truck_${axis}`,
   worker: 'worker',
   hammerTool: 'hammer_tool',
@@ -187,6 +188,10 @@ export class ArtLibrary {
     lib.add(ArtKey.rail(false), railTile(false));
     lib.add(ArtKey.rail(true), railTile(true));
     lib.add(ArtKey.train, trainArt());
+    CAR_COLORS.forEach((color, i) => {
+      lib.add(ArtKey.car('x', i), carArt('x', color));
+      lib.add(ArtKey.car('y', i), carArt('y', color));
+    });
     for (let i = 0; i < WALKER_VARIANTS; i++) lib.add(ArtKey.walker(i), walker(i));
     for (let i = 0; i < CLOUD_VARIANTS; i++) lib.add(ArtKey.cloud(i), cloud(i));
     lib.add(ArtKey.forSale, forSaleSign());

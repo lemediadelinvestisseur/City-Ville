@@ -45,6 +45,12 @@ export class Modals {
     if (!this.current) this.next();
   }
 
+  /** Ferme la fenêtre ouverte et celles en attente. */
+  closeAll(): void {
+    this.queue.length = 0;
+    this.close();
+  }
+
   close(): void {
     if (!this.current) return;
     const { node, options } = this.current;

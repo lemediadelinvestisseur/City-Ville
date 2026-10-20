@@ -3,13 +3,16 @@ import type { InboxStore, InboxTarget } from '@/app/inbox';
 import type { ReminderScheduler } from '@/app/reminders';
 import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
 import { localDay } from '@/core/daily';
+import { weatherAt, type Weather } from '@/core/weather';
 import { findQuestHint, type HintTarget } from '@/core/hints';
 import { DAY_NIGHT_MODES, dayNightAt, type DayNightMode } from '@/core/dayNight';
 import type { KeyValueStorage } from '@/core/save';
-import type { BuildingDef, CropDef, Entity, FailReason, Reward, ShipmentDef, TripDef } from '@/core/types';
+import type { BuildingDef, CropDef, Entity, FailReason, Reward, TripDef, Visitor } from '@/core/types';
+import type { RecipeDef } from '@/data/recipes';
 import { CHUNK_SIZE, ENERGY_REGEN_SEC, LOGIN_STREAK_DAYS, loginReward, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
-import { CROPS, findShipmentDef } from '@/data/crops';
+import { CROPS } from '@/data/crops';
+import { findRecipeDef } from '@/data/recipes';
 import { findCashOffer, type StoreProduct } from '@/data/products';
 import { getQuestDef } from '@/data/quests';
 import { isEastChunk } from '@/data/terrain';
@@ -22,7 +25,7 @@ import {
   questIntro,
   questLabels,
   questTitle,
-  shipmentName,
+  recipeName,
   tripName,
 } from '@/i18n/content';
 import { ArtKey } from '@/render/art/library';
@@ -37,6 +40,7 @@ import { FlyingRewards } from './FlyingRewards';
 import { formatClock, formatDuration } from './format';
 import { Hud } from './Hud';
 import { Icons } from './icons';
+import { itemChip } from './items';
 import { InboxPanel } from './InboxPanel';
 import { failMessage } from './messages';
 import { Modals } from './Modals';
@@ -47,10 +51,15 @@ import { Shop, type ShopTab } from './Shop';
 import { SideButtons, type SideButton } from './SideButtons';
 import { SocialUi, type SocialOptions } from './SocialUi';
 import { Toasts } from './Toasts';
-import { ShipmentPicker } from './ShipmentPicker';
+import { InventoryPanel } from './InventoryPanel';
+import { ProducerPicker } from './ProducerPicker';
+import { TodayPanel } from './TodayPanel';
+import { TownHallPanel } from './TownHallPanel';
 import { TripPicker } from './TripPicker';
 
 type Mode = 'play' | 'edit';
+
+const VISITOR_EMOJI: Record<Visitor['kind'], string> = { tourist: '🧳', chef: '👨‍🍳', trucker: '🚚', grandma: '👵' };
 
 const ANNOUNCEMENT_SEEN_KEY = 'city-ville:announcement-seen';
 
@@ -73,7 +82,10 @@ export class UI {
   private buildMenu: BuildMenu;
   private cropPicker: CropPicker;
   private tripPicker: TripPicker;
-  private shipmentPicker: ShipmentPicker;
+  private producerPicker: ProducerPicker;
+  private inventory: InventoryPanel;
+  private townHall: TownHallPanel;
+  private today: TodayPanel;
   private bubble: Bubble;
   private shop: Shop;
   private flying: FlyingRewards;
@@ -101,6 +113,7 @@ export class UI {
   private started = false;
   /** Outils de test et boutique : réservés au compte administrateur (et au développement). */
   private tester = false;
+  private weather: Weather = weatherAt(Date.now());
 
   constructor(
     parent: HTMLElement,
@@ -110,7 +123,16 @@ export class UI {
     const { game, art, payments, prefs } = ctx;
     this.root = h('div', { class: 'ui' });
     this.announcementSeen = Number(options.storage.getItem(ANNOUNCEMENT_SEEN_KEY) ?? '0') || 0;
-    this.hud = new Hud(game, (target) => this.openShop(target === 'cash' ? 'cash' : 'coins'));
+    this.hud = new Hud(
+      game,
+      (target) => this.openShop(target === 'cash' ? 'cash' : 'coins'),
+      (target) => {
+        this.closeTransient();
+        if (target === 'goods') this.inventory.open();
+        else if (target === 'population') this.townHall.open();
+        else this.toasts.show(this.workersText(), 'info', undefined, { icon: Icons.worker });
+      },
+    );
     this.quests = new QuestTracker(game, art, (id) => this.showQuest(id));
     this.modals = new Modals((open) => ctx.bus.emit('ui:modalOpen', open));
     this.buildMenu = new BuildMenu(
@@ -132,10 +154,9 @@ export class UI {
       (id, trip) => this.sendBoat(id, trip),
       () => this.refreshDock(),
     );
-    this.shipmentPicker = new ShipmentPicker(
+    this.producerPicker = new ProducerPicker(
       game,
-      art,
-      (id, shipment) => this.sendTrain(id, shipment),
+      (id, recipe) => this.startProduction(id, recipe),
       () => this.refreshDock(),
     );
     this.bubble = new Bubble(game, {
@@ -185,6 +206,16 @@ export class UI {
       onToggle: () => this.refreshDock(),
     });
     this.daily = new DailyPanel(game, this.modals);
+    const toast = (text: string, kind: 'info' | 'success' | 'error') => this.toasts.show(text, kind);
+    this.today = new TodayPanel(game, this.modals, this.daily, toast);
+    this.townHall = new TownHallPanel(game, this.modals, toast);
+    this.inventory = new InventoryPanel(game, this.modals, {
+      toast,
+      toMarket: (item) => {
+        this.modals.closeAll();
+        this.social.openMarket(item);
+      },
+    });
     this.notifications = new NotificationsUi({
       game,
       notifier: options.notifier,
@@ -208,7 +239,7 @@ export class UI {
       this.buildMenu.el,
       this.cropPicker.el,
       this.tripPicker.el,
-      this.shipmentPicker.el,
+      this.producerPicker.el,
       this.social.panel.el,
       this.chat.el,
       this.inboxPanel.el,
@@ -309,8 +340,13 @@ export class UI {
         this.refreshDock();
       } else if (action.type === 'sendBoat') {
         this.tripPicker.open(entityId);
+      } else if (action.type === 'startProduction') {
+        this.producerPicker.open(entityId);
       } else if (action.type === 'sendTrain') {
-        this.shipmentPicker.open(entityId);
+        // Le train part avec la grosse commande du jour.
+        this.today.open('orders');
+      } else if (action.type === 'townHall') {
+        this.townHall.open();
       } else {
         this.bubble.showInfo(entityId, screen);
       }
@@ -323,7 +359,18 @@ export class UI {
     bus.on('world:lockedTap', ({ cx, cy }) => this.offerExpansion(cx, cy));
     bus.on('world:emptyTap', () => this.closeTransient());
     bus.on('world:cameraMoved', () => this.bubble.close());
-    bus.on('world:fail', ({ reason, missing }) => this.onFail(reason, missing));
+    bus.on('world:fail', ({ reason, missing, item }) => this.onFail(reason, missing, item));
+    bus.on('world:visitorTap', () => this.showVisitor());
+    bus.on('world:photo', ({ url }) => this.showPhoto(url));
+    game.events.on('visitorArrived', (visitor) => {
+      if (!game.state.tutorial.introSeen) return;
+      this.toasts.show(
+        t('visitor.arrived', { who: t(`visitor.kind.${visitor.kind}`) }),
+        'info',
+        { label: t('common.see'), onClick: () => this.showVisitor() },
+        { icon: Icons.population },
+      );
+    });
     bus.on('world:placement', (info) => {
       this.placement = info;
       if (info) this.closeTransient();
@@ -339,6 +386,13 @@ export class UI {
   }
 
   private tick(): void {
+    // Pluie ou neige qui commence : un mot (la pluie fait pousser les cultures plus vite).
+    const weather = weatherAt(Date.now());
+    if (this.started && weather !== this.weather) {
+      if (weather === 'rain') this.toasts.show(t('weather.rain'), 'info');
+      else if (weather === 'snow') this.toasts.show(t('weather.snow'), 'info');
+    }
+    this.weather = weather;
     this.hud.refreshTimer();
     this.bubble.tick();
   }
@@ -348,7 +402,7 @@ export class UI {
     this.buildMenu.close();
     this.cropPicker.close();
     this.tripPicker.close();
-    this.shipmentPicker.close();
+    this.producerPicker.close();
     this.social.panel.close();
     this.chat.close();
     this.inboxPanel.close();
@@ -409,7 +463,7 @@ export class UI {
       this.buildMenu.isOpen ||
       this.cropPicker.isOpen ||
       this.tripPicker.isOpen ||
-      this.shipmentPicker.isOpen ||
+      this.producerPicker.isOpen ||
       this.social.panel.isOpen ||
       this.chat.isOpen ||
       this.inboxPanel.isOpen;
@@ -428,9 +482,9 @@ export class UI {
 
   /** Boutons latéraux : défis du jour (s'ils sont débloqués) et pastilles. */
   private refreshSide(): void {
-    const daily = this.ctx.game.dailyInfo();
-    this.side.setVisible('daily', daily.available);
-    this.side.setBadge('daily', daily.claimable);
+    this.side.setVisible('daily', this.today.visible());
+    this.side.setBadge('daily', this.today.badge());
+    this.hud.target('population')?.classList.toggle('has-alert', this.townHall.needsAttention());
     this.side.setBadge('inbox', this.options.inbox.unread());
   }
 
@@ -439,7 +493,7 @@ export class UI {
     this.closeTransient();
     if (this.mode === 'edit') this.setMode('play');
     if (wasOpen) return;
-    if (which === 'daily') this.daily.open();
+    if (which === 'daily') this.today.open();
     else if (which === 'inbox') this.inboxPanel.open();
     else this.chat.open();
   }
@@ -450,7 +504,7 @@ export class UI {
     this.closeTransient();
     if (target.kind === 'entity') {
       if (this.ctx.game.getEntity(target.entityId)) this.ctx.bus.emit('ui:focusEntity', { entityId: target.entityId });
-    } else if (target.kind === 'daily') this.daily.open();
+    } else if (target.kind === 'daily') this.today.open('daily');
     else if (target.kind === 'chat') this.chat.open();
     else this.social.openNeighbors();
   }
@@ -546,7 +600,46 @@ export class UI {
     } else this.onFail(reason, missing);
   }
 
-  private onFail(reason: FailReason, missing?: number): void {
+  /** Le visiteur de passage : ce qu'il demande, ce qu'il offre. */
+  private showVisitor(): void {
+    const { game } = this.ctx;
+    const visitor = game.state.visitor;
+    if (!visitor) return;
+    const have = game.itemCount(visitor.item);
+    this.modals.show({
+      title: t(`visitor.kind.${visitor.kind}`),
+      kicker: t('visitor.kicker'),
+      className: 'modal--visitor',
+      body: [
+        h('div', { class: 'visitor__face', text: VISITOR_EMOJI[visitor.kind] }),
+        h('p', { text: t(`visitor.ask.${visitor.kind}`) }),
+        h(
+          'div',
+          { class: 'visitor__ask' },
+          itemChip(visitor.item, visitor.qty, game),
+          ` → `,
+          rewardChips(visitor.reward),
+        ),
+        h('p', {
+          class: 'muted small',
+          text: t('visitor.leaves', { duration: formatDuration((visitor.leavesAt - game.now()) / 1000) }),
+        }),
+      ],
+      buttons: [
+        { label: t('visitor.no'), kind: 'secondary', onClick: () => game.dismissVisitor() },
+        {
+          label: have >= visitor.qty ? t('visitor.give') : t('visitor.missing', { n: visitor.qty - have }),
+          onClick: () => {
+            const result = game.serveVisitor();
+            if (result.ok) this.toasts.show(t('visitor.thanks'), 'success');
+            else this.onFail(result.reason, result.missing, result.item);
+          },
+        },
+      ],
+    });
+  }
+
+  private onFail(reason: FailReason, missing?: number, item?: string): void {
     switch (reason) {
       case 'notEnoughEnergy':
         this.showEnergyEmpty();
@@ -575,8 +668,11 @@ export class UI {
           { icon: Icons.worker },
         );
         return;
+      case 'needsRoad':
+        this.toasts.show(failMessage(reason, missing), 'error', undefined, { icon: Icons.road });
+        return;
       default:
-        this.toasts.show(failMessage(reason, missing), 'error');
+        this.toasts.show(failMessage(reason, missing, item), 'error');
     }
   }
 
@@ -612,21 +708,28 @@ export class UI {
     });
   }
 
-  private sendTrain(entityId: number, shipment: ShipmentDef): void {
-    const result = this.ctx.game.sendTrain(entityId, shipment.id);
+  private startProduction(entityId: number, recipe: RecipeDef): void {
+    const result = this.ctx.game.startProduction(entityId, recipe.id);
     if (!result.ok) {
       if (result.reason === 'levelLocked') {
         this.toasts.show(
-          t('toast.levelRequired', { name: shipmentName(shipment), level: shipment.requires?.level ?? 1 }),
+          t('toast.levelRequired', { name: recipeName(recipe.id), level: recipe.requires?.level ?? 1 }),
           'error',
         );
-      } else this.onFail(result.reason, result.missing);
+      } else this.onFail(result.reason, result.missing, result.item);
       return;
     }
-    this.shipmentPicker.close();
-    this.toasts.show(t('toast.trainSent', { duration: formatDuration(shipment.durationSec) }), 'info', undefined, {
-      icon: Icons.train,
-    });
+    this.producerPicker.close();
+    this.toasts.show(t('toast.produceStarted', { duration: formatDuration(recipe.durationSec) }), 'info');
+  }
+
+  /** « 1 ouvrier sur 1 est occupé, libre dans 3 min » */
+  private workersText(): string {
+    const workers = this.ctx.game.workersInfo();
+    if (workers.busy < workers.total)
+      return t('workers.free', { n: workers.total - workers.busy, total: workers.total });
+    const left = workers.nextFreeAt === null ? 0 : (workers.nextFreeAt - this.ctx.game.now()) / 1000;
+    return t('workers.busy', { duration: formatDuration(Math.max(0, left)) });
   }
 
   private checkPlantMode(): void {
@@ -833,11 +936,11 @@ export class UI {
     const items = unlocked.map((id) => {
       const building = findBuildingDef(id);
       const crop = CROPS.find((c) => c.id === id);
-      const shipment = findShipmentDef(id);
+      const recipe = findRecipeDef(id);
       const src = building
         ? this.ctx.art.iconUrl(ArtKey.building(id), 96)
-        : shipment
-          ? this.ctx.art.iconUrl(ArtKey.train, 96)
+        : recipe
+          ? this.ctx.art.iconUrl(ArtKey.building(recipe.building), 96)
           : this.ctx.art.iconUrl(ArtKey.cropIcon(id), 96);
       return h(
         'div',
@@ -848,8 +951,8 @@ export class UI {
             ? buildingName(building)
             : crop
               ? cropName(crop)
-              : shipment
-                ? shipmentName(shipment)
+              : recipe
+                ? recipeName(recipe.id)
                 : tripName(id),
         }),
       );
@@ -997,7 +1100,9 @@ export class UI {
               devButton(t('dev.energy'), () =>
                 game.devGrant({ energy: Math.max(0, game.derived().energyMax - game.state.energy) }),
               ),
-              devButton(t('dev.goods', { n: 50 }), () => game.devGrant({ goods: 50 })),
+              devButton(t('dev.goods', { n: 50 }), () =>
+                game.devGrant({ items: { wheat: 50, carrot: 50, corn: 50, milk: 20, eggs: 20 } }),
+              ),
               devButton(t('dev.level'), () =>
                 game.devGrant({ xp: Math.max(0, xpForLevel(game.state.level + 1) - game.state.xp) }),
               ),
@@ -1015,8 +1120,13 @@ export class UI {
         h(
           'div',
           { class: 'settings' },
-          this.soundToggle(),
+          this.soundSection(),
           this.dayNightToggle(),
+          h('button', {
+            class: 'btn btn--secondary',
+            text: `📷 ${t('settings.photo')}`,
+            onClick: () => this.takePhoto(),
+          }),
           this.notifications.settingsSection(),
           this.social.accountSection(),
           h('button', {
@@ -1036,18 +1146,85 @@ export class UI {
     });
   }
 
-  private soundToggle(): HTMLButtonElement {
-    const { sound } = this.ctx;
-    const label = () => (sound.muted ? t('settings.soundOff') : t('settings.soundOn'));
-    const toggle = h('button', {
-      class: 'btn btn--secondary',
-      text: label(),
-      onClick: () => {
-        sound.setMuted(!sound.muted);
-        toggle.textContent = label();
-      },
+  /** Son : musique, bruitages et vibrations, chacun réglable à part. */
+  private soundSection(): HTMLElement {
+    const { sound, music, haptics } = this.ctx;
+    const toggle = (label: () => string, flip: () => void) => {
+      const button = h('button', {
+        class: 'btn btn--secondary',
+        text: label(),
+        onClick: () => {
+          flip();
+          button.textContent = label();
+        },
+      });
+      return button;
+    };
+    return h(
+      'div',
+      { class: 'settings__sound' },
+      h('div', { class: 'modal__section-title', text: t('settings.sound') }),
+      h(
+        'div',
+        { class: 'settings__row' },
+        toggle(
+          () => `🎵 ${music.enabled ? t('settings.on') : t('settings.off')}`,
+          () => music.setEnabled(!music.enabled),
+        ),
+        toggle(
+          () => `🔔 ${sound.muted ? t('settings.off') : t('settings.on')}`,
+          () => sound.setMuted(!sound.muted),
+        ),
+        haptics.supported
+          ? toggle(
+              () => `📳 ${haptics.enabled ? t('settings.on') : t('settings.off')}`,
+              () => haptics.setEnabled(!haptics.enabled),
+            )
+          : null,
+      ),
+      h('p', { class: 'muted settings__hint', text: t('settings.soundHint') }),
+    );
+  }
+
+  private showPhoto(url: string): void {
+    const city = this.ctx.game.state.cityName;
+    const file = async () => {
+      const blob = await (await fetch(url)).blob();
+      return new File([blob], 'city-ville.png', { type: 'image/png' });
+    };
+    const save = () => {
+      const link = h('a', { attrs: { href: url, download: 'city-ville.png' } });
+      document.body.append(link);
+      link.click();
+      link.remove();
+    };
+    const canShare = typeof navigator.share === 'function';
+    this.modals.show({
+      title: t('photo.title'),
+      className: 'modal--photo',
+      body: [h('img', { class: 'photo__img', attrs: { src: url, alt: city } })],
+      buttons: [
+        { label: t('photo.save'), kind: 'secondary', onClick: save },
+        ...(canShare
+          ? [
+              {
+                label: t('photo.share'),
+                onClick: () => {
+                  void file()
+                    .then((f) => navigator.share({ files: [f], text: t('photo.shareText', { city }) }))
+                    .catch(() => undefined);
+                },
+              },
+            ]
+          : []),
+      ],
     });
-    return toggle;
+  }
+
+  /** Photo de la ville (sans l'interface), à partager ou à enregistrer. */
+  private takePhoto(): void {
+    this.modals.closeAll();
+    this.ctx.bus.emit('ui:photo', undefined);
   }
 
   private dayNightToggle(): HTMLElement {

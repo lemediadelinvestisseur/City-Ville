@@ -6,6 +6,7 @@ import type {
   DecorationDef,
   HouseDef,
   PortDef,
+  ProducerDef,
   RailDef,
   StationDef,
   StorageDef,
@@ -16,8 +17,7 @@ import type {
  * (src/render/art/) pour garder ces données purement « gameplay ».
  *
  * Durées en secondes. L'XP de construction est gagnée à l'inauguration ;
- * elle vaut environ 1/50e du prix en pièces. Commerces et services
- * demandent aussi des marchandises (matériaux) : les récoltes trouvent un usage.
+ * elle vaut environ 1/50e du prix en pièces.
  */
 
 const MIN = 60;
@@ -27,20 +27,13 @@ type HouseInput = Omit<HouseDef, 'category' | 'xp'> & { xp?: number };
 const house = (d: HouseInput): HouseDef => ({ category: 'house', xp: xpFor(d.cost.coins), ...d });
 
 type BusinessInput = Omit<BusinessDef, 'category' | 'xp'> & { xp?: number };
-const business = (d: BusinessInput): BusinessDef => ({
-  category: 'business',
-  xp: xpFor(d.cost.coins),
-  ...d,
-  cost: withMaterials(d.cost),
-});
+const business = (d: BusinessInput): BusinessDef => ({ category: 'business', xp: xpFor(d.cost.coins), ...d });
 
 type CommunityInput = Omit<CommunityDef, 'category' | 'xp'> & { xp?: number };
-const community = (d: CommunityInput): CommunityDef => ({
-  category: 'community',
-  xp: xpFor(d.cost.coins),
-  ...d,
-  cost: withMaterials(d.cost),
-});
+const community = (d: CommunityInput): CommunityDef => ({ category: 'community', xp: xpFor(d.cost.coins), ...d });
+
+type ProducerInput = Omit<ProducerDef, 'xp'> & { xp?: number };
+const producer = (d: ProducerInput): ProducerDef => ({ xp: xpFor(d.cost.coins), ...d });
 
 type StationInput = Omit<StationDef, 'category' | 'xp'> & { xp?: number };
 const station = (d: StationInput): StationDef => ({
@@ -48,7 +41,6 @@ const station = (d: StationInput): StationDef => ({
   xp: xpFor(d.cost.coins),
   placement: 'rail',
   ...d,
-  cost: withMaterials(d.cost),
 });
 
 type StorageInput = Omit<StorageDef, 'category' | 'xp'> & { xp?: number };
@@ -68,12 +60,6 @@ const decoration = (d: DecorationInput): DecorationDef => ({
 
 function xpFor(coins: number | undefined): number {
   return Math.round((coins ?? 0) / 50);
-}
-
-/** Matériaux (marchandises) d'un chantier : 1 pour 40 pièces, arrondi à 5, au plus 400. */
-function withMaterials(cost: { coins?: number; goods?: number }): { coins?: number; goods?: number } {
-  if (cost.goods !== undefined || !cost.coins) return cost;
-  return { ...cost, goods: Math.min(400, Math.round(cost.coins / 200) * 5) };
 }
 
 /** Catégories qui ne fonctionnent qu'une fois reliées à une route. */
@@ -223,7 +209,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     rent: { coins: 220, xp: 4, intervalSec: 10 * MIN },
   }),
 
-  // ——— Commerces : marchandises → recettes ———
+  // ——— Commerces : produits → recettes ———
   business({
     id: 'bakery',
     name: 'Boulangerie',
@@ -231,7 +217,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     size: { w: 2, d: 2 },
     cost: { coins: 500 },
     buildSec: MIN,
-    supplyGoods: 20,
+    inputs: { wheat: 20 },
     customers: 10,
     serveSec: 3 * MIN,
     payout: { coins: 150, xp: 3 },
@@ -244,7 +230,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 900 },
     requires: { level: 2, population: 40 },
     buildSec: 3 * MIN,
-    supplyGoods: 30,
+    inputs: { flowers: 30 },
     customers: 15,
     serveSec: 10 * MIN,
     payout: { coins: 270, xp: 4 },
@@ -257,7 +243,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 1600 },
     requires: { level: 3, population: 70 },
     buildSec: 5 * MIN,
-    supplyGoods: 45,
+    inputs: { strawberry: 45 },
     customers: 20,
     serveSec: 30 * MIN,
     payout: { coins: 480, xp: 5 },
@@ -270,7 +256,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 2600 },
     requires: { level: 5, population: 120 },
     buildSec: 15 * MIN,
-    supplyGoods: 65,
+    inputs: { flour: 35 },
     customers: 25,
     serveSec: HOUR,
     payout: { coins: 780, xp: 6 },
@@ -283,7 +269,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 5000 },
     requires: { level: 7, population: 200 },
     buildSec: 30 * MIN,
-    supplyGoods: 110,
+    inputs: { carrot: 55, eggs: 35 },
     customers: 40,
     serveSec: 2 * HOUR,
     payout: { coins: 1450, xp: 8 },
@@ -296,7 +282,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 9000 },
     requires: { level: 10, population: 350 },
     buildSec: HOUR,
-    supplyGoods: 170,
+    inputs: { corn: 170 },
     customers: 60,
     serveSec: 3 * HOUR,
     payout: { coins: 2600, xp: 10 },
@@ -309,7 +295,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 11000 },
     requires: { level: 11, population: 450 },
     buildSec: 90 * MIN,
-    supplyGoods: 200,
+    inputs: { cotton: 200 },
     customers: 50,
     serveSec: 3 * HOUR,
     payout: { coins: 3100, xp: 11 },
@@ -322,7 +308,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 15000 },
     requires: { level: 13, population: 600 },
     buildSec: 2 * HOUR,
-    supplyGoods: 240,
+    inputs: { cake: 40 },
     customers: 60,
     serveSec: 4 * HOUR,
     payout: { coins: 3900, xp: 12 },
@@ -335,7 +321,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 18000 },
     requires: { level: 14, population: 700 },
     buildSec: 150 * MIN,
-    supplyGoods: 280,
+    inputs: { meat: 45, tomato: 140 },
     customers: 80,
     serveSec: 4 * HOUR,
     payout: { coins: 4700, xp: 14 },
@@ -348,7 +334,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 28000 },
     requires: { level: 17, population: 1000 },
     buildSec: 4 * HOUR,
-    supplyGoods: 420,
+    inputs: { canned: 45, milk: 95, bread: 45 },
     customers: 120,
     serveSec: 6 * HOUR,
     payout: { coins: 7600, xp: 18 },
@@ -361,7 +347,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 38000 },
     requires: { level: 19, population: 1300 },
     buildSec: 5 * HOUR,
-    supplyGoods: 520,
+    inputs: { bread: 60, cheese: 45, jam: 60 },
     customers: 100,
     serveSec: 6 * HOUR,
     payout: { coins: 9800, xp: 20 },
@@ -374,7 +360,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 60000 },
     requires: { level: 22, population: 1800 },
     buildSec: 8 * HOUR,
-    supplyGoods: 820,
+    inputs: { cotton: 410, sunflower: 410 },
     customers: 200,
     serveSec: 8 * HOUR,
     payout: { coins: 16500, xp: 26 },
@@ -387,7 +373,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 75000 },
     requires: { level: 24, population: 2200 },
     buildSec: 10 * HOUR,
-    supplyGoods: 950,
+    inputs: { corn: 475, meat: 160 },
     customers: 160,
     serveSec: 10 * HOUR,
     payout: { coins: 19500, xp: 30 },
@@ -400,7 +386,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 110000 },
     requires: { level: 27, population: 2800 },
     buildSec: 14 * HOUR,
-    supplyGoods: 1350,
+    inputs: { cake: 110, apple: 675 },
     customers: 300,
     serveSec: 12 * HOUR,
     payout: { coins: 29000, xp: 36 },
@@ -413,7 +399,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     cost: { coins: 160000 },
     requires: { level: 30, population: 3500 },
     buildSec: 24 * HOUR,
-    supplyGoods: 2000,
+    inputs: { meat: 220, bread: 220, corn: 665 },
     customers: 500,
     serveSec: 24 * HOUR,
     payout: { coins: 46000, xp: 50 },
@@ -532,7 +518,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     popCap: 1600,
   }),
 
-  // ——— Stockage : capacité de marchandises ———
+  // ——— Stockage : capacité de l'entrepôt ———
   storage({
     id: 'barn',
     name: 'Grange',
@@ -545,7 +531,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
   storage({
     id: 'warehouse',
     name: 'Entrepôt',
-    description: 'Un grand stockage pour vos marchandises.',
+    description: 'Un grand stockage pour vos produits.',
     size: { w: 3, d: 3 },
     cost: { coins: 4000 },
     requires: { level: 5 },
@@ -587,7 +573,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
   {
     id: 'plot',
     name: 'Champ',
-    description: 'Plantez-y des cultures pour produire des marchandises.',
+    description: 'Plantez-y des cultures : blé, fraises, légumes…',
     category: 'farm',
     size: { w: 1, d: 1 },
     cost: { coins: 25 },
@@ -595,6 +581,80 @@ export const BUILDINGS: readonly BuildingDef[] = [
     buildSec: 0,
     repeatPlacement: true,
   },
+
+  // ——— Élevage : on nourrit les bêtes, elles donnent œufs, lait et viande ———
+  producer({
+    id: 'chicken_coop',
+    name: 'Poulailler',
+    description: 'Nourrissez les poules avec du blé : elles pondent des œufs.',
+    category: 'ranch',
+    size: { w: 2, d: 2 },
+    cost: { coins: 1200 },
+    requires: { level: 3 },
+    buildSec: 2 * MIN,
+  }),
+  producer({
+    id: 'cowshed',
+    name: 'Étable',
+    description: 'Des vaches nourries au maïs donnent du lait.',
+    category: 'ranch',
+    size: { w: 3, d: 3 },
+    cost: { coins: 4500 },
+    requires: { level: 6 },
+    buildSec: 20 * MIN,
+  }),
+  producer({
+    id: 'cattle_ranch',
+    name: 'Ferme d’élevage',
+    description: 'Un grand troupeau, nourri au maïs et au blé, pour la viande.',
+    category: 'ranch',
+    size: { w: 3, d: 3 },
+    cost: { coins: 15000 },
+    requires: { level: 12 },
+    buildSec: 90 * MIN,
+  }),
+
+  // ——— Ateliers : on transforme les produits ———
+  producer({
+    id: 'mill',
+    name: 'Moulin',
+    description: 'Moud le blé en farine.',
+    category: 'workshop',
+    size: { w: 2, d: 2 },
+    cost: { coins: 1500 },
+    requires: { level: 4 },
+    buildSec: 5 * MIN,
+  }),
+  producer({
+    id: 'bakehouse',
+    name: 'Fournil',
+    description: 'Du pain et des gâteaux avec la farine, les œufs et les fraises.',
+    category: 'workshop',
+    size: { w: 2, d: 2 },
+    cost: { coins: 2500 },
+    requires: { level: 5 },
+    buildSec: 10 * MIN,
+  }),
+  producer({
+    id: 'dairy',
+    name: 'Fromagerie',
+    description: 'Transforme le lait en fromage.',
+    category: 'workshop',
+    size: { w: 2, d: 2 },
+    cost: { coins: 6000 },
+    requires: { level: 9 },
+    buildSec: 30 * MIN,
+  }),
+  producer({
+    id: 'cannery',
+    name: 'Conserverie',
+    description: 'Conserves de tomates et confitures de fraises.',
+    category: 'workshop',
+    size: { w: 3, d: 3 },
+    cost: { coins: 10000 },
+    requires: { level: 11 },
+    buildSec: HOUR,
+  }),
 
   // ——— Pêche : au bord de l'eau ———
   port({
@@ -632,7 +692,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
   station({
     id: 'train_station',
     name: 'Gare',
-    description: 'Le train emporte vos marchandises et rapporte des pièces. À poser le long de la voie ferrée.',
+    description: 'Une grosse commande par jour part en train et rapporte gros. À poser le long de la voie ferrée.',
     size: { w: 3, d: 3 },
     cost: { coins: 6000 },
     requires: { level: 10 },
@@ -838,15 +898,23 @@ export function findBuildingDef(id: string): BuildingDef | undefined {
   return BY_ID.get(id);
 }
 
-/** Ordre et libellés des onglets du menu de construction. */
-export const SHOP_CATEGORIES: ReadonlyArray<{ id: BuildingCategory; label: string }> = [
+/**
+ * Onglets du menu de construction : une catégorie principale (libellé, icône)
+ * et, au besoin, des catégories proches regroupées pour garder peu d'onglets.
+ */
+export const SHOP_CATEGORIES: ReadonlyArray<{ id: BuildingCategory; label: string; includes?: BuildingCategory[] }> = [
   { id: 'house', label: 'Habitations' },
   { id: 'business', label: 'Commerces' },
-  { id: 'community', label: 'Services' },
-  { id: 'farm', label: 'Agriculture' },
+  { id: 'community', label: 'Services', includes: ['station'] },
+  { id: 'farm', label: 'Ferme', includes: ['ranch'] },
+  { id: 'workshop', label: 'Ateliers' },
   { id: 'port', label: 'Pêche' },
-  { id: 'station', label: 'Train' },
   { id: 'storage', label: 'Stockage' },
   { id: 'decoration', label: 'Décorations' },
   { id: 'road', label: 'Routes' },
 ];
+
+/** Onglet du menu où se trouve une catégorie. */
+export function shopTabOf(category: BuildingCategory): BuildingCategory {
+  return SHOP_CATEGORIES.find((tab) => tab.id === category || tab.includes?.includes(category))?.id ?? category;
+}

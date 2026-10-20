@@ -236,6 +236,22 @@ export async function deletePlayerData(ctx: MutationCtx, playerId: Id<'players'>
       .withIndex('by_player', (q) => q.eq('playerId', playerId))
       .collect()),
     ...(await ctx.db
+      .query('requests')
+      .withIndex('by_player', (q) => q.eq('playerId', playerId))
+      .collect()),
+    ...(await ctx.db
+      .query('likes')
+      .withIndex('by_from_to_week', (q) => q.eq('fromId', playerId))
+      .collect()),
+    ...(await ctx.db
+      .query('communityContributions')
+      .withIndex('by_player', (q) => q.eq('playerId', playerId))
+      .collect()),
+    ...(await ctx.db
+      .query('likeCounts')
+      .withIndex('by_player_week', (q) => q.eq('playerId', playerId))
+      .collect()),
+    ...(await ctx.db
       .query('pushSubscriptions')
       .withIndex('by_player', (q) => q.eq('playerId', playerId))
       .collect()),

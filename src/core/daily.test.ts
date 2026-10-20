@@ -88,10 +88,10 @@ describe('attentes terminées', () => {
     game.events.on('ready', ({ items }) => ready.push(...items));
     const plot = game.state.entities.find((e) => e.farm?.cropId)!;
     game.harvest(plot.id);
-    game.plant(plot.id, 'strawberry');
+    game.plant(plot.id, 'wheat');
     game.tick();
     expect(ready).toEqual([]);
-    clock.advance(getCropDef('strawberry').growSec);
+    clock.advance(getCropDef('wheat').growSec);
     game.tick();
     game.tick();
     expect(ready).toEqual([{ entityId: plot.id, kind: 'crop', at: clock.now() }]);
@@ -104,13 +104,13 @@ describe('rappels', () => {
     const plots = game.state.entities.filter((e) => e.farm?.cropId);
     for (const plot of plots) {
       game.harvest(plot.id);
-      game.plant(plot.id, 'strawberry');
+      game.plant(plot.id, 'wheat');
       clock.advance(60);
     }
     const reminders = planReminders(game, clock.now(), { kinds: allKinds, quietHours: false });
     const crops = reminders.filter((r) => r.kind === 'crop');
     expect(crops).toHaveLength(1);
-    expect(crops[0]).toMatchObject({ count: plots.length, cropId: 'strawberry' });
+    expect(crops[0]).toMatchObject({ count: plots.length, cropId: 'wheat' });
     const none = planReminders(game, clock.now(), { kinds: { ...allKinds, crop: false }, quietHours: false });
     expect(none.some((r) => r.kind === 'crop')).toBe(false);
   });

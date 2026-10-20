@@ -16,6 +16,8 @@ import type { Backend } from './services/online/Backend';
 import { ConvexBackend } from './services/online/ConvexBackend';
 import { LocalBackend } from './services/online/LocalBackend';
 import { createNotifier, registerServiceWorker } from './services/notifications';
+import { Haptics } from './services/haptics';
+import { Music } from './services/music';
 import { MockPaymentProvider } from './services/payments/MockPaymentProvider';
 import { SoundFx } from './services/sound';
 import { Preferences } from './services/preferences';
@@ -82,7 +84,13 @@ async function boot(): Promise<void> {
   let ui: UI | null = null;
   const payments = new MockPaymentProvider((product) => ui?.confirmTestPurchase(product) ?? Promise.resolve(false));
   const sound = new SoundFx(storage);
-  const ctx: AppContext = { game, bus, art, payments, sound, prefs };
+  const music = new Music(storage);
+  const haptics = new Haptics(storage);
+  const ctx: AppContext = { game, bus, art, payments, sound, music, haptics, prefs };
+  bus.on('world:ambience', ({ sea, forest }) => {
+    const hour = new Date().getHours();
+    music.setAmbience(sea, forest, prefs.dayNight !== 'off' && (hour >= 21 || hour < 7));
+  });
   const inbox = new InboxStore(storage);
 
   // ——— Sauvegarde automatique ———
