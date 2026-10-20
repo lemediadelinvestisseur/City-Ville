@@ -38,8 +38,9 @@ export function outlined(piece: ArtPiece, px = 2.2, saturate = 1.12, color = OUT
   sil.ctx.fillStyle = color;
   sil.ctx.fillRect(0, 0, width, height);
   const out = createCanvas(width + pad * 2, height + pad * 2);
-  for (let a = 0; a < 16; a++) {
-    const t = (a / 16) * Math.PI * 2;
+  // Huit directions suffisent pour un contour de 2 à 3 px, et coûtent deux fois moins que seize.
+  for (let a = 0; a < 8; a++) {
+    const t = (a / 8) * Math.PI * 2;
     out.ctx.drawImage(sil.canvas, pad + Math.cos(t) * px, pad + Math.sin(t) * px);
   }
   out.ctx.drawImage(src, pad, pad);
@@ -52,7 +53,8 @@ export function outlined(piece: ArtPiece, px = 2.2, saturate = 1.12, color = OUT
 
 /** Superpose un calque d'objets (contouré) sur un calque de sol (non contouré) de mêmes dimensions. */
 export function layered(ground: ArtPiece, objects: ArtPiece, px = 2.2): ArtPiece {
-  const top = outlined(objects, px);
+  // Les bâtiments dessinés à la main ont déjà des couleurs franches : pas de passe de saturation (coûteuse).
+  const top = outlined(objects, px, 1);
   const pad = (top.canvas.width - ground.canvas.width) / 2;
   const { canvas, ctx } = createCanvas(top.canvas.width, top.canvas.height);
   ctx.drawImage(ground.canvas, pad, pad);

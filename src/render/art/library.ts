@@ -1,8 +1,8 @@
 import { BUILDINGS } from '@/data/buildings';
 import { CROPS } from '@/data/crops';
 import { boatArt, bridgeArt, movingTruckArt, BOAT_TIERS } from './boats';
-import { buildingArt } from './buildings';
-import { decorationArt } from './decorations';
+import { BUILDING_ART_IDS, buildingArt } from './buildings';
+import { DECORATION_ART_IDS, decorationArt } from './decorations';
 import type { ShoreKind } from './ground';
 import { createCanvas, type ArtPiece } from './IsoPainter';
 import { outlined } from './toon';
@@ -84,16 +84,32 @@ function compose(base: ArtPiece, overlay: ArtPiece): ArtPiece {
 
 export class ArtLibrary {
   readonly pieces = new Map<string, ArtPiece>();
+  /** Visuels détaillés (bâtiments) dessinés seulement à leur premier usage : démarrage plus rapide. */
+  private readonly lazy = new Map<string, () => ArtPiece | null>();
   private iconCache = new Map<string, string>();
 
   get(key: string): ArtPiece {
-    const piece = this.pieces.get(key);
+    const piece = this.pieces.get(key) ?? this.draw(key);
     if (!piece) throw new Error(`Texture inconnue : ${key}`);
     return piece;
   }
 
   has(key: string): boolean {
-    return this.pieces.has(key);
+    return this.pieces.has(key) || this.lazy.has(key);
+  }
+
+  /** Dessine tout de suite les visuels encore en attente (planche de contrôle). */
+  drawAll(): void {
+    for (const key of [...this.lazy.keys()]) this.draw(key);
+  }
+
+  private draw(key: string): ArtPiece | undefined {
+    const make = this.lazy.get(key);
+    if (!make) return undefined;
+    this.lazy.delete(key);
+    const piece = make();
+    if (piece) this.pieces.set(key, piece);
+    return piece ?? undefined;
   }
 
   /** Visuel dessiné à la première demande, puis conservé. */
@@ -111,7 +127,7 @@ export class ArtLibrary {
     const cacheKey = `${key}@${max}`;
     const cached = this.iconCache.get(cacheKey);
     if (cached) return cached;
-    const piece = this.pieces.get(key);
+    const piece = this.pieces.get(key) ?? this.draw(key);
     if (!piece) return '';
     const { width, height } = piece.canvas;
     const scale = Math.min(1, max / Math.max(width, height));
@@ -152,9 +168,12 @@ export class ArtLibrary {
       }
       if (def.category === 'farm') lib.add(ArtKey.building(def.id), plot);
       else if (def.category === 'decoration') {
-        const art = decorationArt(def.id);
-        lib.add(ArtKey.building(def.id), art && outlined(art, 1.6));
-      } else lib.add(ArtKey.building(def.id), buildingArt(def.id));
+        if (DECORATION_ART_IDS.includes(def.id))
+          lib.lazy.set(ArtKey.building(def.id), () => {
+            const art = decorationArt(def.id);
+            return art && outlined(art, 1.6);
+          });
+      } else if (BUILDING_ART_IDS.includes(def.id)) lib.lazy.set(ArtKey.building(def.id), () => buildingArt(def.id));
     }
     lib.add(ArtKey.building('road'), roadTile(5));
     for (const crop of CROPS) {

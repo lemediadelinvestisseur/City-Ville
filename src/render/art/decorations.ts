@@ -1195,3 +1195,5 @@ export function decorationArt(defId: string): ArtPiece | null {
   const draw = DECORATIONS[defId];
   return draw ? draw() : null;
 }
+
+export const DECORATION_ART_IDS = Object.keys(DECORATIONS);
