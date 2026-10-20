@@ -209,7 +209,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     rent: { coins: 220, xp: 4, intervalSec: 10 * MIN },
   }),
 
-  // ——— Commerces : marchandises → recettes ———
+  // ——— Commerces : produits → recettes ———
   business({
     id: 'bakery',
     name: 'Boulangerie',
@@ -518,7 +518,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
     popCap: 1600,
   }),
 
-  // ——— Stockage : capacité de marchandises ———
+  // ——— Stockage : capacité de l'entrepôt ———
   storage({
     id: 'barn',
     name: 'Grange',
@@ -531,7 +531,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
   storage({
     id: 'warehouse',
     name: 'Entrepôt',
-    description: 'Un grand stockage pour vos marchandises.',
+    description: 'Un grand stockage pour vos produits.',
     size: { w: 3, d: 3 },
     cost: { coins: 4000 },
     requires: { level: 5 },
@@ -573,7 +573,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
   {
     id: 'plot',
     name: 'Champ',
-    description: 'Plantez-y des cultures pour produire des marchandises.',
+    description: 'Plantez-y des cultures : blé, fraises, légumes…',
     category: 'farm',
     size: { w: 1, d: 1 },
     cost: { coins: 25 },
@@ -692,7 +692,7 @@ export const BUILDINGS: readonly BuildingDef[] = [
   station({
     id: 'train_station',
     name: 'Gare',
-    description: 'Le train emporte vos marchandises et rapporte des pièces. À poser le long de la voie ferrée.',
+    description: 'Une grosse commande par jour part en train et rapporte gros. À poser le long de la voie ferrée.',
     size: { w: 3, d: 3 },
     cost: { coins: 6000 },
     requires: { level: 10 },

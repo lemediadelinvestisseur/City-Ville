@@ -36,7 +36,8 @@ notifications, messages en jeu regroupés, notifications de l'appareil (« vos f
 ## V1.x — finition
 
 - [ ] Vrais visuels (illustrateur ou packs sous licence) en remplaçant les textures de `render/art/`
-- [ ] Musique d'ambiance, vibrations (Capacitor Haptics), réglage du volume
+- [x] Musique d'ambiance, vibrations (Capacitor Haptics)
+- [ ] Réglage du volume
 - [ ] Routes « au glissé », rotation des constructions, « tout encaisser » d'un geste
 - [ ] Plus de contenu : bâtiments, cultures, objectifs, collections
 - [ ] Tests de bout en bout (Playwright) dans la CI
@@ -48,8 +49,10 @@ notifications, messages en jeu regroupés, notifications de l'appareil (« vos f
 - [ ] Suivi des erreurs (ex. Sentry), agrégats nocturnes des statistiques quand l'audience grandit
 - [ ] Économie validée par le serveur (actions rejouées avec `src/core`) pour un classement incontestable
 - [ ] Cadeaux entre voisins, aide sur un chantier précis, marché d'objets (décorations rares)
-- [ ] Gare et trains pour échanger des marchandises
-- [ ] Objectifs collectifs, événements saisonniers
+- [x] Gare et trains (commande du jour par le train)
+- [x] Produits, élevage, ateliers, repas et bonheur de la ville
+- [x] Commandes du jour, roue de la chance, visiteur surprise, défi de quartier, « J'aime »
+- [ ] Saisons et événements, collections, succès
 
 ## Choix techniques
 

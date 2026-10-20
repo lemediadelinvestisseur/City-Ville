@@ -3,6 +3,7 @@ import type { InboxStore, InboxTarget } from '@/app/inbox';
 import type { ReminderScheduler } from '@/app/reminders';
 import { DEV_TOOLS, GAME_TITLE, GAME_VERSION } from '@/config';
 import { localDay } from '@/core/daily';
+import { weatherAt, type Weather } from '@/core/weather';
 import { findQuestHint, type HintTarget } from '@/core/hints';
 import { DAY_NIGHT_MODES, dayNightAt, type DayNightMode } from '@/core/dayNight';
 import type { KeyValueStorage } from '@/core/save';
@@ -112,6 +113,7 @@ export class UI {
   private started = false;
   /** Outils de test et boutique : réservés au compte administrateur (et au développement). */
   private tester = false;
+  private weather: Weather = weatherAt(Date.now());
 
   constructor(
     parent: HTMLElement,
@@ -384,6 +386,13 @@ export class UI {
   }
 
   private tick(): void {
+    // Pluie ou neige qui commence : un mot (la pluie fait pousser les cultures plus vite).
+    const weather = weatherAt(Date.now());
+    if (this.started && weather !== this.weather) {
+      if (weather === 'rain') this.toasts.show(t('weather.rain'), 'info');
+      else if (weather === 'snow') this.toasts.show(t('weather.snow'), 'info');
+    }
+    this.weather = weather;
     this.hud.refreshTimer();
     this.bubble.tick();
   }

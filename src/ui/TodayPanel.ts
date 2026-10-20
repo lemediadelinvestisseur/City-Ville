@@ -201,7 +201,7 @@ export class TodayPanel {
         h('span', {
           class: 'wheel__label',
           text: PRIZE_EMOJI[prize.id],
-          style: `transform: rotate(${angle}deg) translateY(-38%) rotate(${-angle}deg)`,
+          style: `transform: rotate(${angle}deg) translateY(calc(var(--wheel-size) * -0.33)) rotate(${-angle}deg)`,
         }),
       );
     });
@@ -211,9 +211,13 @@ export class TodayPanel {
       text: info.spinsLeft > 0 ? t('wheel.spin', { n: info.spinsLeft }) : t('wheel.none'),
       onClick: () => {
         if (this.spinning) return;
-        const outcome = this.game.spinWheel(Math.random());
-        if (!outcome.ok) return;
+        // Pas de nouveau rendu de la fenêtre pendant que la roue tourne.
         this.spinning = true;
+        const outcome = this.game.spinWheel(Math.random());
+        if (!outcome.ok) {
+          this.spinning = false;
+          return;
+        }
         spin.disabled = true;
         const target = 360 * 5 + (360 - (outcome.index + 0.5) * slice);
         const done = () => {

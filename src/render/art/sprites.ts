@@ -138,7 +138,8 @@ export function drawFish(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.fill();
 }
 
-export type BadgeKind = 'coin' | 'goods' | 'build' | 'harvest' | 'plant' | 'fish' | 'road' | 'train';
+export type BadgeKind =
+  'coin' | 'goods' | 'build' | 'harvest' | 'plant' | 'fish' | 'road' | 'train' | 'meal' | 'visitor';
 
 export const BADGE_KINDS: readonly BadgeKind[] = [
   'coin',
@@ -222,6 +223,8 @@ export function badge(kind: BadgeKind): ArtPiece {
     fish: '#0288d1',
     road: '#e53935',
     train: '#c62828',
+    meal: '#8e24aa',
+    visitor: '#00897b',
   }[kind];
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath();
@@ -242,7 +245,33 @@ export function badge(kind: BadgeKind): ArtPiece {
   else if (kind === 'harvest') drawBasket(ctx, cx, cy + 2, 34);
   else if (kind === 'fish') drawFish(ctx, cx, cy + 1, 34);
   else if (kind === 'road') drawRoadSign(ctx, cx, cy);
-  else if (kind === 'train') {
+  else if (kind === 'meal') {
+    // Assiette, fourchette et couteau.
+    ctx.fillStyle = '#eceff1';
+    ctx.strokeStyle = '#90a4ae';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#607d8b';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - 19, cy - 12);
+    ctx.lineTo(cx - 19, cy + 13);
+    ctx.moveTo(cx + 19, cy - 12);
+    ctx.lineTo(cx + 19, cy + 13);
+    ctx.stroke();
+  } else if (kind === 'visitor') {
+    ctx.fillStyle = '#00897b';
+    ctx.font = 'bold 34px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', cx, cy + 2);
+  } else if (kind === 'train') {
     drawCoin(ctx, cx + 6, cy + 5, 10);
     drawTrainFront(ctx, cx - 4, cy - 1);
   } else {
