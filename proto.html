@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Prototype style</title>
+    <style>
+      body {
+        margin: 0;
+        background: #2b2b2b;
+        color: #fff;
+        font: 16px system-ui;
+      }
+      #proto {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px;
+      }
+      figure {
+        margin: 0;
+        flex: 1 1 45%;
+      }
+      .row {
+        display: flex;
+        gap: 20px;
+        align-items: flex-end;
+        background: #7cc443;
+        padding: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="proto"></div>
+    <script type="module" src="/src/dev/protoStyle.ts"></script>
+  </body>
+</html>
