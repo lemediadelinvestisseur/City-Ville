@@ -2,7 +2,15 @@ import type Phaser from 'phaser';
 import { roadMask } from '@/core/grid';
 import type { Terrain } from '@/core/types';
 import { CHUNK_SIZE, MAP_H, MAP_W } from '@/data/balance';
-import { groundCoverOf, isSceneryRoad, mountainPeaks, rockScatterOf, sceneryOf, type Peak } from '@/data/scenery';
+import {
+  RAIL_END_Y,
+  groundCoverOf,
+  isSceneryRoad,
+  mountainPeaks,
+  rockScatterOf,
+  sceneryOf,
+  type Peak,
+} from '@/data/scenery';
 import {
   GROUND_PERIOD,
   grassFringe,
@@ -100,8 +108,10 @@ export class MapLayer {
     private readonly art: ArtLibrary,
     private readonly world: MapWorld,
   ) {
-    this.groundAtlas = new TerrainAtlas(scene, 'atlas_ground', 1024);
-    this.objectAtlas = new TerrainAtlas(scene, 'atlas_objects', 2048, true);
+    // Un atlas par scène : la ville visitée ne doit pas écraser celle du joueur (en sommeil).
+    const prefix = `atlas_${scene.sys.settings.key}`;
+    this.groundAtlas = new TerrainAtlas(scene, `${prefix}_ground`, 1024);
+    this.objectAtlas = new TerrainAtlas(scene, `${prefix}_objects`, 2048, true);
   }
 
   /** Route sauvage (décor) sur cette case, dans une zone pas encore achetée. */
@@ -260,6 +270,18 @@ export class MapLayer {
 
   private buildWild(view: ChunkView): void {
     for (const item of sceneryOf(view.cx, view.cy)) {
+      if (item.defId === 'rail') {
+        const key = ArtKey.rail(item.y === RAIL_END_Y);
+        const piece = this.art.get(key);
+        const pos = tileToWorld(item.x, item.y);
+        const image = this.scene.add
+          .image(pos.x, pos.y, key)
+          .setOrigin(piece.originX, piece.originY)
+          .setDepth(DEPTH_ROAD)
+          .setTint(LOCKED_TINT);
+        view.wild.push(image);
+        continue;
+      }
       if (item.defId === 'road') {
         const key = this.roadKey(item.x, item.y);
         const piece = this.art.get(key);

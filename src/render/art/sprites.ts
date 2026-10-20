@@ -138,7 +138,74 @@ export function drawFish(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.fill();
 }
 
-export type BadgeKind = 'coin' | 'goods' | 'build' | 'harvest' | 'plant' | 'fish';
+export type BadgeKind = 'coin' | 'goods' | 'build' | 'harvest' | 'plant' | 'fish' | 'road' | 'train';
+
+export const BADGE_KINDS: readonly BadgeKind[] = [
+  'coin',
+  'goods',
+  'build',
+  'harvest',
+  'plant',
+  'fish',
+  'road',
+  'train',
+];
+
+/** Panneau « route manquante » : triangle et tronçon de route. */
+function drawRoadSign(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+  ctx.fillStyle = '#ffca28';
+  ctx.strokeStyle = '#c62828';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 17);
+  ctx.lineTo(cx + 17, cy + 12);
+  ctx.lineTo(cx - 17, cy + 12);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#424242';
+  ctx.beginPath();
+  ctx.moveTo(cx - 3, cy - 7);
+  ctx.lineTo(cx + 3, cy - 7);
+  ctx.lineTo(cx + 7, cy + 9);
+  ctx.lineTo(cx - 7, cy + 9);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 5);
+  ctx.lineTo(cx, cy - 1);
+  ctx.moveTo(cx, cy + 2);
+  ctx.lineTo(cx, cy + 7);
+  ctx.stroke();
+}
+
+/** Face avant d'une locomotive. */
+function drawTrainFront(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+  ctx.fillStyle = '#e53935';
+  ctx.strokeStyle = '#8e1b1b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(cx - 11, cy - 13, 22, 22, 5);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#bbdefb';
+  ctx.fillRect(cx - 7, cy - 9, 14, 7);
+  ctx.fillStyle = '#fff59d';
+  ctx.beginPath();
+  ctx.arc(cx - 6, cy + 4, 2, 0, Math.PI * 2);
+  ctx.arc(cx + 6, cy + 4, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#455a64';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - 7, cy + 9);
+  ctx.lineTo(cx - 10, cy + 14);
+  ctx.moveTo(cx + 7, cy + 9);
+  ctx.lineTo(cx + 10, cy + 14);
+  ctx.stroke();
+}
 
 /** Bulle d'état affichée au-dessus d'une construction. */
 export function badge(kind: BadgeKind): ArtPiece {
@@ -153,6 +220,8 @@ export function badge(kind: BadgeKind): ArtPiece {
     harvest: '#43a047',
     plant: '#8d6e63',
     fish: '#0288d1',
+    road: '#e53935',
+    train: '#c62828',
   }[kind];
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath();
@@ -172,7 +241,11 @@ export function badge(kind: BadgeKind): ArtPiece {
   else if (kind === 'build') drawHammer(ctx, cx, cy + 2, 30);
   else if (kind === 'harvest') drawBasket(ctx, cx, cy + 2, 34);
   else if (kind === 'fish') drawFish(ctx, cx, cy + 1, 34);
-  else {
+  else if (kind === 'road') drawRoadSign(ctx, cx, cy);
+  else if (kind === 'train') {
+    drawCoin(ctx, cx + 6, cy + 5, 10);
+    drawTrainFront(ctx, cx - 4, cy - 1);
+  } else {
     // Pousse à planter.
     ctx.fillStyle = '#8b6240';
     ctx.beginPath();

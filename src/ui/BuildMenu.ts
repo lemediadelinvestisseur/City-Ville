@@ -32,6 +32,10 @@ function effectLine(def: BuildingDef): string {
       return t('build.effect.decoration', { percent: def.bonus.percent, radius: def.bonus.radius });
     case 'road':
       return t('build.effect.road');
+    case 'station':
+      return t('build.effect.station');
+    case 'rail':
+      return '';
     case 'port':
       return def.boatTier === 1
         ? t('build.effect.port1')
@@ -128,6 +132,15 @@ export class BuildMenu {
       ? h('span', { class: 'cost cost--cash' }, icon(Icons.cash), formatNumber(def.cost.cash))
       : h('span', { class: 'cost' }, icon(Icons.coin), formatNumber(def.cost.coins ?? 0));
     if (reason === 'notEnoughCoins' || reason === 'notEnoughCash') cost.classList.add('is-short');
+    // Matériaux : marchandises demandées en plus des pièces.
+    const goods = def.cost.goods
+      ? h(
+          'span',
+          { class: `cost cost--goods${reason === 'notEnoughGoods' ? ' is-short' : ''}` },
+          icon(Icons.goods),
+          formatNumber(def.cost.goods),
+        )
+      : null;
     let lockText = '';
     if (reason === 'levelLocked') lockText = t('common.level', { level: def.requires?.level ?? 1 });
     else if (reason === 'populationLocked') lockText = t('build.lockPopulation', { n: def.requires?.population ?? 0 });
@@ -170,6 +183,7 @@ export class BuildMenu {
         'span',
         { class: 'card__footer' },
         cost,
+        goods,
         def.buildSec > 0
           ? h(
               'span',

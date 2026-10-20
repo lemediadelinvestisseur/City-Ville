@@ -1,4 +1,4 @@
-import type { CropDef, TripDef } from '@/core/types';
+import type { CropDef, ShipmentDef, TripDef } from '@/core/types';
 
 const MIN = 60;
 const HOUR = 3600;
@@ -71,8 +71,36 @@ export const TRIPS: readonly TripDef[] = [
   },
 ];
 
+/**
+ * Livraisons par le train (gare) : elles écoulent les marchandises en trop.
+ * Moins rentables qu'un commerce (5 à 7 pièces par marchandise), mais sans limite.
+ */
+export const SHIPMENTS: readonly ShipmentDef[] = [
+  { id: 'local', name: 'Livraison locale', durationSec: 30 * MIN, goods: 40, coins: 220, xp: 3 },
+  { id: 'regional', name: 'Train régional', durationSec: 2 * HOUR, goods: 120, coins: 720, xp: 6 },
+  {
+    id: 'freight',
+    name: 'Train de marchandises',
+    durationSec: 6 * HOUR,
+    goods: 320,
+    coins: 2000,
+    xp: 12,
+    requires: { level: 14 },
+  },
+  {
+    id: 'convoy',
+    name: 'Grand convoi',
+    durationSec: 12 * HOUR,
+    goods: 700,
+    coins: 4600,
+    xp: 22,
+    requires: { level: 20 },
+  },
+];
+
 const CROP_BY_ID = new Map(CROPS.map((crop) => [crop.id, crop]));
 const TRIP_BY_ID = new Map(TRIPS.map((trip) => [trip.id, trip]));
+const SHIPMENT_BY_ID = new Map(SHIPMENTS.map((shipment) => [shipment.id, shipment]));
 
 export function findCropDef(id: string): CropDef | undefined {
   return CROP_BY_ID.get(id);
@@ -92,4 +120,14 @@ export function getTripDef(id: string): TripDef {
   const trip = TRIP_BY_ID.get(id);
   if (!trip) throw new Error(`Expédition inconnue : ${id}`);
   return trip;
+}
+
+export function findShipmentDef(id: string): ShipmentDef | undefined {
+  return SHIPMENT_BY_ID.get(id);
+}
+
+export function getShipmentDef(id: string): ShipmentDef {
+  const shipment = SHIPMENT_BY_ID.get(id);
+  if (!shipment) throw new Error(`Livraison inconnue : ${id}`);
+  return shipment;
 }

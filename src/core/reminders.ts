@@ -11,7 +11,15 @@ import type { Game, ReadyKind } from './game';
 
 export type ReminderKind = ReadyKind | 'energy' | 'daily';
 
-export const REMINDER_KINDS: readonly ReminderKind[] = ['crop', 'build', 'boat', 'business', 'energy', 'daily'];
+export const REMINDER_KINDS: readonly ReminderKind[] = [
+  'crop',
+  'build',
+  'boat',
+  'train',
+  'business',
+  'energy',
+  'daily',
+];
 
 export interface Reminder {
   at: number;
@@ -58,6 +66,7 @@ export function planReminders(game: Game, now: number, options: ReminderOptions)
     }
     if (entity.farm?.cropId) add({ at: entity.farm.readyAt, kind: 'crop', count: 1, cropId: entity.farm.cropId });
     if (entity.port?.tripId) add({ at: entity.port.readyAt, kind: 'boat', count: 1, defId: entity.defId });
+    if (entity.station?.shipmentId) add({ at: entity.station.readyAt, kind: 'train', count: 1 });
     if (entity.business && entity.business.readyAt !== null) {
       add({ at: entity.business.readyAt, kind: 'business', count: 1, defId: entity.defId });
     }

@@ -31,6 +31,20 @@ const translation: Translation = {
     'hud.energy': 'Energia',
     'hud.goods': 'Mercadorias',
     'hud.population': 'Habitantes',
+    'hud.workers': 'Operários disponíveis',
+    'toast.trainSent': 'O trem parte com suas mercadorias: volta em {duration}.',
+    'toast.needsRoad': '{name} precisa tocar uma estrada para funcionar.',
+    'fail.needsRoad': 'Ligue este edifício a uma estrada para que funcione.',
+    'fail.needsRail': 'A estação deve ficar ao lado da ferrovia.',
+    'fail.noWorker': 'Seu operário já está em uma obra: espere terminar ou acelere-a.',
+    'workers.hire': 'Contratar um operário',
+    'build.effect.station': 'O trem troca suas mercadorias por moedas',
+    'shipments.title': 'O que o trem leva?',
+    'shipments.aria': 'Carregar o trem',
+    'bubble.delivery': 'Na volta: {icon} {coins} moedas',
+    'bubble.trainDocked': 'O trem espera na estação. Toque na estação para carregá-lo.',
+    'bubble.needsRoad': 'Sem estrada: edifício parado',
+    'notif.kind.train': 'Retorno dos trens',
     'hud.getCoins': 'Obter moedas',
     'hud.getCash': 'Obter cash',
     'hud.getEnergy': 'Obter energia',
@@ -411,6 +425,8 @@ const translation: Translation = {
     'ready.boat#one': 'O barco voltou ao porto com a pesca!',
     'ready.boat#many': '{n} barcos voltaram ao porto com a pesca!',
     'ready.boat#other': '{n} barcos voltaram ao porto com a pesca!',
+    'ready.train#one': 'O trem voltou com o lucro!',
+    'ready.train#other': '{n} trens voltaram com o lucro!',
     'ready.business#one': '{name} atendeu todos os clientes: colete a receita!',
     'ready.business#many': '{n} comércios esperam você coletar a receita!',
     'ready.business#other': '{n} comércios esperam você coletar a receita!',
@@ -427,6 +443,8 @@ const translation: Translation = {
     'away.boat#one': '{n} barco de volta',
     'away.boat#many': '{n} barcos de volta',
     'away.boat#other': '{n} barcos de volta',
+    'away.train#one': '{n} trem de volta',
+    'away.train#other': '{n} trens de volta',
     'away.business#one': '{n} comércio para coletar',
     'away.business#many': '{n} comércios para coletar',
     'away.business#other': '{n} comércios para coletar',
@@ -556,7 +574,10 @@ const translation: Translation = {
       fire_station: { name: 'Corpo de Bombeiros', description: 'Sempre prontos para agir.' },
       library: { name: 'Biblioteca', description: 'O saber ao alcance das mãos.' },
       hospital: { name: 'Hospital', description: 'Cuidados para toda a região.' },
-      train_station: { name: 'Estação de trem', description: 'Os trens ligam sua cidade ao resto do país.' },
+      train_station: {
+        name: 'Estação de trem',
+        description: 'O trem leva suas mercadorias e traz moedas. Coloque-a ao lado da ferrovia.',
+      },
       university: { name: 'Universidade', description: 'Estudantes chegam de todos os lugares.' },
       museum: { name: 'Museu', description: 'Obras vindas do mundo inteiro.' },
       convention_center: { name: 'Centro de convenções', description: 'Feiras e grandes eventos.' },
@@ -601,6 +622,7 @@ const translation: Translation = {
         description:
           'Liga as duas margens: a margem leste fica disponível para expansão. Deve ser colocada sobre o braço de mar.',
       },
+      rail: { name: 'Ferrovia', description: 'A linha que liga a cidade ao resto do país.' },
     },
     categories: {
       house: 'Casas',
@@ -611,6 +633,7 @@ const translation: Translation = {
       storage: 'Estoque',
       decoration: 'Decoração',
       road: 'Ruas',
+      station: 'Trem',
     },
     crops: {
       strawberry: 'Morangos',
@@ -630,6 +653,12 @@ const translation: Translation = {
       trawl: 'Pesca de arrasto',
       campaign: 'Grande pescaria',
       industrial: 'Expedição industrial',
+    },
+    shipments: {
+      local: 'Entrega local',
+      regional: 'Trem regional',
+      freight: 'Trem de carga',
+      convoy: 'Grande comboio',
     },
     quests: {
       welcome: {
@@ -796,6 +825,11 @@ const translation: Translation = {
       },
     },
     products: {
+      worker_2: {
+        title: 'Segundo operário',
+        description: 'Duas obras ao mesmo tempo, para sempre',
+        badge: 'Oferta única',
+      },
       starter_pack: {
         title: 'Pacote inicial',
         description: '30 cash + 5.000 moedas + 10 de energia',

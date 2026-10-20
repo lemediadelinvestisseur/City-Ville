@@ -6,10 +6,10 @@ import { localDay } from '@/core/daily';
 import { findQuestHint, type HintTarget } from '@/core/hints';
 import { DAY_NIGHT_MODES, dayNightAt, type DayNightMode } from '@/core/dayNight';
 import type { KeyValueStorage } from '@/core/save';
-import type { BuildingDef, CropDef, FailReason, Reward, TripDef } from '@/core/types';
+import type { BuildingDef, CropDef, Entity, FailReason, Reward, ShipmentDef, TripDef } from '@/core/types';
 import { CHUNK_SIZE, ENERGY_REGEN_SEC, LOGIN_STREAK_DAYS, loginReward, xpForLevel } from '@/data/balance';
 import { findBuildingDef, getBuildingDef } from '@/data/buildings';
-import { CROPS } from '@/data/crops';
+import { CROPS, findShipmentDef } from '@/data/crops';
 import { findCashOffer, type StoreProduct } from '@/data/products';
 import { getQuestDef } from '@/data/quests';
 import { isEastChunk } from '@/data/terrain';
@@ -22,6 +22,7 @@ import {
   questIntro,
   questLabels,
   questTitle,
+  shipmentName,
   tripName,
 } from '@/i18n/content';
 import { ArtKey } from '@/render/art/library';
@@ -46,6 +47,7 @@ import { Shop, type ShopTab } from './Shop';
 import { SideButtons, type SideButton } from './SideButtons';
 import { SocialUi, type SocialOptions } from './SocialUi';
 import { Toasts } from './Toasts';
+import { ShipmentPicker } from './ShipmentPicker';
 import { TripPicker } from './TripPicker';
 
 type Mode = 'play' | 'edit';
@@ -71,6 +73,7 @@ export class UI {
   private buildMenu: BuildMenu;
   private cropPicker: CropPicker;
   private tripPicker: TripPicker;
+  private shipmentPicker: ShipmentPicker;
   private bubble: Bubble;
   private shop: Shop;
   private flying: FlyingRewards;
@@ -127,6 +130,12 @@ export class UI {
       game,
       art,
       (id, trip) => this.sendBoat(id, trip),
+      () => this.refreshDock(),
+    );
+    this.shipmentPicker = new ShipmentPicker(
+      game,
+      art,
+      (id, shipment) => this.sendTrain(id, shipment),
       () => this.refreshDock(),
     );
     this.bubble = new Bubble(game, {
@@ -199,6 +208,7 @@ export class UI {
       this.buildMenu.el,
       this.cropPicker.el,
       this.tripPicker.el,
+      this.shipmentPicker.el,
       this.social.panel.el,
       this.chat.el,
       this.inboxPanel.el,
@@ -278,6 +288,15 @@ export class UI {
         icon: Icons.build,
       });
     });
+    // Un bâtiment posé (ou déplacé) loin des routes ne fonctionnera pas : on le signale tout de suite.
+    const warnRoad = (entity: Entity) => {
+      if (entity.starter || game.isConnected(entity)) return;
+      this.toasts.show(t('toast.needsRoad', { name: buildingName(entity.defId) }), 'info', undefined, {
+        icon: Icons.road,
+      });
+    };
+    game.events.on('entityAdded', warnRoad);
+    game.events.on('entityMoved', warnRoad);
     game.events.on('expanded', () =>
       this.toasts.show(t('toast.expanded'), 'success', undefined, { icon: Icons.expand }),
     );
@@ -290,6 +309,8 @@ export class UI {
         this.refreshDock();
       } else if (action.type === 'sendBoat') {
         this.tripPicker.open(entityId);
+      } else if (action.type === 'sendTrain') {
+        this.shipmentPicker.open(entityId);
       } else {
         this.bubble.showInfo(entityId, screen);
       }
@@ -327,6 +348,7 @@ export class UI {
     this.buildMenu.close();
     this.cropPicker.close();
     this.tripPicker.close();
+    this.shipmentPicker.close();
     this.social.panel.close();
     this.chat.close();
     this.inboxPanel.close();
@@ -387,6 +409,7 @@ export class UI {
       this.buildMenu.isOpen ||
       this.cropPicker.isOpen ||
       this.tripPicker.isOpen ||
+      this.shipmentPicker.isOpen ||
       this.social.panel.isOpen ||
       this.chat.isOpen ||
       this.inboxPanel.isOpen;
@@ -542,6 +565,16 @@ export class UI {
           this.tester ? { label: t('toast.getCash'), onClick: () => this.openShop('cash') } : undefined,
         );
         return;
+      case 'noWorker':
+        this.toasts.show(
+          failMessage(reason, missing),
+          'error',
+          this.tester && !this.ctx.game.state.oneTimePurchases.includes('worker_2')
+            ? { label: t('workers.hire'), onClick: () => this.openShop('cash') }
+            : undefined,
+          { icon: Icons.worker },
+        );
+        return;
       default:
         this.toasts.show(failMessage(reason, missing), 'error');
     }
@@ -576,6 +609,23 @@ export class UI {
     this.tripPicker.close();
     this.toasts.show(t('toast.boatSent', { duration: formatDuration(trip.durationSec) }), 'info', undefined, {
       icon: Icons.boat,
+    });
+  }
+
+  private sendTrain(entityId: number, shipment: ShipmentDef): void {
+    const result = this.ctx.game.sendTrain(entityId, shipment.id);
+    if (!result.ok) {
+      if (result.reason === 'levelLocked') {
+        this.toasts.show(
+          t('toast.levelRequired', { name: shipmentName(shipment), level: shipment.requires?.level ?? 1 }),
+          'error',
+        );
+      } else this.onFail(result.reason, result.missing);
+      return;
+    }
+    this.shipmentPicker.close();
+    this.toasts.show(t('toast.trainSent', { duration: formatDuration(shipment.durationSec) }), 'info', undefined, {
+      icon: Icons.train,
     });
   }
 
@@ -783,14 +833,25 @@ export class UI {
     const items = unlocked.map((id) => {
       const building = findBuildingDef(id);
       const crop = CROPS.find((c) => c.id === id);
+      const shipment = findShipmentDef(id);
       const src = building
         ? this.ctx.art.iconUrl(ArtKey.building(id), 96)
-        : this.ctx.art.iconUrl(ArtKey.cropIcon(id), 96);
+        : shipment
+          ? this.ctx.art.iconUrl(ArtKey.train, 96)
+          : this.ctx.art.iconUrl(ArtKey.cropIcon(id), 96);
       return h(
         'div',
         { class: 'unlock' },
         h('img', { attrs: { src, alt: '' } }),
-        h('span', { text: building ? buildingName(building) : crop ? cropName(crop) : tripName(id) }),
+        h('span', {
+          text: building
+            ? buildingName(building)
+            : crop
+              ? cropName(crop)
+              : shipment
+                ? shipmentName(shipment)
+                : tripName(id),
+        }),
       );
     });
     this.modals.show({

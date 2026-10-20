@@ -36,7 +36,7 @@ export class NotificationsUi {
       let wait = 0;
       if (event.type === 'plant') wait = getCropDef(event.cropId).growSec;
       else if (event.type === 'place') wait = getBuildingDef(event.defId).buildSec;
-      else if (event.type === 'sendBoat') wait = LONG_WAIT_SEC;
+      else if (event.type === 'sendBoat' || event.type === 'sendTrain') wait = LONG_WAIT_SEC;
       if (wait >= LONG_WAIT_SEC) void this.maybeAsk();
     });
   }

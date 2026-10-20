@@ -36,12 +36,12 @@ function setup(): { game: Game; clock: FakeClock } {
 
 const byDef = (game: Game, defId: string): Entity[] => game.state.entities.filter((e) => e.defId === defId);
 
-/** Premier emplacement libre (balayage) pour une construction donnée. */
+/** Premier emplacement libre (balayage) pour une construction donnée, au bord d'une route si elle en a besoin. */
 function freeSpot(game: Game, defId: string): { x: number; y: number } {
   const def = getBuildingDef(defId);
   for (let y = 0; y < 40; y++) {
     for (let x = 0; x < 40; x++) {
-      if (game.checkPlacement(def, x, y) === null) return { x, y };
+      if (game.checkPlacement(def, x, y) === null && game.wouldConnect(def, x, y)) return { x, y };
     }
   }
   throw new Error('Aucun emplacement libre');
@@ -105,6 +105,7 @@ describe('placement', () => {
     const { game } = setup();
     // Niveau 6 : jusqu'à 6 maisonnettes (2 de départ + 4), la limite ne gêne pas.
     game.devGrant({ coins: 10_000, xp: 400 });
+    game.state.workers = 4;
     // 30 habitants + 3 maisonnettes (45) = 75 ≤ 80, la 4e dépasse.
     for (let i = 0; i < 3; i++) {
       const spot = freeSpot(game, 'cottage');
@@ -676,6 +677,7 @@ describe('limites et améliorations', () => {
   it('limite le nombre d’exemplaires d’un bâtiment selon le niveau', () => {
     const { game } = setup();
     game.devGrant({ coins: 100_000 });
+    game.state.workers = 3;
     // Niveau 1 : 4 maisonnettes au plus, dont 2 de départ.
     expect(game.buildLimitFor(getBuildingDef('cottage'))).toBe(4);
     for (let i = 0; i < 2; i++) {
@@ -741,5 +743,118 @@ describe('limites et améliorations', () => {
     const copy = restored.entities.find((e) => e.id === house.id)!;
     expect(copy.stars).toBe(1);
     expect(copy.upgrade).toEqual(house.upgrade);
+  });
+});
+
+describe('routes, ouvriers et train', () => {
+  it('ne fait fonctionner un bâtiment que relié à une route', () => {
+    const { game, clock } = setup();
+    game.devGrant({ coins: 5000 });
+    const def = getBuildingDef('cottage');
+    if (def.category !== 'house') throw new Error();
+    // Un coin isolé de la ville de départ, loin des routes.
+    const spot = { x: 9, y: 9 };
+    while (game.checkPlacement(def, spot.x, spot.y) !== null || game.wouldConnect(def, spot.x, spot.y)) spot.x++;
+    const placed = game.place('cottage', spot.x, spot.y);
+    if (!placed.ok) throw new Error(placed.reason);
+    clock.advance(def.buildSec);
+    game.finishBuild(placed.entity.id);
+    const population = game.derived().population;
+    expect(game.isConnected(placed.entity)).toBe(false);
+    clock.advance(3600);
+    expect(game.primaryAction(placed.entity).type).toBe('needsRoad');
+    expect(game.collectRent(placed.entity.id)).toMatchObject({ ok: false, reason: 'needsRoad' });
+    // Un bout de route contre la maison suffit.
+    const road = getBuildingDef('road');
+    const side = [
+      { x: spot.x, y: spot.y + def.size.d },
+      { x: spot.x + def.size.w, y: spot.y },
+      { x: spot.x, y: spot.y - 1 },
+      { x: spot.x - 1, y: spot.y },
+    ].find((p) => game.checkPlacement(road, p.x, p.y) === null)!;
+    expect(game.place('road', side.x, side.y).ok).toBe(true);
+    expect(game.isConnected(placed.entity)).toBe(true);
+    expect(game.derived().population).toBe(population + def.population);
+    expect(game.primaryAction(placed.entity).type).toBe('collectRent');
+  });
+
+  it('mène un seul chantier à la fois avec un ouvrier', () => {
+    const { game, clock } = setup();
+    game.devGrant({ coins: 5000 });
+    expect(game.workersInfo()).toMatchObject({ busy: 0, total: 1 });
+    const first = freeSpot(game, 'cottage');
+    const placed = game.place('cottage', first.x, first.y);
+    if (!placed.ok) throw new Error(placed.reason);
+    expect(game.workersInfo()).toMatchObject({ busy: 1, total: 1 });
+    const second = freeSpot(game, 'cottage');
+    expect(game.place('cottage', second.x, second.y)).toMatchObject({ ok: false, reason: 'noWorker' });
+    // Les constructions immédiates (routes, champs) n'ont pas besoin d'ouvrier.
+    const plot = freeSpot(game, 'plot');
+    expect(game.place('plot', plot.x, plot.y).ok).toBe(true);
+    clock.advance(getBuildingDef('cottage').buildSec);
+    game.finishBuild(placed.entity.id);
+    expect(game.place('cottage', second.x, second.y).ok).toBe(true);
+  });
+
+  it('engage un deuxième ouvrier une seule fois', () => {
+    const { game } = setup();
+    expect(game.grantStoreProduct('worker_2').ok).toBe(true);
+    expect(game.state.workers).toBe(2);
+    expect(game.grantStoreProduct('worker_2')).toMatchObject({ ok: false, reason: 'alreadyOwned' });
+    expect(game.state.workers).toBe(2);
+  });
+
+  it('pose la gare le long de la voie ferrée et échange des marchandises contre des pièces', () => {
+    const { game, clock } = setup();
+    game.devGrant({ coins: 100_000, xp: xpForLevel(10), goods: 200 });
+    const g = game;
+    // La voie ferrée arrive avec la zone qu'elle traverse.
+    expect(g.buyExpansion(0, 1).ok).toBe(true);
+    expect(g.state.entities.some((e) => e.defId === 'rail')).toBe(true);
+    const station = getBuildingDef('train_station');
+    expect(g.checkPlacement(station, 12, 10)).toBe('needsRail');
+    // À l'est de la voie (colonne 4), avec une route contre la gare.
+    let spot: { x: number; y: number } | null = null;
+    for (let y = 8; y < 16 && !spot; y++) if (g.checkPlacement(station, 5, y) === null) spot = { x: 5, y };
+    if (!spot) throw new Error('pas de place le long de la voie');
+    const placed = g.place('train_station', spot.x, spot.y);
+    if (!placed.ok) throw new Error(placed.reason);
+    g.place('road', spot.x + station.size.w, spot.y);
+    g.speedUp(placed.entity.id);
+    expect(g.primaryAction(placed.entity).type).toBe('sendTrain');
+    const goods = g.state.goods;
+    expect(g.sendTrain(placed.entity.id, 'local').ok).toBe(true);
+    expect(g.state.goods).toBe(goods - 40);
+    expect(g.primaryAction(placed.entity).type).toBe('waitTrain');
+    clock.advance(30 * 60);
+    const coins = g.state.coins;
+    expect(g.unloadTrain(placed.entity.id)).toMatchObject({ ok: true, coins: 220 });
+    expect(g.state.coins).toBe(coins + 220);
+  });
+
+  it('ne vend pas les zones de montagne', () => {
+    const { game } = setup();
+    expect(terrainAt(104, 22)).toBe('rock');
+    expect(game.expansionInfo(13, 2)).toEqual({ status: 'unavailable' });
+    // Au nord de la ville, la forêt remplace les montagnes : elle s'achète.
+    expect(terrainAt(16, 3)).toBe('grass');
+    expect(game.expansionInfo(2, 0).status).toBe('purchasable');
+  });
+});
+
+describe('migration v6 → v7', () => {
+  it('donne un ouvrier et pose la voie ferrée dans les zones déjà achetées', () => {
+    const { game } = setup();
+    const state = JSON.parse(JSON.stringify(game.state)) as Record<string, unknown>;
+    delete state.workers;
+    state.unlockedChunks = [...(state.unlockedChunks as string[]), '0,1'];
+    // Un arbre sauvage adopté autrefois sur le tracé de la voie.
+    (state.entities as unknown[]).push({ id: 999, defId: 'tree_pine', x: 4, y: 10, built: true, starter: true });
+    const restored = deserialize(JSON.stringify({ version: 6, savedAt: game.now(), state }));
+    expect(restored?.workers).toBe(1);
+    const rails = restored!.entities.filter((e) => e.defId === 'rail');
+    expect(rails.map((e) => e.y).sort((a, b) => a - b)).toEqual([8, 9, 10, 11, 12, 13, 14, 15]);
+    expect(restored!.entities.some((e) => e.id === 999)).toBe(false);
+    expect(new Set(restored!.entities.map((e) => e.id)).size).toBe(restored!.entities.length);
   });
 });

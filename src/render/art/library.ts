@@ -7,6 +7,7 @@ import type { ShoreKind } from './ground';
 import { createCanvas, type ArtPiece } from './IsoPainter';
 import { BROADLEAF_VARIANTS, CONIFER_VARIANTS, broadleafTree, coniferTree, type PlantKind } from './nature';
 import {
+  BADGE_KINDS,
   badge,
   cloud,
   coinParticle,
@@ -19,6 +20,7 @@ import {
   hammerTool,
   type BadgeKind,
 } from './sprites';
+import { railTile, trainArt } from './rail';
 import { constructionSite, cropOverlay, forSaleSign, plotTile, roadTile } from './terrain';
 
 export const WALKER_VARIANTS = 8;
@@ -43,6 +45,8 @@ export const ArtKey = {
   tree: (kind: TreeKind, variant: number) => `tree_${kind}_${variant}`,
   plant: (kind: PlantKind, variant: number) => `plant_${kind}_${variant}`,
   boat: (tier: number) => `boat_${tier}`,
+  rail: (end: boolean) => (end ? 'rail_end' : 'rail'),
+  train: 'train',
   truck: (axis: 'x' | 'y') => `truck_${axis}`,
   worker: 'worker',
   hammerTool: 'hammer_tool',
@@ -133,6 +137,10 @@ export class ArtLibrary {
     const plot = plotTile();
     for (const def of BUILDINGS) {
       if (def.id === 'road') continue;
+      if (def.id === 'rail') {
+        lib.add(ArtKey.building(def.id), railTile(false));
+        continue;
+      }
       if (def.id === 'bridge') {
         lib.add(ArtKey.building(def.id), bridgeArt());
         continue;
@@ -149,8 +157,10 @@ export class ArtLibrary {
       lib.add(ArtKey.cropIcon(crop.id), compose(plot, lib.get(ArtKey.crop(crop.id, 'ripe'))));
     }
     for (const size of [1, 2, 3, 4]) lib.add(ArtKey.construction(size), constructionSite(size));
-    for (const kind of ['coin', 'goods', 'build', 'harvest', 'plant', 'fish'] as const)
-      lib.add(ArtKey.badge(kind), badge(kind));
+    for (const kind of BADGE_KINDS) lib.add(ArtKey.badge(kind), badge(kind));
+    lib.add(ArtKey.rail(false), railTile(false));
+    lib.add(ArtKey.rail(true), railTile(true));
+    lib.add(ArtKey.train, trainArt());
     for (let i = 0; i < WALKER_VARIANTS; i++) lib.add(ArtKey.walker(i), walker(i));
     for (let i = 0; i < CLOUD_VARIANTS; i++) lib.add(ArtKey.cloud(i), cloud(i));
     lib.add(ArtKey.forSale, forSaleSign());

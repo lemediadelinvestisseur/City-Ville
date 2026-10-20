@@ -1,5 +1,5 @@
 import { BUILDINGS, getBuildingDef } from '@/data/buildings';
-import { CROPS, TRIPS } from '@/data/crops';
+import { CROPS, SHIPMENTS, TRIPS } from '@/data/crops';
 import type { Clock } from './game';
 import { Game } from './game';
 import { CHUNK_SIZE } from '@/data/balance';
@@ -100,6 +100,18 @@ function collectAll(game: Game, gapSec: number): number {
       case 'supply':
         ok = game.supply(entity.id).ok;
         break;
+      case 'unloadTrain':
+        ok = game.unloadTrain(entity.id).ok;
+        break;
+      case 'sendTrain': {
+        // Le train n'emporte que le surplus : les commerces passent d'abord.
+        const spare = game.state.goods - game.derived().goodsCap * 0.5;
+        const shipment = SHIPMENTS.filter(
+          (d) => (d.requires?.level ?? 1) <= game.state.level && d.goods <= spare && d.durationSec <= gapSec,
+        ).pop();
+        if (shipment) ok = game.sendTrain(entity.id, shipment.id).ok;
+        break;
+      }
       case 'plant': {
         const crop = bestFitting(
           CROPS.map((c) => ({ id: c.id, sec: c.growSec, level: c.requires?.level ?? 1, cost: c.cost })),
@@ -164,14 +176,32 @@ function bestAffordable(game: Game, category: BuildingDef['category'], reserve: 
   return options[0] ?? null;
 }
 
-function placeSomewhere(game: Game, def: BuildingDef): boolean {
-  // Seules les zones achetées comptent : on les parcourt case par case.
+/** Cases des zones achetées, zone par zone. */
+function* unlockedTiles(game: Game): Generator<{ x: number; y: number }> {
   for (const key of game.state.unlockedChunks) {
     const [cx = 0, cy = 0] = key.split(',').map(Number);
     for (let y = cy * CHUNK_SIZE; y < (cy + 1) * CHUNK_SIZE; y++) {
-      for (let x = cx * CHUNK_SIZE; x < (cx + 1) * CHUNK_SIZE; x++) {
-        if (game.checkPlacement(def, x, y) === null) return game.place(def.id, x, y).ok;
-      }
+      for (let x = cx * CHUNK_SIZE; x < (cx + 1) * CHUNK_SIZE; x++) yield { x, y };
+    }
+  }
+}
+
+/** Pose un bâtiment au bord d'une route ; à défaut, à côté d'une case libre où tracer un bout de route. */
+function placeSomewhere(game: Game, def: BuildingDef): boolean {
+  for (const { x, y } of unlockedTiles(game)) {
+    if (game.wouldConnect(def, x, y) && game.checkPlacement(def, x, y) === null) return game.place(def.id, x, y).ok;
+  }
+  const road = getBuildingDef('road');
+  for (const { x, y } of unlockedTiles(game)) {
+    if (game.checkPlacement(def, x, y) !== null) continue;
+    // Une case libre juste au sud de l'emprise accueille la route.
+    for (let dx = 0; dx < def.size.w; dx++) {
+      const rx = x + dx;
+      const ry = y + def.size.d;
+      if (game.checkPlacement(road, rx, ry) !== null) continue;
+      if (!game.place(def.id, x, y).ok) return false;
+      game.place('road', rx, ry);
+      return true;
     }
   }
   return false;
@@ -214,6 +244,7 @@ function invest(game: Game): number {
     const businesses = count(game, (d) => d.category === 'business');
     const plots = count(game, (d) => d.category === 'farm');
     const ports = count(game, (d) => d.category === 'port');
+    const stations = count(game, (d) => d.category === 'station');
     const decorations = count(game, (d, e) => d.category === 'decoration' && !e.starter);
 
     const storages = count(game, (d) => d.category === 'storage');
@@ -233,6 +264,11 @@ function invest(game: Game): number {
       def = bestAffordable(game, 'storage', reserve);
     if (!def && plots < 4 + Math.floor(level / 2)) def = bestAffordable(game, 'farm', reserve);
     if (!def && ports < 1 + Math.floor(level / 12)) def = bestAffordable(game, 'port', reserve);
+    if (!def && stations < 1) {
+      const station = bestAffordable(game, 'station', reserve);
+      // La gare longe la voie ferrée : seulement si une zone traversée par la voie est achetée.
+      if (station && game.state.entities.some((e) => e.defId === 'rail')) def = station;
+    }
     if (!def && businesses * 2 < houses) def = bestAffordable(game, 'business', reserve);
     if (!def && houseFits) def = houseNext;
     if (!def && tryUpgrade(game, reserve)) {
